@@ -1,6 +1,9 @@
 import re
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
+
 from ecommerce_search.config.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -85,3 +88,103 @@ def test_the_provisional_rrf_k_default_is_forwarded_once_to_the_api():
     api = re.split(r"^volumes:", COMPOSE.split("  api:")[1], flags=re.MULTILINE)[0]
     assert "      SEARCH_RRF_K: ${SEARCH_RRF_K:-100}" in api
     assert re.search(r"^SEARCH_RRF_K=100$", ENV_EXAMPLE, re.MULTILINE)
+
+
+# Milestone 8 (V3 reranking): forwarded to the api service only. Expected values are written out
+# here (the provisional ADR-007 pin and the reviewed defaults), not derived from the settings.
+RERANKER_FORWARDED = {
+    "RERANKER_ENABLED": "true",
+    "RERANKER_MODEL_ID": "cross-encoder/ms-marco-MiniLM-L6-v2",
+    "RERANKER_MODEL_REVISION": "233902d25c440f23af6f7d6e94d2946bac0bee0a",
+    "RERANKER_BATCH_SIZE": "16",
+    "SEARCH_RERANK_DEPTH": "20",
+}
+
+
+def _api() -> str:
+    return re.split(r"^volumes:", COMPOSE.split("  api:")[1], flags=re.MULTILINE)[0]
+
+
+def test_reranker_settings_are_forwarded_once_to_the_api_with_reviewed_defaults():
+    api = _api()
+    for name, default in RERANKER_FORWARDED.items():
+        assert f"      {name}: ${{{name}:-{default}}}\n" in api, name
+        keys = re.findall(rf"^\s+{name}:", COMPOSE, re.MULTILINE)
+        assert len(keys) == 1, name  # one key, in the api service only
+        assert re.search(rf"^{re.escape(name)}={re.escape(default)}$", ENV_EXAMPLE, re.MULTILINE)
+
+
+def test_reranker_settings_never_reach_the_db_or_migrate_services():
+    db = _service("db", "  migrate:")
+    migrate = _service("migrate", "  api:")
+    head = COMPOSE.split("services:")[0]  # the shared x-app-env anchor
+    for section in (db, migrate, head):
+        assert "RERANKER_" not in section and "SEARCH_RERANK_DEPTH" not in section
+
+
+def test_forwarded_reranker_defaults_parse_to_the_settings_defaults(make_settings, monkeypatch):
+    for name, value in RERANKER_FORWARDED.items():
+        monkeypatch.setenv(name, value)
+    from_env = make_settings()  # reads the forwarded values from the environment
+    for field in (
+        "reranker_enabled",
+        "reranker_model_id",
+        "reranker_model_revision",
+        "reranker_batch_size",
+        "search_rerank_depth",
+    ):
+        assert getattr(from_env, field) == Settings.model_fields[field].default, field
+
+
+def test_valid_reranker_overrides_are_accepted(make_settings, monkeypatch):
+    overrides = {"RERANKER_ENABLED": "false", "RERANKER_BATCH_SIZE": "4"}
+    overrides |= {"SEARCH_RERANK_DEPTH": "10"}
+    for name, value in overrides.items():
+        monkeypatch.setenv(name, value)
+    settings = make_settings()
+    assert settings.reranker_enabled is False
+    assert (settings.reranker_batch_size, settings.search_rerank_depth) == (4, 10)
+
+
+# Override strings as Compose would pass them through the environment; each must be refused.
+INVALID_RERANKER_OVERRIDES = [
+    ("RERANKER_ENABLED", "yes"),
+    ("RERANKER_ENABLED", "1"),
+    ("RERANKER_ENABLED", ""),
+    ("RERANKER_MODEL_ID", "cross-encoder/ms-marco-MiniLM-L12-v2"),
+    ("RERANKER_MODEL_ID", "CROSS-ENCODER/MS-MARCO-MINILM-L6-V2"),
+    ("RERANKER_MODEL_REVISION", "main"),
+    ("RERANKER_MODEL_REVISION", "f" * 40),
+    ("RERANKER_BATCH_SIZE", "0"),
+    ("RERANKER_BATCH_SIZE", "257"),
+    ("RERANKER_BATCH_SIZE", "16.0"),
+    ("RERANKER_BATCH_SIZE", "sixteen"),
+    ("SEARCH_RERANK_DEPTH", "0"),
+    ("SEARCH_RERANK_DEPTH", "51"),  # above the default SEARCH_CANDIDATE_K of 50
+    ("SEARCH_RERANK_DEPTH", "20.5"),
+]
+
+
+@pytest.mark.parametrize(("name", "value"), INVALID_RERANKER_OVERRIDES)
+def test_invalid_reranker_overrides_fail_settings(make_settings, monkeypatch, name, value):
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError):
+        make_settings()
+
+
+def test_env_example_documents_the_reranker_constraints():
+    block = ENV_EXAMPLE.split("# Cross-encoder reranking (Milestone 8, V3).", 1)[1]
+    assert "provisional" in block and "ADR-007" in block
+    assert "model-fetch --kind reranker" in block and "never" in block
+    assert "downloaded at request time" in block
+    assert "must not exceed SEARCH_CANDIDATE_K" in block
+
+
+def test_existing_forwarded_settings_and_model_mount_are_unchanged():
+    api = _api()
+    for env_name, field in FORWARDED.items():
+        default = Settings.model_fields[field].default
+        assert COMPOSE.count(f"{env_name}: ${{{env_name}:-{default}}}") == 1
+    assert api.count("      - ./models:/models:ro") == 1
+    assert api.count("EMBEDDING_MODELS_DIR: /models") == 1
+    assert "EMBEDDING_MODEL_ID" not in COMPOSE and "EMBEDDING_BATCH_SIZE" not in COMPOSE

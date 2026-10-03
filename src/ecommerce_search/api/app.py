@@ -9,6 +9,7 @@ from ecommerce_search.api.dense import router as dense_router
 from ecommerce_search.api.filtered import router as filtered_router
 from ecommerce_search.api.health import router as health_router
 from ecommerce_search.api.hybrid import router as hybrid_router
+from ecommerce_search.api.reranked import router as reranked_router
 from ecommerce_search.api.search import router as search_router
 from ecommerce_search.config import Settings, get_settings
 from ecommerce_search.db.engine import create_db_engine, create_session_factory
@@ -16,6 +17,7 @@ from ecommerce_search.decision import DeterministicDecisionProvider
 from ecommerce_search.embeddings.sentence_transformers_provider import (
     SentenceTransformerEmbedder,
 )
+from ecommerce_search.reranking.cross_encoder_provider import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +61,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Intelligent E-commerce Search", version=__version__, lifespan=lifespan)
     # One stateless, local provider per app: constructing it performs no I/O.
     app.state.decision_provider = DeterministicDecisionProvider()
+    # One reranker per app, created unloaded: construction reads no file and imports no model
+    # library; the snapshot is verified and loaded by the first request that scores candidates.
+    reranker_models_dir = settings.resolved_models_dir()
+    app.state.reranker = (
+        None
+        if reranker_models_dir is None
+        else CrossEncoderReranker(
+            settings.reranker_spec(), reranker_models_dir, batch_size=settings.reranker_batch_size
+        )
+    )
     app.include_router(health_router)
     app.include_router(search_router)
     app.include_router(dense_router)
     app.include_router(hybrid_router)
     app.include_router(filtered_router)
+    app.include_router(reranked_router)
     return app

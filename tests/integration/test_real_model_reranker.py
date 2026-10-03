@@ -1,8 +1,10 @@
 """Offline smoke tests with the real, pinned cross-encoder snapshot (ADR-007). `-m real_model`.
 
 They need the snapshot fetched into the git-ignored `models/` directory (`model-fetch --kind
-reranker`) and FAIL (they are not skipped) when it is missing or modified. No database is used.
-Outbound sockets and name resolution are blocked for the whole module, including the model load.
+reranker`) and FAIL (they are not skipped) when it is missing or modified. Only the V3 API
+regression (also marked `integration`) uses a database: a scratch database, never the development
+one, with the embedding snapshot (ADR-006) as well. Python outbound sockets and name resolution
+are blocked for the whole module, including the model loads (the database is reached by libpq).
 
 Nothing here asserts relevance or quality: the pin is a compatibility pin. Scores are checked
 only as raw logits (finite, ordered, deterministic, equal to the model's own unactivated output);
@@ -19,11 +21,19 @@ import sys
 from pathlib import Path
 
 import pytest
-from catalog_support import SEED
+from catalog_support import PROVENANCE, SEED
+from fastapi.testclient import TestClient
 
+from ecommerce_search.api.app import create_app
 from ecommerce_search.embeddings.fetch import RERANKER_PROFILE, verify_manifest
-from ecommerce_search.embeddings.spec import repository_models_dir, snapshot_dir
+from ecommerce_search.embeddings.sentence_transformers_provider import SentenceTransformerEmbedder
+from ecommerce_search.embeddings.spec import (
+    ALL_MINILM_L6_V2,
+    repository_models_dir,
+    snapshot_dir,
+)
 from ecommerce_search.ingestion.loader import load_catalog
+from ecommerce_search.ingestion.service import ingest_file
 from ecommerce_search.reranking.cross_encoder_provider import (
     CrossEncoderReranker,
     snapshot_config_problems,
@@ -31,6 +41,7 @@ from ecommerce_search.reranking.cross_encoder_provider import (
 from ecommerce_search.reranking.documents import build_rerank_document
 from ecommerce_search.reranking.provider import RerankerUnavailable, score_documents
 from ecommerce_search.reranking.spec import MS_MARCO_MINILM_L6_V2, RerankerModelSpec
+from ecommerce_search.search.dense_indexing import embed
 
 pytestmark = pytest.mark.real_model
 
@@ -44,6 +55,8 @@ DOCUMENTS = [
     "Sony wireless noise cancelling over-ear headphones with 30 hour battery",
 ]
 BLOCKED: list[str] = []
+_SOCKET_CONNECT = socket.socket.connect  # captured before the module guard replaces it
+LOOPBACK = frozenset({"127.0.0.1", "::1"})
 
 
 def _refuse(name):
@@ -225,6 +238,126 @@ def test_a_spec_that_contradicts_the_snapshot_is_config_mismatch():
     with pytest.raises(RerankerUnavailable) as info:
         CrossEncoderReranker(other, models_dir()).load()
     assert info.value.reason == "config_mismatch"
+
+
+V3_QUERY = "hp laptop 8gb ram"  # a fixed probe; no relevance is asserted
+OTHER_ROUTES = ("/search", "/search/dense", "/search/hybrid", "/search/filtered")
+
+
+def _strip(body: dict) -> dict:
+    return {key: value for key, value in body.items() if key != "latency_ms"}
+
+
+def _record_checkouts(provider, engine, checked: list) -> None:
+    """Wrap the provider's model work to record the pool's checked-out connections."""
+    for name in ("load", "count_pair_tokens", "score", "embed_query"):
+        original = getattr(provider, name, None)
+        if original is None:
+            continue
+
+        def wrapper(*args, _name=name, _original=original, **kwargs):
+            checked.append((_name, engine.pool.checkedout()))
+            return _original(*args, **kwargs)
+
+        setattr(provider, name, wrapper)
+
+
+def _loopback_connect(sock, address, *args, **kwargs):
+    """`socket.connect` limited to loopback addresses (anything else is refused and recorded)."""
+    if isinstance(address, tuple) and address[0] in LOOPBACK:
+        return _SOCKET_CONNECT(sock, address, *args, **kwargs)
+    BLOCKED.append("connect")
+    raise OSError("network access is not allowed in real-model tests")
+
+
+@pytest.mark.integration
+def test_v3_api_with_the_real_models_on_a_scratch_database(
+    settings, migrated_engine, tmp_path, monkeypatch
+):
+    # The test client's event loop needs its loopback self-pipe (on Windows, `socketpair` connects
+    # to 127.0.0.1). Name resolution and `create_connection` stay blocked by the module guard.
+    monkeypatch.setattr(socket.socket, "connect", _loopback_connect)
+    embedding_dir = repository_models_dir()
+    assert (
+        verify_manifest(embedding_dir, ALL_MINILM_L6_V2.model_id, ALL_MINILM_L6_V2.revision) == []
+    )
+    models_dir()  # the reranker snapshot verifies
+    ingest_file(migrated_engine, SEED, PROVENANCE)
+    embedder = SentenceTransformerEmbedder(ALL_MINILM_L6_V2, embedding_dir)
+    assert embed(migrated_engine, embedder).inserted == 240
+    scratch = settings.model_copy(update={"postgres_db": migrated_engine.url.database})
+    assert scratch.postgres_db != settings.postgres_db  # never the development database
+    assert scratch.postgres_db.startswith("ecommerce_search_test_")
+    assert scratch.reranker_enabled and scratch.search_rerank_depth == 20
+
+    # Enabled: the app's own lazily loaded reranker over the canonical snapshots.
+    app = create_app(scratch)
+    reranker = app.state.reranker
+    assert isinstance(reranker, CrossEncoderReranker) and not reranker.loaded
+    checked: list = []
+    with TestClient(app) as client:
+        engine = app.state.engine
+        _record_checkouts(reranker, engine, checked)
+        _record_checkouts(app.state.embedder, engine, checked)
+        responses = [
+            client.get("/search/reranked", params={"q": V3_QUERY, "top_k": 50}),
+            client.post("/search/reranked", json={"query": V3_QUERY, "top_k": 50}),
+            client.get("/search/reranked", params={"q": V3_QUERY, "top_k": 50}),
+        ]
+        v2 = client.get("/search/filtered", params={"q": V3_QUERY, "top_k": 50})
+        assert engine.pool.checkedout() == 0
+    assert all(r.status_code == 200 for r in responses) and v2.status_code == 200
+    first = responses[0].json()
+    assert first["reranker"]["status"] == "applied"
+    assert first["reranker"]["model_id"] == SPEC.model_id
+    assert first["reranker"]["model_revision"] == SPEC.revision
+    assert first["reranker"]["score_type"] == "logit"
+    assert first["candidate_count"] > 0
+    assert first["reranker"]["reranked_count"] == min(20, first["candidate_count"])
+    # Deterministic within the process: repeated GET/POST requests return identical bodies.
+    assert _strip(first) == _strip(responses[1].json()) == _strip(responses[2].json())
+    assert first["latency_ms"]["reranker_load_ms"] is not None
+    assert responses[1].json()["latency_ms"]["reranker_load_ms"] is None  # loaded once
+    # The candidate set, its RRF order and its counts are exactly V2's.
+    v2_body = v2.json()
+    v2_ids = [r["product_id"] for r in v2_body["results"]]
+    assert sorted(r["product_id"] for r in first["results"]) == sorted(v2_ids)
+    by_rrf = sorted(first["results"], key=lambda r: r["rrf_rank"])
+    assert [r["product_id"] for r in by_rrf] == v2_ids
+    for key in ("lexical_hit_count", "dense_hit_count", "fused_count", "candidate_count"):
+        assert first[key] == v2_body[key], key
+    assert first["applied_filters"] == v2_body["applied_filters"]
+    size = first["reranker"]["reranked_count"]
+    head, tail = first["results"][:size], first["results"][size:]
+    scores = [r["rerank_score"] for r in head]
+    assert all(type(score) is float and math.isfinite(score) for score in scores)
+    assert scores == sorted(scores, reverse=True)  # raw logits, ordered; values not judged
+    assert [r["rerank_rank"] for r in head] == list(range(1, size + 1))
+    assert sorted(r["rrf_rank"] for r in head) == list(range(1, size + 1))
+    assert all(r["rerank_rank"] is None and r["rerank_score"] is None for r in tail)
+    # No database connection was checked out while either model loaded, counted or scored.
+    assert {name for name, _n in checked} >= {"load", "count_pair_tokens", "score", "embed_query"}
+    assert all(n == 0 for _name, n in checked)
+
+    # Disabled by configuration: V2 order, and the reranker is never loaded.
+    disabled = create_app(scratch.model_copy(update={"reranker_enabled": False}))
+    with TestClient(disabled) as client:
+        off = client.get("/search/reranked", params={"q": V3_QUERY, "top_k": 50})
+    assert off.status_code == 200 and off.json()["reranker"]["status"] == "disabled"
+    assert [r["product_id"] for r in off.json()["results"]] == v2_ids
+    assert not disabled.state.reranker.loaded
+
+    # A missing reranker snapshot affects V3 only; the other routes keep serving.
+    missing = create_app(scratch)
+    missing.state.reranker = CrossEncoderReranker(SPEC, tmp_path)  # an empty models directory
+    with TestClient(missing) as client:
+        failed = client.get("/search/reranked", params={"q": V3_QUERY})
+        assert failed.status_code == 503 and failed.json() == {"detail": "search unavailable"}
+        assert client.get("/health").status_code == 200
+        for route in OTHER_ROUTES:
+            assert client.get(route, params={"q": V3_QUERY}).status_code == 200, route
+        assert missing.state.engine.pool.checkedout() == 0
+    assert str(tmp_path) not in failed.text
 
 
 def test_no_socket_was_used():

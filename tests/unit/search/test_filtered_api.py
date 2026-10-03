@@ -1436,7 +1436,7 @@ def test_frozen_operations_and_components_are_unchanged_from_head(make_settings)
     schema = create_app(make_settings()).openapi()
     frozen = frozen_openapi(schema)
     assert _digest(frozen) == HEAD_FROZEN_DIGEST
-    assert set(schema["paths"]) == {*FROZEN_OPENAPI_PATHS, "/search/filtered"}
+    assert set(schema["paths"]) == {*FROZEN_OPENAPI_PATHS, "/search/filtered", "/search/reranked"}
     # The same app without the V2 router publishes byte-identical frozen operations.
     legacy = FastAPI(title="Intelligent E-commerce Search", version=schema["info"]["version"])
     for router in (health_router, search_router, dense_router, hybrid_router):

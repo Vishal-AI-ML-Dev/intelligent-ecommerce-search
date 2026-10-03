@@ -411,3 +411,165 @@ class FilteredSearchResponse(BaseModel):
     )
     query_understanding: FilteredQueryUnderstandingBlock
     latency_ms: FilteredSearchLatency
+
+
+# ---- reranked search (Milestone 8, V3) ---------------------------------------------------------
+
+
+class RerankedSearchRequest(BaseModel):
+    """Body of `POST /search/reranked`. Same validation as `GET /search/reranked`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(description="Search text. Whitespace is collapsed; see /docs for limits.")
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        description="Maximum results to return. Default and upper bound come from settings.",
+    )
+
+
+RerankerStatus = Literal[
+    "applied", "disabled", "skipped_no_candidates", "skipped_no_searchable_text"
+]
+
+
+class RerankerBlock(BaseModel):
+    """The cross-encoder reranker configuration and what it did for this request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(description="Whether reranking is enabled in the configuration.")
+    status: RerankerStatus = Field(
+        description="`applied`: the head of the fused list was reranked. `disabled`: reranking "
+        "is switched off by configuration and the fused (V2) order is returned. "
+        "`skipped_no_candidates`: there were no fused candidates to rerank. "
+        "`skipped_no_searchable_text`: the query has no letter or digit, so nothing ran."
+    )
+    model_id: str = Field(description="The configured reranker model (a provisional pin).")
+    model_revision: str = Field(description="Immutable model commit hash.")
+    document_version: Literal["rd-1"] = Field(
+        description="Version of the product text the reranker reads."
+    )
+    max_length: int = Field(
+        description="Maximum (query, document) pair length in tokens. Longer pairs are refused, "
+        "never truncated."
+    )
+    rerank_depth: int = Field(description="Configured number of fused candidates to rerank.")
+    reranked_count: int = Field(
+        description="Candidates actually scored: min(rerank_depth, candidate_count) when "
+        "applied, else 0."
+    )
+    score_type: Literal["logit"] = Field(
+        description="Scores are raw model logits: uncalibrated and not probabilities."
+    )
+
+
+class RerankedSearchResult(HybridSearchResult):
+    rrf_rank: int = Field(description="1-based position in the fused (RRF) candidate list.")
+    rerank_rank: int | None = Field(
+        description="1-based position among the reranked candidates; null for candidates beyond "
+        "the rerank depth (the unscored tail, which keeps its RRF order) or when no reranking ran."
+    )
+    rerank_score: float | None = Field(
+        description="Raw cross-encoder logit: uncalibrated, not a probability, and comparable "
+        "only within one query and one model revision. Null when the candidate was not scored."
+    )
+
+
+class RerankedSearchLatency(BaseModel):
+    lexical_ms: float | None = Field(
+        description="Time in the filtered lexical SQL queries and row fetch; null when they did "
+        "not run."
+    )
+    model_load_ms: float | None = Field(
+        description="Time to load the embedding model during this request; null when it was "
+        "already loaded or not needed."
+    )
+    query_embedding_ms: float | None = Field(
+        description="Time to check the query's token length and encode it; null when no "
+        "encoding ran."
+    )
+    vector_ms: float | None = Field(
+        description="Time in the filtered vector SQL query and row fetch; null when it did not run."
+    )
+    rrf_ms: float | None = Field(
+        description="Time to fuse the candidate lists; null when fusion did not run."
+    )
+    query_understanding_ms: float = Field(
+        description="Time to parse the query, call the decision provider and validate its "
+        "result. Always present on a 200 response."
+    )
+    filter_translation_ms: float = Field(
+        description="Time to translate the decision into filters with the filter policy. Always "
+        "present on a 200 response. Filtering itself runs inside the source SQL and is part of "
+        "`lexical_ms` and `vector_ms`."
+    )
+    document_read_ms: float | None = Field(
+        description="Time to read the catalog records of every product in either source list "
+        "(SQL inside the source transaction) and to rebuild and validate them after it. Excludes "
+        "building the reranker text (`rerank_document_ms`). Null when no record read ran "
+        "(reranking disabled, no searchable text or no candidates)."
+    )
+    reranker_load_ms: float | None = Field(
+        description="Time to load the reranker model during this request; null when it was "
+        "already loaded or not needed."
+    )
+    rerank_document_ms: float | None = Field(
+        description="Time to build the reranker documents; null when it did not run."
+    )
+    reranking_ms: float | None = Field(
+        description="Time to check pair lengths, score the head and reorder it; null when it did "
+        "not run."
+    )
+    total_ms: float = Field(
+        description="Application processing from handler entry through construction of the "
+        "result models. Excludes request validation and framework response serialization."
+    )
+
+
+class RerankedSearchResponse(BaseModel):
+    query: str = Field(
+        description="The query after whitespace normalization. Sent unchanged to both sources "
+        "and to the reranker."
+    )
+    search_version: Literal["v3_reranked"]
+    document_version: str
+    tsquery: str | None = Field(
+        description="PostgreSQL tsquery text generated from the query; null when no SQL ran "
+        "(the query has no letter or digit)."
+    )
+    embedding_model_id: str
+    embedding_model_revision: str = Field(description="Immutable model commit hash.")
+    embedding_dimension: int
+    embedding_text_version: str
+    distance_metric: Literal["cosine"]
+    fusion: HybridFusion
+    dense_status: Literal["used", "skipped_no_searchable_text"]
+    lexical_hit_count: int = Field(
+        description="Lexical candidates retrieved after filtering (at most lexical_k)."
+    )
+    dense_hit_count: int = Field(
+        description="Dense candidates retrieved after filtering (at most dense_k). Only "
+        "embeddings current for the active model and the product's current content take part, "
+        "so this can be lower while embeddings are missing or stale."
+    )
+    overlap_count: int = Field(description="Products present in both candidate lists.")
+    fused_count: int = Field(description="Unique products in the union of both lists.")
+    candidate_count: int = Field(description="Fused candidates kept (at most candidate_k).")
+    top_k: int = Field(description="The requested (or default) maximum number of results.")
+    result_count: int = Field(description="Number of results returned in this response.")
+    results: list[RerankedSearchResult]
+    filter_policy: FilterPolicy
+    applied_filters: list[AppliedFilter] = Field(
+        description="Hard filters applied inside both source queries, in fixed field order. "
+        "Values are canonical strings (prices with two decimals). Never relaxed: when no "
+        "product satisfies them the result list is empty."
+    )
+    ignored_constraints: list[IgnoredConstraint] = Field(
+        description="Parsed constraints the filter policy deliberately did not apply, with the "
+        "reason, in fixed field order."
+    )
+    query_understanding: FilteredQueryUnderstandingBlock
+    reranker: RerankerBlock
+    latency_ms: RerankedSearchLatency
