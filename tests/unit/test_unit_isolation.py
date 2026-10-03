@@ -27,7 +27,9 @@ def test_whole_unit_suite_passes_without_a_database_password():
     env = {
         k: v
         for k, v in os.environ.items()
-        if not k.startswith(("POSTGRES_", "DB_", "APP_ENV", "LOG_LEVEL", "EMBEDDING_", "SEARCH_"))
+        if not k.startswith(
+            ("POSTGRES_", "DB_", "APP_ENV", "LOG_LEVEL", "EMBEDDING_", "SEARCH_", "RERANKER_")
+        )
     }
     env.update({CHILD_FLAG: "1", "POSTGRES_PASSWORD": ""})
     result = subprocess.run(  # noqa: S603 - fixed argv, sys.executable

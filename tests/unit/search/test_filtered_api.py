@@ -1213,7 +1213,7 @@ def test_counts_results_and_fusion_are_consistent_with_the_filtered_sources(clie
 
 
 def test_candidate_k_and_top_k_truncate_as_in_v1(client_for):
-    with client_for(search_candidate_k=3, search_default_top_k=2) as client:
+    with client_for(search_candidate_k=3, search_default_top_k=2, search_rerank_depth=3) as client:
         body = call(client, "get", "laptop").json()
         too_many = call(client, "get", "laptop", 4)
     assert body["fused_count"] == 4 and body["candidate_count"] == 3
@@ -1223,7 +1223,11 @@ def test_candidate_k_and_top_k_truncate_as_in_v1(client_for):
 
 def test_source_depths_come_from_settings(client_for, events):
     with client_for(
-        search_lexical_k=7, search_dense_k=9, search_candidate_k=16, search_default_top_k=2
+        search_lexical_k=7,
+        search_dense_k=9,
+        search_candidate_k=16,
+        search_default_top_k=2,
+        search_rerank_depth=16,
     ) as client:
         body = call(client, "get", "laptop").json()
     sources = {e[0]: e for e in events if isinstance(e, tuple) and e[0] in ("lexical", "dense")}

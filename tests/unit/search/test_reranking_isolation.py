@@ -62,11 +62,15 @@ def test_reranking_package_imports_no_db_web_settings_network_or_model_stack() -
     assert done.stdout.strip() == ""
 
 
+CONCRETE_PROVIDER = "cross_encoder_provider.py"
+
+
 def _reranking_sources() -> list[Path]:
+    """The pure reranking modules (the concrete Session C provider is tested separately)."""
     import ecommerce_search.reranking as package
 
     root = Path(package.__file__).parent
-    return sorted(root.glob("*.py"))
+    return sorted(p for p in root.glob("*.py") if p.name != CONCRETE_PROVIDER)
 
 
 # Every module the pure reranking source may import directly. Checked statically, because the
@@ -128,3 +132,72 @@ def test_reranking_modules_read_no_environment_or_files() -> None:
         source = path.read_text(encoding="utf-8")
         for forbidden in ("os.environ", "getenv", "open(", "logging", "Settings", "Path("):
             assert forbidden not in source, f"{path.name} uses {forbidden}"
+
+
+# ---- the concrete cross-encoder provider (Milestone 8 Session C) -------------------------------
+
+_LAZY_PROBE = """
+import sys
+import ecommerce_search.reranking
+import ecommerce_search.reranking.cross_encoder_provider as provider
+import ecommerce_search.search.cli
+import ecommerce_search.api.app
+from pathlib import Path
+provider.CrossEncoderReranker(provider.MS_MARCO_MINILM_L6_V2, Path("does-not-exist"))
+heavy = ("torch", "transformers", "sentence_transformers", "huggingface_hub", "hf_xet",
+         "tokenizers", "safetensors")
+print(",".join(sorted(name for name in sys.modules if name.split(".")[0] in heavy)))
+"""
+
+
+def test_importing_and_constructing_the_provider_loads_no_model_library() -> None:
+    done = subprocess.run(  # noqa: S603 - fixed argv, sys.executable
+        [sys.executable, "-c", _LAZY_PROBE],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == ""
+
+
+PROVIDER_MODULE_IMPORTS = frozenset(
+    {
+        "collections.abc",
+        "json",
+        "logging",
+        "os",
+        "pathlib",
+        "threading",
+        "time",
+        "typing",
+        "ecommerce_search.embeddings.fetch",
+        "ecommerce_search.embeddings.spec",
+        "ecommerce_search.reranking.provider",
+        "ecommerce_search.reranking.spec",
+    }
+)
+PROVIDER_LAZY_IMPORTS = frozenset({"torch", "sentence_transformers"})
+
+
+def test_concrete_provider_imports_model_libraries_only_inside_functions() -> None:
+    import ecommerce_search.reranking as package
+
+    path = Path(package.__file__).parent / CONCRETE_PROVIDER
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.name)
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            assert {a.name for a in node.names} <= PROVIDER_MODULE_IMPORTS
+        elif isinstance(node, ast.ImportFrom):
+            assert node.level == 0 and node.module in PROVIDER_MODULE_IMPORTS, node.module
+    lazy = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            lazy |= {a.name for a in node.names} - PROVIDER_MODULE_IMPORTS
+        elif isinstance(node, ast.ImportFrom) and node.module not in PROVIDER_MODULE_IMPORTS:
+            lazy.add(node.module)
+    assert lazy == PROVIDER_LAZY_IMPORTS
+    source = path.read_text(encoding="utf-8")
+    for forbidden in ("trust_remote_code=True", "local_files_only=False", "Sigmoid", "print("):
+        assert forbidden not in source

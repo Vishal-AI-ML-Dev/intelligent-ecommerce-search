@@ -4,7 +4,15 @@ import pytest
 
 from ecommerce_search.config import Settings, get_settings
 
-_ISOLATED_PREFIXES = ("POSTGRES_", "DB_", "APP_ENV", "LOG_LEVEL", "EMBEDDING_", "SEARCH_")
+_ISOLATED_PREFIXES = (
+    "POSTGRES_",
+    "DB_",
+    "APP_ENV",
+    "LOG_LEVEL",
+    "EMBEDDING_",
+    "SEARCH_",
+    "RERANKER_",
+)
 
 
 @pytest.fixture(autouse=True)

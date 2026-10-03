@@ -24,6 +24,11 @@ ENV_KEYS = [
     "EMBEDDING_MODEL_REVISION",
     "EMBEDDING_MODELS_DIR",
     "EMBEDDING_BATCH_SIZE",
+    "RERANKER_ENABLED",
+    "RERANKER_MODEL_ID",
+    "RERANKER_MODEL_REVISION",
+    "RERANKER_BATCH_SIZE",
+    "SEARCH_RERANK_DEPTH",
 ]
 
 
@@ -233,3 +238,147 @@ def test_rrf_k_environment_override_out_of_range_rejected(monkeypatch, raw):
     monkeypatch.setenv("SEARCH_RRF_K", raw)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+# ---- Milestone 8: reranker settings (ADR-007) -------------------------------------------------
+
+RERANKER_ID = "cross-encoder/ms-marco-MiniLM-L6-v2"
+RERANKER_REV = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+
+
+def test_reranker_defaults_pin_the_reviewed_model(make_settings):
+    from ecommerce_search.reranking.spec import MS_MARCO_MINILM_L6_V2
+
+    s = make_settings()
+    assert s.reranker_enabled is True
+    assert (s.reranker_model_id, s.reranker_model_revision) == (RERANKER_ID, RERANKER_REV)
+    assert (s.reranker_batch_size, s.search_rerank_depth) == (16, 20)
+    assert s.reranker_spec() is MS_MARCO_MINILM_L6_V2
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field", "expected"),
+    [
+        ({"reranker_enabled": False}, "reranker_enabled", False),
+        ({"reranker_batch_size": 1}, "reranker_batch_size", 1),
+        ({"reranker_batch_size": 256}, "reranker_batch_size", 256),
+        ({"search_rerank_depth": 1}, "search_rerank_depth", 1),
+        ({"search_rerank_depth": 50}, "search_rerank_depth", 50),  # == search_candidate_k
+        (
+            {"search_candidate_k": 10, "search_rerank_depth": 10},
+            "search_rerank_depth",
+            10,
+        ),
+        (
+            {
+                "search_lexical_k": 1000,
+                "search_dense_k": 1000,
+                "search_candidate_k": 2000,
+                "search_rerank_depth": 1000,
+            },
+            "search_rerank_depth",
+            1000,
+        ),
+        (
+            {"reranker_enabled": False, "search_candidate_k": 10, "search_rerank_depth": 10},
+            "search_rerank_depth",
+            10,
+        ),
+    ],
+)
+def test_valid_reranker_overrides(make_settings, overrides, field, expected):
+    assert getattr(make_settings(**overrides), field) == expected
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"reranker_model_id": "cross-encoder/ms-marco-MiniLM-L12-v2"},
+        {"reranker_model_id": "org/unreviewed"},
+        {"reranker_model_id": RERANKER_ID.upper()},
+        {"reranker_model_id": None},
+        {"reranker_model_revision": "main"},
+        {"reranker_model_revision": "f" * 40},
+        {"reranker_model_revision": RERANKER_REV.upper()},
+        {"reranker_model_revision": None},
+        {"reranker_batch_size": 0},
+        {"reranker_batch_size": 257},
+        {"reranker_batch_size": True},
+        {"reranker_batch_size": 16.0},
+        {"reranker_batch_size": "16.0"},
+        {"reranker_batch_size": "1e1"},
+        {"reranker_batch_size": ""},
+        {"reranker_batch_size": None},
+        {"search_rerank_depth": 0},
+        {"search_rerank_depth": 51},  # > search_candidate_k (50)
+        {"search_rerank_depth": False},
+        {"search_rerank_depth": 20.5},
+        {"search_candidate_k": 10},  # the default depth 20 would exceed it
+        # Depth is validated even when reranking is disabled: the configuration is valid as a whole.
+        {"reranker_enabled": False, "search_candidate_k": 10},
+        {
+            "search_lexical_k": 1000,
+            "search_dense_k": 1000,
+            "search_candidate_k": 2000,
+            "search_rerank_depth": 1001,
+        },
+        {"reranker_enabled": 1},
+        {"reranker_enabled": 0},
+        {"reranker_enabled": "yes"},
+        {"reranker_enabled": "1"},
+        {"reranker_enabled": "on"},
+        {"reranker_enabled": ""},
+        {"reranker_enabled": None},
+    ],
+)
+def test_invalid_reranker_settings_rejected(make_settings, overrides):
+    with pytest.raises(ValidationError):
+        make_settings(**overrides)
+
+
+def test_reranker_settings_read_from_environment(monkeypatch):
+    monkeypatch.setenv("POSTGRES_PASSWORD", "pw")
+    monkeypatch.setenv("RERANKER_ENABLED", "FALSE")
+    monkeypatch.setenv("RERANKER_MODEL_ID", RERANKER_ID)
+    monkeypatch.setenv("RERANKER_MODEL_REVISION", RERANKER_REV)
+    monkeypatch.setenv("RERANKER_BATCH_SIZE", "8")
+    monkeypatch.setenv("SEARCH_RERANK_DEPTH", "10")
+    s = Settings(_env_file=None)
+    assert (s.reranker_enabled, s.reranker_batch_size, s.search_rerank_depth) == (False, 8, 10)
+    assert s.reranker_spec().model_id == RERANKER_ID
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("true", True), (" True ", True), ("false", False)])
+def test_reranker_enabled_accepts_only_true_or_false_words(monkeypatch, raw, expected):
+    monkeypatch.setenv("POSTGRES_PASSWORD", "pw")
+    monkeypatch.setenv("RERANKER_ENABLED", raw)
+    assert Settings(_env_file=None).reranker_enabled is expected
+
+
+@pytest.mark.parametrize(
+    ("key", "raw"),
+    [
+        ("RERANKER_ENABLED", "yes"),
+        ("RERANKER_ENABLED", "0"),
+        ("RERANKER_BATCH_SIZE", "0"),
+        ("RERANKER_BATCH_SIZE", "257"),
+        ("RERANKER_BATCH_SIZE", "8.0"),
+        ("SEARCH_RERANK_DEPTH", "51"),
+        ("SEARCH_RERANK_DEPTH", "-1"),
+        ("RERANKER_MODEL_ID", "org/unreviewed"),
+        ("RERANKER_MODEL_REVISION", "main"),
+    ],
+)
+def test_invalid_reranker_environment_rejected(monkeypatch, key, raw):
+    monkeypatch.setenv("POSTGRES_PASSWORD", "pw")
+    monkeypatch.setenv(key, raw)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_reranker_settings_do_not_reach_the_pure_reranking_modules():
+    import ecommerce_search.reranking.provider as provider
+    import ecommerce_search.reranking.spec as spec
+
+    for module in (spec, provider):
+        assert "Settings" not in vars(module) and "get_settings" not in vars(module)

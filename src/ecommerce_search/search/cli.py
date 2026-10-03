@@ -1,4 +1,5 @@
-"""Search-index command line: `reindex`, `status`, `embed`, `embed-status` and `model-fetch`.
+"""Search-index command line: `reindex`, `status`, `embed`, `embed-status`, `model-fetch` and
+`model-verify`.
 
 `reindex` and `status` require an explicit `--database NAME` (there is no silent default to
 POSTGRES_DB) and print only that name, never credentials. `reindex` rebuilds missing and stale
@@ -11,9 +12,13 @@ model (ADR-006), in plan / encode / write phases; any failure writes nothing, an
 loads the model unless `--verify-vectors` is given. Both need the model snapshot only for
 encoding and never use the network.
 
-`model-fetch` is the only command that uses the network: it downloads one embedding-model
-snapshot, at a full commit hash, into the git-ignored `models/` directory and writes a file
-manifest. It needs no database and no settings.
+`model-fetch` is the only command that uses the network: it downloads one model snapshot, at a
+full commit hash, into the git-ignored `models/` directory and writes a file manifest.
+`--kind embedding` (the default) is the Milestone 4 behaviour, unchanged; `--kind reranker`
+fetches only the reviewed cross-encoder registry entry at its pinned revision (ADR-007).
+`model-verify --kind embedding|reranker` is offline: it re-checks the pinned registry snapshot of
+that kind against its manifest (and, for the reranker, the strict profile and the model config)
+and never downloads anything. Neither command needs a database or settings.
 """
 
 import argparse
@@ -29,9 +34,27 @@ from sqlalchemy.orm import Session
 
 from ecommerce_search.config import Settings, get_settings
 from ecommerce_search.db.engine import create_db_engine
-from ecommerce_search.embeddings.fetch import FetchError, fetch_snapshot
+from ecommerce_search.embeddings.fetch import (
+    EMBEDDING_PROFILE,
+    RERANKER_PROFILE,
+    FetchError,
+    fetch_snapshot,
+    verify_manifest,
+)
 from ecommerce_search.embeddings.provider import Embedder, EmbedderUnavailable
-from ecommerce_search.embeddings.spec import SpecError, repository_models_dir
+from ecommerce_search.embeddings.spec import (
+    DEFAULT_EMBEDDING_MODEL_ID,
+    EMBEDDING_MODELS,
+    EmbeddingModelSpec,
+    SpecError,
+    repository_models_dir,
+)
+from ecommerce_search.reranking.spec import (
+    DEFAULT_RERANKER_MODEL_ID,
+    RERANKER_MODELS,
+    RerankerModelSpec,
+    registered_reranker,
+)
 from ecommerce_search.search.dense_indexing import EmbeddingError, embed, embedding_status
 from ecommerce_search.search.indexing import IndexingError, index_status, reindex
 
@@ -133,18 +156,72 @@ def cmd_embed_status(args: argparse.Namespace) -> int:
     return 1 if (args.require_current and not status.current) else 0
 
 
-def cmd_model_fetch(args: argparse.Namespace) -> int:
+def _models_dir(args: argparse.Namespace) -> Path:
     models_dir = args.models_dir or repository_models_dir()
     if models_dir is None:
         raise CliError("not running from a source checkout: pass --models-dir explicitly")
+    return models_dir
+
+
+def cmd_model_fetch(args: argparse.Namespace) -> int:
+    if args.kind == "reranker":
+        # Only the reviewed registry entry, at its pinned revision, before any network access.
+        registered_reranker(args.model_id, args.revision)
+    models_dir = _models_dir(args)
     print(f"models directory: {models_dir.as_posix()}")
+    if args.kind == "reranker":
+        print(f"model kind: {args.kind}")
     print(f"network: downloading {args.model_id} at revision {args.revision}")
-    result = fetch_snapshot(args.model_id, args.revision, models_dir)
+    if args.kind == "reranker":
+        result = fetch_snapshot(args.model_id, args.revision, models_dir, profile=RERANKER_PROFILE)
+    else:
+        result = fetch_snapshot(args.model_id, args.revision, models_dir)
     print(f"snapshot: {result.snapshot.as_posix()}")
     print(f"manifest: {result.manifest_path.as_posix()}")
     print(f"files: {len(result.files)} bytes: {result.total_bytes}")
     print(f"declared license (model card front matter): {result.declared_license}")
     return 0
+
+
+def cmd_model_verify(args: argparse.Namespace) -> int:
+    """Offline: re-check the pinned registry snapshot of one kind. Never downloads."""
+    models_dir = _models_dir(args)
+    print(f"models directory: {models_dir.as_posix()}")
+    try:
+        problems, spec = _verify_kind(args.kind, models_dir)
+    except (OSError, UnicodeDecodeError):
+        raise CliError(
+            f"{args.kind} snapshot could not be read; details are intentionally not shown"
+        ) from None
+    print(f"config_sha256: {spec.config_sha256()}")
+    for problem in problems:
+        print(f"problem: {problem}", file=sys.stderr)
+    if problems:
+        return _fail(f"{args.kind} snapshot failed verification ({len(problems)} problem(s))")
+    print("verify: ok (offline; manifest and files match)")
+    return 0
+
+
+def _verify_kind(
+    kind: str, models_dir: Path
+) -> tuple[list[str], EmbeddingModelSpec | RerankerModelSpec]:
+    if kind == "reranker":
+        from ecommerce_search.reranking.cross_encoder_provider import snapshot_config_problems
+
+        spec = RERANKER_MODELS[DEFAULT_RERANKER_MODEL_ID]
+        print(f"model kind: reranker  model: {spec.model_id}@{spec.revision}")
+        problems = verify_manifest(
+            models_dir, spec.model_id, spec.revision, profile=RERANKER_PROFILE
+        )
+        if not problems:
+            problems = snapshot_config_problems(models_dir, spec)
+    else:
+        spec = EMBEDDING_MODELS[DEFAULT_EMBEDDING_MODEL_ID]
+        print(f"model kind: embedding  model: {spec.model_id}@{spec.revision}")
+        problems = verify_manifest(
+            models_dir, spec.model_id, spec.revision, profile=EMBEDDING_PROFILE
+        )
+    return problems, spec
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,18 +251,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_embed_status)
     p = sub.add_parser(
         "model-fetch",
-        help="NETWORK: download an embedding-model snapshot at a pinned commit into models/",
+        help="NETWORK: download a model snapshot (embedding or reranker) at a pinned commit "
+        "into models/",
     )
     p.add_argument("--model-id", required=True, help="Hugging Face repository, e.g. org/name")
     p.add_argument("--revision", required=True, help="full 40-character commit hash (immutable)")
+    _add_kind_and_models_dir(p, reranker_help="only the reviewed reranker registry entry")
+    p.set_defaults(func=cmd_model_fetch)
+    p = sub.add_parser(
+        "model-verify",
+        help="offline: re-check the pinned registry snapshot of one kind against its manifest",
+    )
+    _add_kind_and_models_dir(p, reranker_help="the pinned cross-encoder reranker (ADR-007)")
+    p.set_defaults(func=cmd_model_verify)
+    return parser
+
+
+def _add_kind_and_models_dir(p: argparse.ArgumentParser, *, reranker_help: str) -> None:
+    p.add_argument(
+        "--kind",
+        choices=("embedding", "reranker"),
+        default="embedding",
+        help=f"embedding (default) or reranker: {reranker_help}",
+    )
     p.add_argument(
         "--models-dir",
         type=Path,
         default=None,
         help="default: the git-ignored models/ directory at the repository root",
     )
-    p.set_defaults(func=cmd_model_fetch)
-    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:

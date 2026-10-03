@@ -1,6 +1,7 @@
 """Milestone 8 Session A: `RerankerModelSpec` validation and configuration hashing.
 
-Only a test-local spec is used: there is no production reranker registry or pin yet."""
+Validation uses a test-local spec; the production registry (one provisional compatibility pin,
+ADR-007, added in Session C) is tested at the end."""
 
 import dataclasses
 import hashlib
@@ -114,10 +115,57 @@ def test_document_version_changes_the_hash(monkeypatch):
     assert _spec().config_sha256() != before
 
 
-def test_no_production_registry_or_default_pin_exists_yet():
-    names = {name for name in vars(rs) if not name.startswith("_")}
-    assert not {n for n in names if "REGISTRY" in n or n.endswith("_MODELS") or "DEFAULT" in n}
-    assert not [v for v in vars(rs).values() if isinstance(v, RerankerModelSpec)]
+# ---- production registry (Milestone 8 Session C, ADR-007) -------------------------------------
+
+PINNED_ID = "cross-encoder/ms-marco-MiniLM-L6-v2"
+PINNED_REV = "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+
+
+def test_registry_holds_exactly_the_one_reviewed_compatibility_pin():
+    assert list(rs.RERANKER_MODELS) == [PINNED_ID]
+    assert rs.DEFAULT_RERANKER_MODEL_ID == PINNED_ID
+    spec = rs.RERANKER_MODELS[PINNED_ID]
+    assert spec is rs.MS_MARCO_MINILM_L6_V2
+    assert spec == RerankerModelSpec(
+        model_id=PINNED_ID, revision=PINNED_REV, max_length=512, num_labels=1, score_type="logit"
+    )
+    # Only one spec object exists in the module: no second candidate or selection logic.
+    assert [v for v in vars(rs).values() if isinstance(v, RerankerModelSpec)] == [spec]
+
+
+def test_pinned_config_hash_is_stable():
+    # Hand-written canonical form of the pin (rd-1 included), hashed without the spec's code.
+    canonical = (
+        '{"max_length":512,"model_id":"' + PINNED_ID + '","num_labels":1,'
+        '"rerank_document_version":"rd-1","revision":"' + PINNED_REV + '","score_type":"logit"}'
+    )
+    expected = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    assert rs.MS_MARCO_MINILM_L6_V2.config_sha256() == expected
+    assert expected == "b30e3ddda48b373d0d929ee16aeec5a2282680b927e47340c5c58c7b299bdef2"
+
+
+def test_registered_reranker_lookup_is_exact():
+    assert rs.registered_reranker(PINNED_ID, PINNED_REV) is rs.MS_MARCO_MINILM_L6_V2
+
+
+@pytest.mark.parametrize(
+    ("model_id", "revision"),
+    [
+        (PINNED_ID, "main"),
+        (PINNED_ID, "f" * 40),
+        (PINNED_ID, PINNED_REV.upper()),
+        (PINNED_ID.upper(), PINNED_REV),
+        (" " + PINNED_ID, PINNED_REV),
+        ("cross-encoder/ms-marco-MiniLM-L12-v2", PINNED_REV),
+        ("test-org/test-reranker", REV),
+        (None, PINNED_REV),
+        (PINNED_ID, None),
+        (PINNED_ID, 123),
+    ],
+)
+def test_registered_reranker_rejects_anything_else(model_id, revision):
+    with pytest.raises(SpecError):
+        rs.registered_reranker(model_id, revision)
 
 
 def test_hash_matches_an_independently_written_canonical_form():

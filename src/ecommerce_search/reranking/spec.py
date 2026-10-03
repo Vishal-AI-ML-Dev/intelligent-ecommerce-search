@@ -4,9 +4,10 @@ A spec pins everything that changes what a reranker score means: model id, immut
 maximum pair length in tokens, the number of output labels and the score type. Together with the
 reranker document version it is hashed into `config_sha256()`.
 
-This module holds the specification type and its validation only. There is no model registry
-and no default model here: a model is pinned only after its snapshot, licence and compatibility
-have been reviewed (an ADR plus a reviewed code change).
+The production registry (`RERANKER_MODELS`) holds exactly one reviewed entry: a provisional
+compatibility pin (ADR-007), not a quality selection. Adding or changing an entry is a reviewed
+code change plus an ADR, never a configuration edit; settings may only select a registered entry
+at its pinned revision.
 
 Scores are raw single logits (`score_type = "logit"`): uncalibrated, not probabilities, and only
 comparable within one query and one model revision.
@@ -62,3 +63,38 @@ class RerankerModelSpec:
     def config_sha256(self) -> str:
         canonical = json.dumps(self.config(), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+# ---- production registry -------------------------------------------------------------------------
+# Milestone 8 (docs/decisions/ADR-007-reranker-model-selection.md): a provisional COMPATIBILITY
+# pin, not a relevance or quality winner. No alternative was compared; Milestone 10 must re-decide
+# on the human-reviewed Golden Dataset. `max_length` is the model's 512 position embeddings, equal
+# to the tokenizer's `model_max_length` in the pinned snapshot.
+
+MS_MARCO_MINILM_L6_V2 = RerankerModelSpec(
+    model_id="cross-encoder/ms-marco-MiniLM-L6-v2",
+    revision="233902d25c440f23af6f7d6e94d2946bac0bee0a",
+    max_length=512,
+    num_labels=1,
+    score_type="logit",
+)
+
+RERANKER_MODELS: dict[str, RerankerModelSpec] = {
+    MS_MARCO_MINILM_L6_V2.model_id: MS_MARCO_MINILM_L6_V2
+}
+DEFAULT_RERANKER_MODEL_ID = MS_MARCO_MINILM_L6_V2.model_id
+
+
+def registered_reranker(model_id: object, revision: object) -> RerankerModelSpec:
+    """The registry entry for exactly (`model_id`, `revision`), or `SpecError`.
+
+    Lookup is exact: no normalisation, case folding or prefix matching, and the revision must be
+    the pinned commit."""
+    if not isinstance(model_id, str) or not isinstance(revision, str):
+        raise SpecError("reranker model id and revision must be strings")
+    spec = RERANKER_MODELS.get(model_id)
+    if spec is None:
+        raise SpecError("reranker model is not in the reviewed registry")
+    if spec.revision != revision:
+        raise SpecError("reranker revision does not match the registry pin")
+    return spec

@@ -58,5 +58,5 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "integration: requires a running PostgreSQL with pgvector (docker compose up -d db)",
-    "real_model: needs the fetched MiniLM snapshot under models/ (offline; see ADR-006)",
+    "real_model: needs the fetched embedding (ADR-006) and reranker (ADR-007) snapshots under models/ (offline)",
 ]

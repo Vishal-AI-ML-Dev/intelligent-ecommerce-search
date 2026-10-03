@@ -305,7 +305,7 @@ def test_top_k_results_are_a_prefix_of_larger_top_k(client_for):
 
 
 def test_candidate_k_truncates_the_fused_list(client_for):
-    with client_for(search_candidate_k=3, search_default_top_k=3) as client:
+    with client_for(search_candidate_k=3, search_default_top_k=3, search_rerank_depth=3) as client:
         body = client.get("/search/hybrid", params={"q": "x"}).json()
         too_many = client.get("/search/hybrid", params={"q": "x", "top_k": 4})
     assert body["fused_count"] == 4 and body["candidate_count"] == 3 and body["top_k"] == 3
@@ -314,7 +314,11 @@ def test_candidate_k_truncates_the_fused_list(client_for):
 
 def test_source_depths_come_from_settings_independent_of_top_k(client_for, events):
     with client_for(
-        search_lexical_k=7, search_dense_k=9, search_candidate_k=16, search_default_top_k=2
+        search_lexical_k=7,
+        search_dense_k=9,
+        search_candidate_k=16,
+        search_default_top_k=2,
+        search_rerank_depth=16,
     ) as client:
         body = client.get("/search/hybrid", params={"q": "shoes"}).json()
     assert ("lexical", "shoes", 7) in events and ("dense", 384, 9) in events
