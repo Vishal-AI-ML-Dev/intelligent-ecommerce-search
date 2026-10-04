@@ -210,6 +210,22 @@ measured against human-reviewed evaluation data.
 - FR-RET-5 (V3): Optional configurable cross-encoder reranking with on/off
   modes. Initial plan: 50 fused candidates, rerank 20, return 10. Benchmarks
   compare no reranker, rerank 10 and rerank 20.
+  **Milestone 8 status: implemented** as `GET`/`POST /search/reranked`
+  (`search_version = "v3_reranked"`; `docs/search-reranked-m8.md`, ADR-007):
+  - V3 = the frozen V2 candidate generation (`qu-1`, `fp-1`, filtered lexical and dense SQL,
+    unchanged RRF with `rrf_k = 100` provisional, `candidate_k = 50`) plus reranking of the head
+    only: the first `min(SEARCH_RERANK_DEPTH, candidate_count)` fused candidates (default depth
+    20) are scored once by the local cross-encoder `cross-encoder/ms-marco-MiniLM-L6-v2` at
+    revision `233902d25c440f23af6f7d6e94d2946bac0bee0a` (a provisional compatibility pin, not a
+    quality selection) over the `rd-1` document (embedding text version 1), and ordered by raw
+    logit, then RRF rank. The unscored tail keeps its RRF order.
+  - On/off: `RERANKER_ENABLED=false` returns exactly the V2 order. An enabled reranker that
+    fails is a fixed 503, never a silent fallback to V2.
+  - No schema, index or persisted score. Scores are raw logits, never a threshold or filter.
+  - The Milestone 8 benchmark of no reranker, depth 10 and depth 20 measured **latency only**
+    (with determinism and neutral rank movement); without human-reviewed labels no quality
+    comparison was possible, and no configuration was selected. The quality comparison is
+    Milestone 10.
 - FR-RET-6 (V4): Confidence-gated Jev decisions (Level 2 only).
 
 ### 6.4 API
@@ -224,7 +240,8 @@ measured against human-reviewed evaluation data.
   this response, not total matches), the generated `tsquery`, `applied_filters` (always empty in
   V0) and `latency_ms` (`lexical_ms`, `total_ms`). Decision provider, reranker state and parsed
   query are **not** returned yet; they are added when those components exist (additive, no
-  placeholders).
+  placeholders). V0 itself stays frozen: those fields arrived on later, separate endpoints
+  (the parse in Milestones 6 and 7, the reranker state on `/search/reranked` in Milestone 8).
 - FR-API-2 status (Milestone 4): `GET`/`POST /search/dense` responses carry `search_version`
   (`dense_only`), `embedding_model_id`, `embedding_model_revision`, `embedding_dimension`,
   `embedding_text_version`, `distance_metric` (`cosine`), `top_k`, `result_count`,
@@ -246,8 +263,8 @@ measured against human-reviewed evaluation data.
   `qu-1`, `understanding`) and `latency_ms.query_understanding_ms` (always present on 200). Every
   M5 field, result, rank and score is unchanged and `applied_filters` stays empty. A
   query-understanding failure returns the same fixed 503 before any model or database work.
-  `/search` and `/search/dense` are unchanged. The reranker state is not reported yet (no
-  reranker exists).
+  `/search` and `/search/dense` are unchanged. The reranker state was not reported at that
+  point (no reranker existed until Milestone 8, which reports it only on `/search/reranked`).
 - FR-API-2 status (Milestone 7): `GET`/`POST /search/filtered` responses carry the V1 fields
   with `search_version` `v2_filtered` (hit counts are after filtering), plus `filter_policy`
   (`version` `fp-1`), `applied_filters` (the safe filters actually applied: `field`, `operator`
@@ -258,7 +275,19 @@ measured against human-reviewed evaluation data.
   `filter_translation_ms`, `total_ms`). Invalid input is `422`; a query-understanding,
   filter-policy, model or database failure is the fixed 503; any other unexpected error is the
   framework's generic 500. `/search`, `/search/dense` and `/search/hybrid` responses are
-  unchanged. The reranker state is still not reported (no reranker exists).
+  unchanged. `/search/filtered` reports no reranker state; Milestone 8 left it unchanged and
+  reports the reranker state on `/search/reranked` only.
+- FR-API-2 status (Milestone 8): `GET`/`POST /search/reranked` responses carry every V2 field
+  with `search_version` `v3_reranked`, plus a `reranker` block (`enabled`, `status` `applied` /
+  `disabled` / `skipped_no_candidates` / `skipped_no_searchable_text`, `model_id`,
+  `model_revision`, `document_version` `rd-1`, `max_length` 512, `rerank_depth`,
+  `reranked_count`, `score_type` `logit`), per result `rrf_rank`, `rerank_rank` and
+  `rerank_score` (null on the unscored tail), and `latency_ms` adding `document_read_ms`,
+  `reranker_load_ms`, `rerank_document_ms` and `reranking_ms` to the V2 timings. Invalid input is
+  `422`; query-understanding, filter-policy, embedding-model, database, candidate-record
+  (`document_build_failed`) and reranker failures are the fixed 503; any other unexpected error
+  is the generic 500. The OpenAPI operations and components of `/health`, `/search`,
+  `/search/dense`, `/search/hybrid` and `/search/filtered` are byte-identical to Milestone 7.
 - FR-API-3: Listing endpoints (`POST /listings/analyze`,
   `POST /listings/normalize`, `GET /reviews/pending`,
   `POST /reviews/{review_id}/decision`) are deferred to their milestones.
@@ -470,8 +499,12 @@ cannot produce authoritative quality numbers.
   1.0 on a deterministic attribute-consistency proxy over 15 checked queries, and the
   predeclared largest-tie rule selected 100. The proxy is not a quality metric and gives no
   evidence that 100 is better (ADR-002, `docs/search-hybrid-m5.md`).
+- **Milestone 8 status:** the no reranker / depth 10 / depth 20 benchmark measured latency,
+  cold loads, memory, determinism and neutral rank movement only. It reports no quality figure
+  and selects no depth; the reranker model is a compatibility pin (ADR-007).
 - Human-reviewed, authoritative labels arrive in Milestone 9.
-- Milestone 10 re-runs V0 through V3 on the human-reviewed Golden Dataset.
+- Milestone 10 re-runs V0 through V3 on the human-reviewed Golden Dataset, including the
+  reranker comparison (no reranker, depth 10, depth 20) and the reranker re-decision.
 - Final reporting must distinguish provisional tuning from authoritative
   evaluation, and label every number as one or the other.
 
@@ -535,6 +568,11 @@ reporting. Split sizes and results are not decided in Milestone 0.
 - Milestone 7 filtered responses add `filter_translation_ms` (the pure fp-1 translation) to the
   M6 hybrid timings. Filtering runs inside the source SQL, so its cost is part of `lexical_ms`
   and `vector_ms` and no separate `filtering_ms` is reported. No M7 latency benchmark was run.
+- Milestone 8 reranked responses add `document_read_ms` (candidate records), `reranker_load_ms`
+  (only the request that loads the reranker), `rerank_document_ms` and `reranking_ms`. A
+  latency-only benchmark (3 runs, in-process `TestClient`, one Windows laptop, synthetic
+  240-product catalog) reports per-run P50/P95/P99 for reranking disabled, depth 10 and depth 20
+  in `docs/search-reranked-m8.md` §7; it sets no latency budget and selects no configuration.
 - Measured stages: `query_understanding_ms`, `jev_decision_ms`, `lexical_ms`,
   `vector_ms`, `filtering_ms`, `rrf_ms`, `reranking_ms`, `serialization_ms`,
   `total_ms`.
@@ -620,7 +658,11 @@ human review, and evaluation is human-reviewed.
    measurement (ADR-004). **Milestone 4:** embedding model decided in ADR-006
    (`sentence-transformers/all-MiniLM-L6-v2` at revision
    `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`), provisional until the Golden Dataset evaluation
-   in Milestone 10. The reranker remains open until Milestone 8.
+   in Milestone 10. **Milestone 8:** reranker decided in ADR-007 as a provisional
+   **compatibility** pin, not a quality selection: `cross-encoder/ms-marco-MiniLM-L6-v2` at
+   revision `233902d25c440f23af6f7d6e94d2946bac0bee0a`, raw-logit output, `rd-1` documents,
+   default depth 20. Still open: Milestone 10 must re-decide the reranker (or no reranker) on the
+   human-reviewed Golden Dataset.
 4. **Confidence thresholds:** experimental. Selected from human-reviewed data
    in Milestone 12. Until then model-derived decisions cannot be hard
    filters (section 7).

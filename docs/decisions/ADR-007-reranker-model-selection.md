@@ -2,16 +2,18 @@
 
 ## Status
 
-**Draft (Milestone 8 Session C; independently reviewed offline in Session D; finalized in
-Session H).** A provisional **compatibility** pin, not a relevance or quality selection.
-**Milestone 10 must re-decide the reranker on the human-reviewed Golden Dataset.** The V3
-reranked search path, its API exposure, deployment wiring and the latency benchmark belong to
-later Milestone 8 sessions; no benchmark, latency or quality number is recorded here because
-none has been measured.
+**Accepted: final Milestone 8 decision, as a provisional compatibility pin** (drafted in
+Session C, independently reviewed offline in Session D, finalized in Session H). It is a
+**compatibility** pin, not a relevance or quality selection: it records that this model works
+with the V3 contract, offline, on CPU, within its token limit, deterministically, at a measured
+latency cost. **Milestone 10 must re-decide the reranker (or no reranker) on the human-reviewed
+Golden Dataset**; nothing below anticipates that decision. The V3 path, its evidence and the
+latency benchmark are documented in [`docs/search-reranked-m8.md`](../search-reranked-m8.md);
+the Milestone 8 evidence is summarized in "Milestone 8 evidence" below. No quality number exists.
 
 ## Date
 
-2026-10-03
+2026-10-03 (drafted); 2026-10-04 (finalized for Milestone 8)
 
 ## Decision
 
@@ -186,23 +188,80 @@ search never uses the network.
   - Consequence: a deployment that sets `SEARCH_CANDIDATE_K` below 20 must also set
     `SEARCH_RERANK_DEPTH` to at most that value, or settings validation fails for every
     endpoint. V0–V2 request behaviour is unchanged.
-  - Compose and `.env.example` wiring is a later session.
+  - Compose forwards the five settings, with these defaults, to the `api` service only, and the
+    reranker reads the existing read-only `./models:/models:ro` mount; `.env.example` documents
+    them (Session F, `558bd39`).
 - `model-fetch --kind reranker` fetches only the registry pin. `model-verify --kind
   embedding|reranker` re-checks a snapshot offline. `--kind embedding` remains the default and
   the embedding fetch behaviour is unchanged.
 - `real_model` tests now also require the reranker snapshot.
 
+## Milestone 8 evidence
+
+Compatibility (the pin works with the V3 contract; nothing here is a relevance signal):
+
+- V3 is implemented as `GET`/`POST /search/reranked` (`558bd39`): the frozen V2 candidate
+  generation plus head-only reranking of `rd-1` documents, default depth 20, raw logits.
+- Session F, on `558bd39`: 2,879 unit, 717 integration and 18 `real_model` tests passed (the
+  real-model tests offline, with sockets blocked). Session G, on `5d86f44`: 2,945 unit tests
+  passed. These results are reused here, not re-run.
+- Session H scratch-database demo with both canonical snapshots, offline: 204 checks passed and
+  0 failed. They cover GET/POST parity, V3 candidates and RRF facts equal to `/search/filtered`,
+  finite descending logits, determinism, disabled V3 equal to V2 apart from the V3-only fields,
+  no database connection during any model call, and a missing reranker snapshot giving the
+  fixed 503 while `/health` and V0–V2 kept serving (`docs/search-reranked-m8.md` §8.2).
+
+Latency (Session G benchmark; latency, determinism and neutral rank facts only; no configuration
+is selected):
+
+- **First attempt invalid and discarded.** Started 2026-10-03T16:48:16Z; a user-initiated
+  system sleep at 2026-10-03T17:54:55Z interrupted it during run 2. It wrote no summary or
+  report and returned no exit code; its scratch database was dropped. No figure from it is used.
+- **Single approved rerun valid.** Harness `5d86f44`, production commit `558bd39`, 2026-10-04
+  04:01:26Z–06:36:21Z, exit code `0`, AC power at start and end, no power event recorded, all
+  scratch databases dropped. 3 runs × 3 arms (disabled, depth 10, depth 20; order rotated), the
+  17 committed M5 queries, in-process `TestClient`, `top_k = 10`: 33,669 requests (9 cold,
+  3,060 warm-up, 30,600 timed), all status 200, no exclusion or retry. One Windows laptop,
+  synthetic 240-product catalog.
+- `request_ms` p50 / p95 per run (ms):
+
+  | Arm | Run 1 | Run 2 | Run 3 |
+  |---|---:|---:|---:|
+  | disabled | 29.048 / 40.840 | 32.969 / 42.759 | 40.487 / 50.020 |
+  | depth 10 | 256.935 / 328.367 | 270.400 / 360.529 | 271.637 / 440.067 |
+  | depth 20 | 484.260 / 638.622 | 511.026 / 668.786 | 574.370 / 734.368 |
+
+- Cold `reranker_load_ms` (including offline snapshot re-verification) was 500.131–640.143 ms
+  over the six enabled cold requests. Process peak RSS reached at most 1027.8 MiB. Rankings and
+  scores were bitwise identical within every arm and across the three runs. Latency drifted
+  upward from run to run, including in stages the reranker does not touch; the cause was not
+  identified.
+- Artifacts (git-ignored, `data/processed/rerank_benchmark/`):
+
+  | File | Bytes | SHA-256 |
+  |---|---:|---|
+  | `rerank-m8-latency-5d86f44b83a6.samples.jsonl` | 108,013,145 | `e76fd924b7d4bffd8cfe1820e42c49e06ce52afa88d85389d69825cc3eda7375` |
+  | `rerank-m8-latency-5d86f44b83a6.json` | 1,272,097 | `ab19c0521eadb3584f5551136b611ce83d8fd0cbe847fb7baaa6cd8c1175221a` |
+  | `rerank-m8-latency-5d86f44b83a6.md` | 14,837 | `681fbf763e266fa3b8ad1f0a3a48a3d4780bf3ee22e0f89dd1c6319f193ee22a` |
+
+  The committed `--verify` recomputed the summary exactly (Sessions G and H), and two
+  independent recomputations found 0 mismatches. Full tables and caveats:
+  `docs/search-reranked-m8.md` §7.
+
+These figures are the cost of the pinned model on one machine. They do not make depth 10,
+depth 20 or "no reranker" the preferred configuration.
+
 ## Follow-up
 
-- Later Milestone 8 sessions: V3 reranked search, API and deployment wiring, and the
-  **latency-only** benchmark of reranker disabled / depth 10 / depth 20 (approved decision D8,
-  Session G). It also reports determinism and descriptive rank movement, and never selects a
-  quality winner. Record measured numbers there, not here.
 - Milestone 10: compare no reranker / depth 10 / depth 20 on the human-reviewed Golden Dataset,
-  and re-decide the reranker (or no reranker).
+  and re-decide the reranker (or no reranker). That re-decision is mandatory; this pin does not
+  carry over by default. Latency figures such as those above are cost information only.
+- Any change of model, revision, document version or score type needs a new ADR and a reviewed
+  code change.
 
 ## References
 
 - ADR-002 (hybrid retrieval and RRF), ADR-004 and ADR-006 (local model strategy and the
   embedding pin whose snapshot tooling this reuses).
 - `docs/MASTER_PLAN.md`, sections "Reranking" and "Milestone 8 — Reranking".
+- `docs/search-reranked-m8.md` (V3 contract, benchmark and limitations).

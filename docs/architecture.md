@@ -1,6 +1,6 @@
 # Architecture
 
-- Status: Milestone 0 design; implemented parts are marked per section (M1 foundation, M2 catalog, M3 lexical V0, M4 dense retrieval, M5 hybrid V1, M6 informational query understanding, M7 structured filtering V2)
+- Status: Milestone 0 design; implemented parts are marked per section (M1 foundation, M2 catalog, M3 lexical V0, M4 dense retrieval, M5 hybrid V1, M6 informational query understanding, M7 structured filtering V2, M8 cross-encoder reranking V3)
 - Date: 2026-09-30
 - Related: `docs/spec.md`, `docs/data-quality.md`, `docs/decisions/`
 
@@ -177,13 +177,75 @@ after it ends. Dense freshness is unchanged, so missing or stale embeddings only
 dense list. Failure boundaries: invalid input `422`; query-understanding, filter-policy, model
 and SQLAlchemy failures the fixed `503 {"detail": "search unavailable"}` with only a fixed
 reason code logged; any other unexpected exception the framework's generic `500`, never
-disguised as 503. The Jev, confidence-gate and reranker stages are still not implemented.
+disguised as 503. The Jev, confidence-gate and reranker stages were not part of V2 (the reranker
+is the separate V3 endpoint below).
 
 No migration, index, setting or dependency was added for V2: it reads the M2 catalog columns,
 the M3 search documents and the M4 embeddings, and dense retrieval stays an exact scan. At 240
 products no index for the filter columns was added and none was measured. Revisit this (and the
 exact scan) with a measured latency benchmark when the catalog grows materially or a measurement
 shows that filtered SQL dominates request time.
+
+**Milestone 8 implemented V3** (`search_version = "v3_reranked"`, `GET`/`POST /search/reranked`;
+see `docs/search-reranked-m8.md` and ADR-007). It is a new, additive endpoint; the OpenAPI
+contracts of the five older routes are byte-identical to Milestone 7.
+
+| Endpoint | `search_version` | Pipeline |
+|---|---|---|
+| `/search` | `v0_lexical` | V0 lexical FTS |
+| `/search/dense` | `dense_only` | dense component (not V-numbered) |
+| `/search/hybrid` | `v1_hybrid` | V1 lexical + dense + RRF; informational parse |
+| `/search/filtered` | `v2_filtered` | V2 = V1 + `fp-1` filters from the `qu-1` parse |
+| `/search/reranked` | `v3_reranked` | V3 = frozen V2 candidates + head-only cross-encoder reranking |
+
+The implemented flow is:
+
+```text
+normalize the query once and validate top_k (422)
+ -> M6 parse + DecisionProvider (503 query_understanding_failed)
+ -> fp-1 translation (503 filter_policy_failed)
+ -> no-searchable-text check (200, no model or SQL, status skipped_no_searchable_text)
+ -> load and encode with the embedding model (no DB connection held)
+ -> one REPEATABLE READ READ ONLY transaction:
+      the V2 filtered lexical + dense SQL, and (enabled, non-empty union) the catalog records of
+      every product in the source union: products + own-category spec rows, constant SQL
+ -> transaction commits and releases the connection
+ -> rebuild and validate the records (503 document_build_failed)
+ -> unchanged RRF (rrf_k = 100, provisional), keep candidate_k = 50
+ -> disabled or no candidates: RRF order (status disabled / skipped_no_candidates)
+ -> enabled: load the reranker once (offline re-verification), build rd-1 documents for the
+    first min(depth, candidate_count) candidates, count pair tokens (no truncation, > 512
+    refused), score once, sort the head by raw logit then RRF rank; tail keeps RRF order
+ -> return the first top_k (status applied)
+```
+
+* **Candidate-record snapshot read.** `read_reranked_sources` runs the V2 reads unchanged and,
+  in the same snapshot, the records of the whole source union (up to `lexical_k + dense_k`
+  products) with constant statements and one bound id array. Records are rebuilt through the
+  reviewed catalog path into `CatalogRecord`s after the transaction; a missing, duplicated or
+  invalid record fails the request as `document_build_failed` (503) while `/search/filtered`
+  keeps serving. Reading the whole union, not only the head, is a known limitation.
+* **Transaction ends before model work.** Fusion, `rd-1` building, token counting, loading and
+  scoring all run after the transaction has committed and released its connection; no
+  connection is checked out during any model call (asserted by tests, the benchmark probe and
+  the Session H demo).
+* **Disabled path is exactly V2.** `RERANKER_ENABLED=false` calls the same `read_filtered_sources`
+  as V2, reads no record, never touches the reranker and returns the V2 body plus the V3-only
+  fields (`reranker`, `rrf_rank`, null `rerank_rank`/`rerank_score`, extra latency fields).
+* **No silent fallback.** An enabled reranker that cannot load or score is the fixed 503 (`reranker
+  snapshot_missing`, `load_failed`, `config_mismatch`, `input_too_long`, `invalid_output`,
+  `score_failed`); the V2 order is never returned instead and nothing is retried. Unexpected
+  exceptions remain the generic 500.
+* **Model lifecycle and offline registry.** `reranking/spec.py` holds one reviewed registry
+  entry (`MS_MARCO_MINILM_L6_V2`, a provisional compatibility pin). `create_app` builds one
+  unloaded `CrossEncoderReranker` per app (no file read, no torch import). The first request
+  with candidates loads it after an offline manifest and strict-profile check (exact seven
+  files, pinned SHA-256, confined links), with hub offline mode, `local_files_only=True`,
+  `trust_remote_code=False`, CPU and `Identity` activation (raw logits). A load lock loads once;
+  an inference lock serializes token counting and scoring; a failed load is retried on the next
+  request. `model-fetch --kind reranker` is the reranker's only network path; `model-verify
+  --kind reranker` re-checks offline.
+* **No migration or index.** Reranking persists nothing; the migration head stays `0004`.
 
 Evaluation order: Milestones 3 to 8 use provisional, non-authoritative smoke
 queries. Human-reviewed labels arrive in Milestone 9, and Milestone 10 re-runs
@@ -391,6 +453,12 @@ setting selects it.
   `SEARCH_LEXICAL_K` and `SEARCH_DENSE_K`.
 - Milestone 7 adds no setting: `/search/filtered` uses the hybrid settings above, and the filter
   policy version `fp-1` is a code constant.
+- Milestone 8 settings: `RERANKER_ENABLED` (default `true`; only `true`/`false`),
+  `RERANKER_MODEL_ID` and `RERANKER_MODEL_REVISION` (must equal the reviewed registry entry; the
+  default is the ADR-007 pin), `RERANKER_BATCH_SIZE` (default 16, 1–256) and
+  `SEARCH_RERANK_DEPTH` (default 20, 1–1000, at most `SEARCH_CANDIDATE_K`, validated even when
+  reranking is disabled). The reranker snapshot is read from `EMBEDDING_MODELS_DIR`. Compose
+  forwards the five settings to the `api` service only.
 - Credentials only in environment variables. `.env` is git-ignored and only
   `.env.example` may be committed. Secrets are never logged.
 
@@ -415,6 +483,13 @@ setting selects it.
   `ignored_constraints` and the post-filter hit, overlap, fused and candidate counts. Filtering
   runs inside the source SQL, so its cost is inside `lexical_ms` and `vector_ms`; no separate
   `filtering_ms` is reported.
+- Milestone 8 reranked responses add `document_read_ms`, `reranker_load_ms` (only the request
+  that loads the reranker), `rerank_document_ms` and `reranking_ms` to the V2 timings, plus the
+  `reranker` block (state, model pin, depth, `reranked_count`, `score_type: "logit"`) and per
+  result `rrf_rank`, `rerank_rank` and `rerank_score`. Errors log one fixed line
+  (`reranked search unavailable: [reranker ]<reason>` plus a fixed hint for a missing snapshot or
+  table), never query or document text, SQL, paths, exception text or a traceback. Measured
+  latency: `docs/search-reranked-m8.md` §7.
 - Provider telemetry: provider, pinned model version, latency, raw provider
   probabilities and gate-confidence values (separate fields), fallback reason
   and returned cost where available.
@@ -430,6 +505,7 @@ setting selects it.
 | `GET /search/dense?q=...`, `POST /search/dense` | 4 (dense-only retrieval implemented; not a V-numbered version) |
 | `GET /search/hybrid?q=...`, `POST /search/hybrid` | 5 (V1 hybrid lexical + dense + RRF implemented; `rrf_k` provisional); 6 adds the informational `query_understanding` block |
 | `GET /search/filtered?q=...`, `POST /search/filtered` | 7 (V2 filtered hybrid implemented; filters from the M6 parse under `fp-1`) |
+| `GET /search/reranked?q=...`, `POST /search/reranked` | 8 (V3 implemented: V2 candidates + head-only cross-encoder reranking; provisional model pin) |
 | `POST /listings/analyze`, `POST /listings/normalize` | 13–14 (provisional) |
 | `GET /reviews/pending`, `POST /reviews/{review_id}/decision` | Listing milestones (provisional) |
 
@@ -450,6 +526,11 @@ is in `docs/MASTER_PLAN.md` §17. Milestone 0 adds only `docs/*.md` and
   `models/` directory read-only into the `api` service only (`./models:/models:ro`). Without a
   snapshot, dense search returns the fixed 503 and lexical search and `/health` keep working
   (verified in Docker; `docs/search-dense-m4.md` §7).
+- Milestone 8: the reranker snapshot uses the same read-only mount and is never downloaded at
+  runtime. Without it, an enabled `/search/reranked` returns the fixed 503 whenever it has
+  candidates to rerank, while `/health` and the V0–V2 routes keep working (verified in-process
+  on a scratch database by the real-model test and the Session H demo,
+  `docs/search-reranked-m8.md` §8.2).
 - AWS (ECR, ECS/Fargate, PostgreSQL with pgvector, Secrets Manager,
   CloudWatch, Terraform) only in Milestone 19, after local stability and with
   approval before chargeable actions. No EKS.
@@ -464,3 +545,4 @@ is in `docs/MASTER_PLAN.md` §17. Milestone 0 adds only `docs/*.md` and
 | [ADR-004](decisions/ADR-004-local-embedding-strategy.md) | Configurable local embedding models |
 | [ADR-005](decisions/ADR-005-jev-bounded-decision-provider.md) | Jev as an optional bounded-decision provider |
 | [ADR-006](decisions/ADR-006-embedding-model-selection.md) | MiniLM embedding model (pinned revision) and exact scan at the current scale |
+| [ADR-007](decisions/ADR-007-reranker-model-selection.md) | MiniLM cross-encoder reranker: a provisional compatibility pin (pinned revision), re-decided in Milestone 10 |

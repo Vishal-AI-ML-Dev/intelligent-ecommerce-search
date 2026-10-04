@@ -50,6 +50,15 @@ the unchanged V1 RRF. No schema, index, setting or dependency change. `/search` 
 `/search/dense` and `/search/hybrid` (V1) are unchanged. See "Filtered search (Milestone 7)"
 below and `docs/search-filtered-m7.md`.
 
+Milestone 8 (cross-encoder reranking, **V3**): **implemented.** A new, additive
+`GET`/`POST /search/reranked` (`search_version = "v3_reranked"`) takes the unchanged V2
+candidates and reranks the head of the fused list (default 20) with a local cross-encoder,
+`cross-encoder/ms-marco-MiniLM-L6-v2`, pinned as a **provisional compatibility pin, not a quality
+selection** (ADR-007). Reranking can be switched off. No schema, index or dependency change;
+`/search`, `/search/dense`, `/search/hybrid` and `/search/filtered` are unchanged. A
+latency-only benchmark was run; no quality comparison exists yet (Milestone 10). See "Reranked
+search (Milestone 8)" below and `docs/search-reranked-m8.md`.
+
 ## Prerequisites
 
 - Python 3.12 (managed by `uv` via `.python-version`)
@@ -424,6 +433,61 @@ curl -X POST http://127.0.0.1:8000/search/filtered -H "Content-Type: application
   `under 40k` or `ke liye` often leave only dense candidates; missing or stale embeddings shorten
   the dense list; `rrf_k = 100` remains provisional.
 
+## Reranked search (Milestone 8)
+
+V3 reranked retrieval (`search_version = "v3_reranked"`): exactly the `/search/filtered`
+candidates (same parse, filters, sources and RRF), then the first `SEARCH_RERANK_DEPTH` (20)
+fused candidates are scored by a local cross-encoder over each product's `rd-1` text (the
+embedding text) and reordered by score; candidates beyond the depth keep their RRF order with a
+null score. **No relevance or quality claim is made and no depth is recommended**: the model is
+a compatibility pin, the catalog is synthetic, and the comparison of no reranker, depth 10 and
+depth 20 on human-reviewed labels is Milestone 10. Contract, benchmark and limitations:
+[`docs/search-reranked-m8.md`](docs/search-reranked-m8.md); decision record:
+[ADR-007](docs/decisions/ADR-007-reranker-model-selection.md).
+
+Prerequisites: everything `/search/filtered` needs, plus the reranker snapshot. Two local
+snapshots must exist under the git-ignored `models/` directory:
+
+| Snapshot | Model at pinned revision | Fetch |
+|---|---|---|
+| Embedding (ADR-006) | `sentence-transformers/all-MiniLM-L6-v2` @ `1110a243fdf4706b3f48f1d95db1a4f5529b4d41` | `model-fetch` (see "Dense search") |
+| Reranker (ADR-007) | `cross-encoder/ms-marco-MiniLM-L6-v2` @ `233902d25c440f23af6f7d6e94d2946bac0bee0a` | `model-fetch --kind reranker` |
+
+```bash
+# once, network: only the reviewed registry entry at its pinned revision is accepted
+uv run python -m ecommerce_search.search model-fetch --kind reranker --model-id cross-encoder/ms-marco-MiniLM-L6-v2 --revision 233902d25c440f23af6f7d6e94d2946bac0bee0a
+# offline re-check against the manifest (the reranker also: exact file set, pinned hashes, model config)
+uv run python -m ecommerce_search.search model-verify --kind reranker
+uv run python -m ecommerce_search.search model-verify --kind embedding
+
+curl "http://127.0.0.1:8000/search/reranked?q=noise+cancelling+headphones&top_k=5"
+curl -X POST http://127.0.0.1:8000/search/reranked -H "Content-Type: application/json" -d '{"query": "laptop 8gb 256 ssd", "top_k": 5}'
+```
+
+* **Enabled** (`RERANKER_ENABLED=true`, the default): `reranker.status` is `applied` and each
+  result carries `rrf_rank`, `rerank_rank` and `rerank_score`. Scores are **raw logits**:
+  uncalibrated, not probabilities, never a threshold or filter. The model loads lazily on the
+  first request with candidates, offline and on CPU, after re-verifying the snapshot.
+* **Disabled** (`RERANKER_ENABLED=false`): `status` is `disabled` and the order is exactly V2's;
+  the reranker is never loaded. When enabled, a query with no candidates gives
+  `skipped_no_candidates`; in either mode a query with no letter or digit gives
+  `skipped_no_searchable_text`.
+* **Failure:** if the enabled reranker cannot load or score (for example a missing snapshot), the
+  response is the fixed `503 {"detail": "search unavailable"}` and the log names a reason code
+  and, for a missing snapshot, the `model-fetch --kind reranker` hint. The V2 order is never
+  returned silently instead. `/health` and the other routes keep working. One invalid catalog
+  record anywhere in the retrieved candidate union also makes V3 return 503
+  (`document_build_failed`) while `/search/filtered` still serves.
+* **Settings:** `RERANKER_ENABLED`, `RERANKER_MODEL_ID`, `RERANKER_MODEL_REVISION` (must equal the
+  pin), `RERANKER_BATCH_SIZE` (16) and `SEARCH_RERANK_DEPTH` (20, at most `SEARCH_CANDIDATE_K`,
+  validated even when disabled). Compose forwards them to `api` only and the reranker reads the
+  same read-only `models/` mount.
+* **Latency.** On one Windows laptop, in-process, an enabled request spent most of its time in
+  CPU cross-encoder scoring, and depth 20 had higher measured `request_ms` p50, p95 and p99
+  than depth 10 in every run.
+  Per-run P50/P95/P99 tables, cold loads, memory, determinism and the run-to-run drift are in
+  `docs/search-reranked-m8.md` §7; they are cost figures, not a recommendation.
+
 ## `GET /health`
 
 Readiness-oriented. Returns `200` with `status: "ok"` when PostgreSQL is
@@ -442,7 +506,7 @@ uv run pytest -m "not integration and not real_model"   # unit + API tests: no D
 docker compose up -d db
 uv run alembic upgrade head
 uv run pytest -m "integration and not real_model"       # needs the compose database (scratch DBs only)
-uv run pytest -m real_model    # offline smoke tests with the fetched MiniLM snapshot (and the database)
+uv run pytest -m real_model    # offline smoke tests with both fetched snapshots (and the database)
 docker compose config -q
 ```
 
@@ -450,8 +514,9 @@ Unit tests are hermetic: they never read `.env` or ambient `POSTGRES_*` settings
 regression test runs the whole unit suite with a blank password.
 Integration tests fail (they are not skipped) if the database is not running.
 They create and drop throwaway databases and never touch the development database. The
-`real_model` tests also fail (they are not skipped) if the MiniLM snapshot is missing; they never
-use the network. Every other test uses a deterministic fake embedder.
+`real_model` tests also fail (they are not skipped) if the embedding or the reranker snapshot is
+missing or modified; they never use the network. Every other test uses a deterministic fake
+embedder and, for V3, a fake reranker.
 
 ## Versions
 
