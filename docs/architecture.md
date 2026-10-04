@@ -494,7 +494,7 @@ setting selects it.
   probabilities and gate-confidence values (separate fields), fallback reason
   and returned cost where available.
 - Full observability (request IDs, structured logs, aggregate metrics) is
-  Milestone 17.
+  Milestone 24.
 
 ## 9. API surface
 
@@ -509,14 +509,13 @@ setting selects it.
 | `POST /listings/analyze`, `POST /listings/normalize` | 13–14 (provisional) |
 | `GET /reviews/pending`, `POST /reviews/{review_id}/decision` | Listing milestones (provisional) |
 
-The listing endpoint milestone mapping is provisional. The master plan does
-not assign endpoints to milestones, and the mapping is confirmed when
-Milestones 13 to 15 are planned.
+The listing endpoint milestone mapping is provisional. `docs/MASTER_PLAN.md` §23 gives
+indicative milestones only; the mapping is confirmed when those milestones are planned.
 
 ## 10. Repository layout
 
 Directories are created only when their milestone begins. The intended layout
-is in `docs/MASTER_PLAN.md` §17. Milestone 0 adds only `docs/*.md` and
+is in `docs/MASTER_PLAN.md` §24. Milestone 0 adds only `docs/*.md` and
 `docs/decisions/`.
 
 ## 11. Deployment
@@ -532,7 +531,7 @@ is in `docs/MASTER_PLAN.md` §17. Milestone 0 adds only `docs/*.md` and
   on a scratch database by the real-model test and the Session H demo,
   `docs/search-reranked-m8.md` §8.2).
 - AWS (ECR, ECS/Fargate, PostgreSQL with pgvector, Secrets Manager,
-  CloudWatch, Terraform) only in Milestone 19, after local stability and with
+  CloudWatch, Terraform) only in Milestone 26, after local stability and with
   approval before chargeable actions. No EKS.
 
 ## 12. Architecture decision records

@@ -1,11 +1,17 @@
-# Intelligent E-commerce Search & Decision Engine
+# Intelligent Ecommerce Search, Shopping & Return Intelligence Platform
 
-A production-oriented e-commerce search and bounded-decision system.
+A production-oriented e-commerce search and bounded-decision system. The search engine is
+implemented. The buyer assistant and return intelligence are planned, not implemented.
 
 Development is organized milestone by milestone. See
 `docs/MASTER_PLAN.md` for the complete engineering plan.
 
 ## Current status
+
+- M0–M8: complete according to repository history (summarized below).
+- M9 (Golden Dataset): in progress.
+- M10–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
+  (HITL), the dual frontend and marketplace integration. M27 is optional.
 
 Milestone 1 (Foundation): typed settings, FastAPI app with `GET /health`,
 PostgreSQL 16 + pgvector via Docker Compose, SQLAlchemy 2 (sync) with psycopg 3,

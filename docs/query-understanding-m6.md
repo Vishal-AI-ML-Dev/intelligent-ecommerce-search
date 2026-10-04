@@ -294,7 +294,7 @@ unchanged.
 * The query text (normalized) appears in the response body (`query`, `raw_query`, span texts),
   as the query already did in M5.
 * The existing uvicorn access-log behaviour (it records GET query strings) is unchanged and
-  deferred to Milestone 17.
+  deferred to Milestone 24.
 
 ## 8. Evidence
 

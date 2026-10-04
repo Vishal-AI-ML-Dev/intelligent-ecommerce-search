@@ -58,7 +58,7 @@ Structured filters are pushed into SQL when safe and beneficial.
 - Vector index choice and parameters are not decided here. They are decided in
   Milestone 4 from measurements.
 - Deployment requires a PostgreSQL instance with pgvector available (local
-  Docker in Milestone 1, AWS PostgreSQL with pgvector in Milestone 19).
+  Docker in Milestone 1, AWS PostgreSQL with pgvector in Milestone 26).
 
 ## Revisit when
 

@@ -1,13 +1,16 @@
-# Specification — Intelligent E-commerce Search & Decision Engine
+# Specification — Intelligent Ecommerce Search, Shopping & Return Intelligence Platform
 
-- Status: Milestone 0 specification
+- Status: Baseline specification created in Milestone 0; amended for the approved expanded roadmap. Current implementation status is maintained in docs/MASTER_PLAN.md.
 - Date: 2026-09-30
 - Primary source: `docs/MASTER_PLAN.md`
 - Related: `docs/architecture.md`, `docs/data-quality.md`, `docs/decisions/`
 
 This document states what the system must do and how completion is judged. It
-does not describe implemented behavior; nothing described here exists in code
-yet. Where `docs/MASTER_PLAN.md` and this document disagree, the master plan
+does not describe implemented behavior. Implementation status is maintained in
+docs/MASTER_PLAN.md. The M0–M8 search foundation is implemented according to
+repository history, M9 is in progress, and the buyer-assistant,
+return-intelligence, production-extension, and optional
+marketplace-integration milestones remain planned. Where `docs/MASTER_PLAN.md` and this document disagree, the master plan
 wins and this document must be corrected.
 
 ## 1. Problem statement
@@ -54,8 +57,16 @@ measured against human-reviewed evaluation data.
 
 ## 3. Non-goals
 
-- A generic RAG chatbot or an unrestricted LLM wrapper.
-- Free-form generated answers, product descriptions or recommendations.
+- Open-domain or unrestricted generation: a generic RAG chatbot, an unrestricted
+  LLM wrapper, or generated answers, product descriptions or recommendations
+  that are not grounded in the catalog. Grounded, catalog-constrained buyer
+  answers with product-ID citations are permitted only in Milestone 16, and
+  their evaluation and safety testing belong only to Milestone 17.
+  Return-intelligence generation is permitted only within the Milestone 19–21
+  boundaries (`docs/MASTER_PLAN.md` §17–§20). None of this is implemented.
+- Automatic publishing of listing changes to any marketplace.
+- LangGraph or a multi-agent architecture, unless later measurement proves a
+  bounded need.
 - Using any model to invent attributes, produce ground-truth labels, make final
   legal conclusions, or automatically reject listings or ban sellers.
 - Paid embedding APIs as a core dependency.
@@ -63,7 +74,7 @@ measured against human-reviewed evaluation data.
   multiple databases for the same search workload, unless measurements prove
   PostgreSQL insufficient.
 - A universal latency promise not backed by measurement.
-- Frontend, AWS or Terraform work before Milestones 18 and 19.
+- Frontend, AWS or Terraform work before Milestones 25 and 26.
 - Multi-currency conversion, personalization, and learning-to-rank from user
   behavior. None of these are in the master plan.
 
@@ -73,7 +84,9 @@ measured against human-reviewed evaluation data.
 |---|---|---|
 | 1 — Core search engine | Catalog, catalog quality, PostgreSQL FTS, local embeddings + pgvector, hybrid retrieval with RRF, deterministic query understanding, structured filtering, cross-encoder reranking, human-reviewed Golden Dataset, evaluation, FastAPI, tests, measured latency | Portfolio-complete when done |
 | 2 — Marketplace decision layer | Jev decision provider, query classification, retrieval-strategy routing, ambiguity and out-of-catalog detection, listing-category classification, attribute-candidate validation, policy-risk triage, confidence-based review routing | Only after Level 1 is stable |
-| 3 — Production extensions | Regression CI, observability, frontend, production Docker, AWS, Terraform | Only after evaluation is stable |
+| 3 — Buyer and Return Intelligence (M16–M22) | Grounded buyer assistant and its evaluation, return data foundation, return-reason intelligence, evidence retrieval and root-cause hypotheses, corrective actions with human review, closed-loop evaluation | Only after Level 1 and its evaluation are stable; not implemented |
+| 4 — Production extensions (M23–M26) | Regression CI, observability, dual frontend, production Docker, AWS, Terraform | Only after evaluation is stable |
+| Optional (M27) | Authorized marketplace integration (official access only) | Optional; the MVP uses CSV/JSON import and export |
 
 ## 5. Actors and workflows
 

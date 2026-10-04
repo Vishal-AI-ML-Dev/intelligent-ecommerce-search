@@ -1,8 +1,8 @@
 # Master Engineering Plan
 
-## Project: Intelligent E-commerce Search & Decision Engine
+## Project: Intelligent Ecommerce Search, Shopping & Return Intelligence Platform
 
-You are the lead Search Engineer, Backend Engineer, and Applied ML Engineer responsible for building this project.
+You are the lead Search Engineer, Backend Engineer, Applied ML Engineer, and AI Evaluation Engineer responsible for building this project.
 
 Execution philosophy:
 
@@ -10,14 +10,46 @@ Execution philosophy:
 Build small -> test -> measure -> evaluate -> document -> stop
 ```
 
-This is not a generic RAG chatbot, an unrestricted LLM wrapper, or a collection of disconnected demos. It is a production-oriented e-commerce search and bounded-decision system built around measurable retrieval quality, explicit constraints, confidence gating, safe fallback, and human review.
+This is not a generic RAG chatbot, an unrestricted LLM wrapper, an autonomous agent, or a collection of disconnected demos. It is a production-oriented e-commerce platform built around measurable retrieval quality, explicit constraints, evidence grounding, confidence gating, safe fallback, and human authority over every consequential decision.
 
-The project has two related workflows:
+The project has two connected workflows built on one search foundation:
 
-1. Buyer-side product search — the core portfolio project.
-2. Seller-side listing intelligence — implemented only after the core is stable.
+1. **Workflow A — Buyer Intelligence.** Product search (the core portfolio project, M0–M10), followed later by a grounded, citation-backed shopping assistant (M16–M17).
+2. **Workflow B — Retailer Return Intelligence.** Return-reason analysis, evidence retrieval, root-cause hypotheses, and corrective-action proposals that go through human review (M18–M22).
+
+Seller-side listing intelligence (M13–M15) connects the two: approved listing corrections improve the catalog that buyers search.
+
+The existing search engine (M3–M8) is both:
+
+1. the buyer-facing product retrieval engine; and
+2. a reusable retrieval foundation for later evidence-based workflows.
+
+### Plan revision note (2026-10-04)
+
+The project was expanded from "Intelligent E-commerce Search & Decision Engine". The milestones M0–M15 keep their meaning. M0–M8 and their implementation boundaries are unchanged. New milestones M16–M22 and the optional M27 were added. The production milestones were renumbered:
+
+| Former number | New number | Milestone |
+|---|---|---|
+| 16 | 23 | Regression CI |
+| 17 | 24 | Observability |
+| 18 | 25 | Frontend (now Dual Frontend) |
+| 19 | 26 | AWS Deployment |
+
+Other documents written before this revision still use the former numbers. These are `docs/spec.md`, `docs/architecture.md`, `docs/query-understanding-m6.md` and ADR-001. Read them through this table until those documents are updated.
+
+### Repository status at this revision
+
+| Milestone | Status | Evidence |
+|---|---|---|
+| M0–M8 | Complete as documented | Milestone commits on `main`, pushed (`origin/main` = `0a93e52`). Per-milestone docs live in `docs/`. |
+| M9 | In progress | Session B evaluation contracts and tests exist but are uncommitted (`evals/contracts/`, `tests/unit/golden/`). No queries, pools, labels or metric results exist. |
+| M10–M27 | Not started | — |
+
+The status above was checked against git history at this revision. The test suite was not re-run as part of this documentation change.
 
 ## 1. Business problem
+
+### Buyer side
 
 Marketplace listings are inconsistent across sellers. They may contain misspellings, missing attributes, conflicting units, misleading claims, policy risks, and duplicate products. Buyers submit short search queries that mix category, brand, exact specifications, price, and semantic intent.
 
@@ -34,7 +66,27 @@ iphone 15
 
 A pure semantic retriever may return semantically similar products that violate explicit constraints. For `laptop 8gb 256 ssd`, RAM, storage, and storage type must be treated as explicit constraints. For `coding laptop`, coding is primarily semantic intent.
 
-The system combines:
+Buyers also need help comparing products and deciding between them. An answer that is not grounded in the catalog, or that ignores an explicit constraint, is worse than no answer.
+
+### Retailer side
+
+Returns are expensive for retailers. They have many causes:
+
+- wrong size or fit;
+- products that do not match the listing;
+- incorrect specifications;
+- quality defects;
+- damage in transit;
+- wrong items delivered;
+- logistics delays;
+- change of mind;
+- occasional abuse.
+
+Return reasons are often free text, multilingual (including Hinglish), misspelled, and spread across order, return, review, and support systems. Teams struggle to see which SKUs and variants share a pattern. They also struggle to tell whether a fix belongs to the listing, the product, the supplier, the warehouse, or the carrier.
+
+Not every return is caused by a listing problem. Many returns are not preventable by any catalog change. The platform proposes evidence-backed hypotheses for qualified humans to investigate. It does not guarantee lower return rates or higher sales.
+
+### What the platform combines
 
 ```text
 Catalog ingestion
@@ -47,9 +99,30 @@ Catalog ingestion
 + reranking
 + bounded model decisions
 + confidence gating
-+ human review
++ grounded generation with citations (bounded)
++ return-reason classification and clustering
++ evidence retrieval and root-cause hypotheses
++ human review and audit
 + evaluation
 ```
+
+### Closed feedback loop
+
+```text
+Buyer search
+ -> purchase
+ -> return / feedback
+ -> return-reason analysis
+ -> evidence retrieval
+ -> root-cause hypothesis
+ -> corrective-action proposal
+ -> authorized human approval
+ -> listing / catalog improvement
+ -> search-index refresh
+ -> future outcome monitoring
+```
+
+Every arrow after "return-reason analysis" can stop early. The pipeline must stop when there is insufficient evidence, conflicting evidence, low confidence, or a human rejection. Outcome monitoring measures change after an approved correction. It does not by itself prove that the correction caused the change.
 
 ## 2. Absolute execution rule
 
@@ -72,7 +145,7 @@ Do not automatically continue. Do not generate future milestone code. Create onl
 
 ## 3. Scope
 
-### Level 1 — Core search engine
+### Level 1 — Core search engine (M0–M10)
 
 - Product catalog
 - Catalog quality validation
@@ -87,9 +160,9 @@ Do not automatically continue. Do not generate future milestone code. Create onl
 - FastAPI
 - Tests and measured latency
 
-The project is portfolio-complete when this level is complete.
+The core search project is portfolio-complete when this level is complete. Every later level builds on it and must not weaken it.
 
-### Level 2 — Marketplace decision layer
+### Level 2 — Marketplace decision layer (M11–M15)
 
 Only after the core is stable:
 
@@ -97,23 +170,72 @@ Only after the core is stable:
 - Query category and semantic-intent classification
 - Retrieval-strategy routing
 - Ambiguity and out-of-catalog detection
+- Listing normalization
 - Listing-category classification
 - Attribute-candidate validation
 - Policy-risk triage
 - Confidence-based human-review routing
 
-### Level 3 — Production extensions
+### Level 3 — Buyer and Return Intelligence (M16–M22)
+
+Only after the core and its evaluation are stable:
+
+- Grounded buyer assistant over V3/V4 search, with evaluation and safety testing (M16–M17)
+- Return data foundation with PII redaction and provenance (M18)
+- Return-reason classification and complaint clustering (M19)
+- Evidence retrieval and root-cause hypotheses (M20)
+- Corrective-action proposals with human-in-the-loop review and audit (M21)
+- Closed-loop evaluation (M22)
+
+### Level 4 — Production extensions (M23–M26)
 
 Only after evaluation is stable:
 
 - Regression CI
 - Observability
-- Frontend
+- Dual frontend (buyer and retailer)
 - Production Docker hardening
 - AWS deployment
 - Terraform
 
-## 4. Locked technology stack
+### Optional — Authorized marketplace integration (M27)
+
+This level is optional and needs authorized official access. The portfolio MVP is complete without it, using CSV/JSON import and export.
+
+## 4. Goals and non-goals
+
+### Goals
+
+1. Return relevant products for short, mixed-intent buyer queries, including Hinglish.
+2. Respect explicit, reliably parsed constraints in retrieval, recommendations, and comparisons.
+3. Give buyers grounded answers that:
+   - cite product IDs;
+   - ask for clarification when requirements are incomplete;
+   - abstain when the catalog cannot support an answer.
+4. Help retailer teams understand written return reasons, cluster related complaints, and find the affected SKUs and variants.
+5. Separate the responsible area of each return: listing, product quality, fulfilment, logistics, customer choice, or possible abuse.
+6. Propose evidence-backed root-cause hypotheses and corrective actions that authorized humans approve, edit, reject, or escalate.
+7. Make every stage measurable: quality, latency at P50/P95/P99, token usage, and cost.
+8. Keep the core search engine working fully locally without any remote model provider.
+9. Keep raw inputs, normalized data, model decisions, human outcomes, and measured outcomes separately auditable.
+
+### Non-goals
+
+- A generic, open-domain RAG chatbot or an unrestricted LLM wrapper.
+- A multi-agent system. LangGraph or similar orchestration is not a default dependency. It may be evaluated later only if a measured need justifies it, such as:
+  - bounded multi-step state;
+  - pause/resume for human review;
+  - recovery requirements.
+- Placing orders, taking payments, issuing refunds, or taking any financial action.
+- Autonomous publishing of marketplace listing changes. Every marketplace publication requires explicit approval from an authorized human reviewer.
+- Automatic seller banning, automatic listing rejection, or legal conclusions.
+- Guaranteed sales growth or guaranteed return reduction.
+- Personalization and learning-to-rank from user behavior.
+- Multi-currency conversion.
+- Scraping, or any unauthorized access to marketplaces.
+- Elasticsearch, OpenSearch, Qdrant, Pinecone, Kafka, Airflow, Kubernetes, or multiple databases or vector stores for the same workload, unless measurements prove PostgreSQL insufficient.
+
+## 5. Locked technology stack
 
 Use Python 3.12, uv, FastAPI, PostgreSQL, pgvector, PostgreSQL Full Text Search, SQLAlchemy, Alembic, Pydantic, pytest, and Ruff.
 
@@ -121,9 +243,66 @@ Use configurable local sentence-transformers-compatible models for embeddings an
 
 Do not introduce Elasticsearch, OpenSearch, Qdrant, Pinecone, Kafka, Airflow, Kubernetes, or multiple databases for the same search workload unless measurements prove PostgreSQL insufficient.
 
-## 5. Architecture
+Generation models (M16, M19–M21) are not part of the locked stack. Each generation provider:
 
-Buyer search:
+- is selected in its milestone through an ADR from measured quality, latency, and cost;
+- sits behind a typed, provider-isolated interface;
+- has its output validated through Pydantic.
+
+The core search engine never depends on a generation provider. When a provider is unavailable, generated workflows must degrade to deterministic results, abstention, or manual review. They must never fail open.
+
+## 6. Safety and human authority
+
+These rules apply to every milestone:
+
+1. GenAI output is an evidence-backed **proposal**, never final truth.
+2. Correlation is not a confirmed root cause. A frequent pattern among returns is a hypothesis until a human investigation confirms it.
+3. Low-confidence cases and cases with conflicting evidence go to manual investigation. They are never resolved automatically.
+4. Production approval belongs to an authorized retailer, catalog manager, quality team, operations team, or policy specialist, not the developer.
+   - The developer may simulate a reviewer only during local prototyping.
+   - Simulated decisions are marked as simulated and never reported as real reviewer outcomes.
+5. The platform never publishes marketplace listing changes autonomously. Every marketplace publication requires explicit approval from an authorized human reviewer. Milestone 27 may support an authorized submission mechanism after approval, but it never permits autonomous publishing.
+6. AI must not invent product specifications, return evidence, policies, discounts, prices, availability, or customer facts.
+7. Each of the following stays separately stored and auditable:
+   - raw seller input;
+   - raw return evidence;
+   - normalized data;
+   - model decisions;
+   - human outcomes;
+   - measured outcomes.
+8. Customer PII is redacted before it reaches prompts, logs, annotations, or evaluation artifacts.
+9. The platform takes none of the following actions:
+   - automatic seller banning;
+   - legal conclusions;
+   - payment actions;
+   - refunds;
+   - order placement.
+10. Low-confidence model decisions are never turned into hard filters or automatic rejections.
+11. External marketplace integrations use authorized official access only.
+12. Seller content, customer comments, reviews, and retrieved documents are untrusted data. They cannot override system instructions.
+
+## 7. Architecture
+
+### Overview
+
+```text
+                 +---------------------------------------------+
+                 | Shared foundation                           |
+                 | catalog, taxonomy, attribute schema,        |
+                 | normalization, provider interfaces,         |
+                 | confidence policies, provenance, evaluation |
+                 +---------------------------------------------+
+                     |                 |                   |
+          Workflow A (buyer)   Listing intelligence   Workflow B (retailer)
+          search V0-V4         M13-M15                return intelligence
+          grounded assistant                          M18-M22
+                     |                 |                   |
+                     +--------> human review & audit <-----+
+                                       |
+                       approved catalog change -> reindex
+```
+
+### Buyer search (implemented through V3)
 
 ```text
 Query
@@ -137,7 +316,21 @@ Query
  -> ranked products + telemetry
 ```
 
-Seller listing:
+### Buyer assistant (M16)
+
+```text
+User message
+ -> query understanding (deterministic, optional gated Jev)
+ -> need clarification?  -> clarification question (no retrieval-backed claims)
+ -> V3/V4 search (retriever)
+ -> catalog facts for retrieved product IDs only
+ -> bounded generation (typed output, product-ID citations)
+ -> deterministic constraint and citation validation
+ -> pass: answer with citations | fail: repair once or abstain
+ -> telemetry (latency, tokens, cost, validation outcome)
+```
+
+### Seller listing (M13–M15)
 
 ```text
 Raw listing
@@ -149,9 +342,50 @@ Raw listing
  -> normalized catalog record
 ```
 
-Shared components include taxonomy, attribute schema, brand dictionary, normalization rules, provider interfaces, confidence policies, and evaluation infrastructure.
+### Return intelligence (M18–M21)
 
-## 6. Product catalog
+```text
+Orders, returns, comments, reviews, support complaints, delivery signals
+ -> validation, provenance, PII redaction
+ -> deterministic reason-code mapping (baseline)
+ -> typed multi-label classification (optional GenAI, confidence-gated)
+ -> complaint clustering by SKU / variant / pattern
+ -> authorized evidence retrieval (listing versions, returns, reviews,
+    complaints, similar SKUs, guidelines, seller docs, policies)
+ -> typed root-cause hypothesis with confidence and evidence references
+ -> sufficient and consistent evidence?  no -> manual investigation
+ -> corrective-action proposal (original vs proposed diff)
+ -> HITL review queue
+```
+
+### Human-in-the-loop review (M21)
+
+```text
+Proposal (evidence, hypothesis, confidence, diff, versions)
+ -> authorized reviewer
+ -> approve | edit | reject | request more evidence | escalate
+ -> audit record (who, when, decision, reason, versions)
+ -> approved: export / apply to catalog (no autonomous marketplace publishing)
+ -> search-index refresh
+ -> outcome monitoring window (M22)
+ -> rollback possible from history
+```
+
+### Shared components
+
+- Taxonomy and attribute schema
+- Brand dictionary
+- Normalization rules
+- Provider interfaces (embedding, reranker, decision, generation)
+- Confidence policies
+- PII redaction
+- Provenance records
+- Audit trail
+- Evaluation infrastructure
+
+Retrieval for the buyer assistant and for root-cause evidence reuses the same PostgreSQL lexical and pgvector infrastructure. It does not add a separate vector store.
+
+## 8. Product catalog
 
 Core fields:
 
@@ -171,9 +405,44 @@ Headphone fields: `wireless`, `anc`, `battery_life_hours`, `connectivity`.
 
 Keep the schema extensible. Do not populate irrelevant category attributes. JSONB may hold validated long-tail attributes, but frequently filtered fields should have proper columns.
 
-## 7. Dataset and quality strategy
+## 9. Data model overview
 
-Use a reproducible public dataset, a clearly labeled synthetic/seed catalog, or an allowed combination. Never describe synthetic data as real marketplace data. Record provenance.
+Each layer is stored separately. One layer never silently overwrites another.
+
+| Layer | Examples | Introduced |
+|---|---|---|
+| Raw | raw seller listing, raw return record, raw customer comment, raw review | M2 (catalog), M13 (listings), M18 (returns) |
+| Normalized | normalized catalog record, normalized units, mapped reason codes | M2, M13, M18 |
+| Inferred | query understanding, model decisions, return classifications, clusters, root-cause hypotheses | M6, M11+, M19, M20 |
+| Human | relevance labels, review decisions, approvals, edits, rejections | M9, M14+, M21 |
+| Outcome | measured or simulated post-correction return rates | M22 |
+
+Return-intelligence entities (M18) are typed, versioned contracts:
+
+- products and SKU/variant linkage;
+- listing versions;
+- orders and order items (anonymized);
+- shipments and delivery/fulfilment signals;
+- returns;
+- return reason codes;
+- customer-written return comments;
+- reviews and support complaints;
+- correction cases and proposed corrections;
+- human decisions;
+- outcomes.
+
+Every record carries these provenance fields:
+
+```text
+source_type, source_name, license, source_record_id, dataset_version,
+ingestion_timestamp, transformation_version, is_synthetic
+```
+
+## 10. Dataset and provenance strategy
+
+### Catalog quality (existing)
+
+Use a reproducible public dataset, a clearly labeled synthetic/seed catalog, or an allowed combination. Never describe synthetic data as real marketplace data. Record provenance. The M2 decision is the project-authored synthetic seed catalog (`docs/data-quality.md` §2.5).
 
 Before evaluation, validate:
 
@@ -190,7 +459,64 @@ Before evaluation, validate:
 
 Prepare at least 30 representative products for real human review. Do not mark the review complete automatically.
 
-## 8. Query understanding
+### Multi-dataset strategy
+
+1. **Amazon Shopping Queries (ESCI).** Use the official dataset for product-search relevance experiments, where its license and fields permit.
+   - ESCI is an optional external benchmark track. It is not part of M9, and the core M10 report does not need it. It runs only after the core internal M10 report is complete. No mandatory milestone is added for it.
+   - Record the exact source, version, download date, license, locale, split, and transformation history.
+   - If the license or terms cannot be confirmed, ESCI is not used.
+   - ESCI is separately versioned and loaded through its own corpus adapter. It has separate provenance, metrics output, and report.
+   - It is never mixed into the internal seed catalog or the M9 Golden Dataset. The catalog schema requires price and category, and ESCI does not reliably provide them; such values are never invented.
+2. **Never describe ESCI as return, order, review, price, inventory, or live marketplace data.**
+3. **Preserve ESCI labels** as Exact, Substitute, Complement, and Irrelevant.
+   - Any conversion into internal graded relevance must be documented, versioned, and human-reviewed.
+   - For primary-product retrieval:
+     - Exact and Substitute contribute through a documented, versioned mapping.
+     - Complement is not relevant by default.
+     - Irrelevant remains not relevant.
+   - Complement does not affect the internal M9 Golden Dataset.
+   - Complement may be used only in a later, separately versioned cross-sell/accessory task with its own policy, dataset, metrics, and report. That task is not planned as a milestone and is not implemented.
+4. **Use the approved structured/seed catalog** for fields that ESCI does not reliably provide: price, RAM, storage, size, category, availability, and similar attributes.
+5. **Mark every synthetic product and event.** Never present synthetic records or simulated outcomes as real Amazon or Flipkart data.
+6. **Hinglish.** ESCI provides no Hinglish coverage, so Hinglish relevance is evaluated on the internal catalog.
+   - The approved M9 20-query development pilot contains only 3 Hinglish queries. Reports must disclose this limited coverage. The pilot is not expanded or redesigned for this.
+   - The later, separately authored and sealed held-out test partition must contain a separately reported Hinglish slice. The provisional target is at least 20% of the held-out test set.
+   - The final test-set size and stratification are approved when that test partition is planned.
+7. **Return Intelligence data.** Build a separate, internally consistent linked dataset. It contains:
+   - products and listing versions;
+   - anonymized orders and order items;
+   - shipments;
+   - returns and return reasons;
+   - feedback;
+   - proposed corrections and human decisions;
+   - measured or simulated outcomes, each marked as such.
+8. **Public reviews.** Legally permitted public review or complaint data is used only as review evidence. A review is never treated as a confirmed return event.
+9. **Return-reason and root-cause evaluation.** Build a separate human-reviewed evaluation set. Generated labels are never authoritative ground truth.
+10. **Separate versioning.** Search, buyer-RAG, listing, policy-risk, return-reason, root-cause, and HITL/outcome evaluation datasets are versioned separately.
+11. **No coincidental joins.** Never join unrelated public datasets on IDs that happen to match. A cross-dataset join requires a verified common identifier; otherwise the datasets stay separate.
+12. **Provenance fields.** Store the provenance fields from §9 on every record and dataset version.
+13. **PII.** Redact PII before prompts, logs, annotations, and stored evaluation artifacts.
+14. **Real retailer data** is optional. It may be used only with:
+    - authorization;
+    - anonymization;
+    - access controls;
+    - documented retention rules.
+
+### Evaluation dataset registry
+
+| Dataset | Unit | Milestone | Ground truth |
+|---|---|---|---|
+| Internal search Golden Dataset (dev pilot: 3 Hinglish queries; held-out test: Hinglish slice, provisional ≥20%) | query → product → relevance grade | M9 | human (`ann-1`) |
+| ESCI benchmark (optional external track) | query → product → ESCI label | after the core M10 report; no mandatory milestone; subject to license check | ESCI labels, preserved as published |
+| Query decision set | query → decision | M12 | human |
+| Listing decision set | listing → decision | M14 | human |
+| Policy-risk set | listing → risk triage | M15 | human, versioned criteria |
+| Buyer-RAG answer set | conversation → answer judgement | M17 | human |
+| Return-reason set | return text → labels | M19 | human |
+| Root-cause set | cluster + evidence → hypothesis judgement | M20 | human |
+| HITL / outcome set | proposal → decision → outcome | M21–M22 | human decisions; outcomes measured or simulated (marked) |
+
+## 11. Query understanding
 
 Create a typed `QueryUnderstanding` model with optional fields:
 
@@ -212,7 +538,7 @@ Create a typed `QueryUnderstanding` model with optional fields:
 
 Do not invent missing constraints. Treat explicit category, brand, model, RAM, storage, storage type, and price as potential hard constraints. Treat gaming, coding, student, lightweight, premium, comfort, travel, and office use as semantic intent unless reliable structured data supports filtering.
 
-## 9. Deterministic parser
+## 12. Deterministic parser
 
 Implement deterministic parsing first. Support values such as `8gb`, `8 gb`, `16gb`, `256gb`, `512gb`, `1tb`, `40k`, `₹40000`, and `rs 40000`.
 
@@ -220,7 +546,7 @@ Normalize `40k` to `40000` and `1tb` to `1024gb`. Support RAM, memory, storage, 
 
 Keep the parser small, typed, and testable. Do not create hundreds of fragile regular expressions.
 
-## 10. Decision providers and Jev
+## 13. Decision providers and Jev
 
 Create a small provider interface conceptually shaped as:
 
@@ -236,13 +562,30 @@ Implementations may include:
 
 The core must work without any remote provider. Isolate provider-specific API code and validate outputs through Pydantic.
 
-Jev access is available, but integration occurs only after core evaluation is stable. Use Jev as a probability-backed bounded-decision layer for category, semantic intent, retrieval strategy, ambiguity, out-of-catalog detection, listing-category validation, attribute-candidate validation, policy-risk triage, and human-review routing.
+Jev access is available, but integration occurs only after core evaluation is stable. Use Jev as a probability-backed bounded-decision layer for:
 
-Do not use Jev to invent attributes, replace reliable numeric parsing, make final legal conclusions, automatically ban sellers, create labels, or replace the reranker without a controlled experiment.
+- category;
+- semantic intent;
+- retrieval strategy;
+- ambiguity;
+- out-of-catalog detection;
+- listing-category validation;
+- attribute-candidate validation;
+- policy-risk triage;
+- human-review routing.
+
+Do not use Jev to:
+
+- invent attributes;
+- replace reliable numeric parsing;
+- make final legal conclusions;
+- automatically ban sellers;
+- create labels;
+- replace the reranker without a controlled experiment.
 
 Keep endpoint, model, timeout, retry, enablement, and thresholds configurable. Store credentials only in environment variables. Log provider, pinned model version, latency, decision probabilities, fallback reason, and returned cost where available. Never log secrets.
 
-## 11. Confidence gating
+## 14. Confidence gating
 
 Initial thresholds are experimental. Final thresholds must be selected from human-reviewed data, calibration, coverage, abstention, and mistake cost.
 
@@ -250,19 +593,39 @@ High-confidence query decisions may be accepted. Medium-confidence decisions sho
 
 For listings, low-risk high-confidence cases may be auto-accepted; uncertain cases must be warned or routed to human review. Confidence is not correctness.
 
-## 12. Listing intelligence
+For return intelligence, confidence never auto-approves a correction. It only decides which queue a case goes to and in what order. Low confidence or conflicting evidence always means manual investigation.
+
+## 15. Listing intelligence
 
 Preserve raw seller input. Store normalized facts, inferred decisions, risk signals, and human outcomes separately.
 
 Use deterministic normalization for casing, whitespace, known brand aliases, units, storage terms, and numeric formats. Do not automatically rewrite uncertain model names.
 
-Extract exact attributes deterministically where possible. Use Jev only for bounded validation questions such as whether an extracted value refers to RAM or storage, whether an attribute is category-compatible, whether the listing is ambiguous, and whether review is required.
+Extract exact attributes deterministically where possible. Use Jev only for bounded validation questions, such as:
 
-Optional risk signals include prohibited item, counterfeit indicator, misleading claim, suspicious review, policy mismatch, adult content, unsafe product, and unsupported medical claim. These are triage signals, not final legal conclusions.
+- whether an extracted value refers to RAM or storage;
+- whether an attribute is category-compatible;
+- whether the listing is ambiguous;
+- whether review is required.
+
+Optional risk signals include:
+
+- prohibited item;
+- counterfeit indicator;
+- misleading claim;
+- suspicious review;
+- policy mismatch;
+- adult content;
+- unsafe product;
+- unsupported medical claim.
+
+These are triage signals, not final legal conclusions.
 
 Automated review outcomes may be `auto_accept`, `accept_with_warning`, or `manual_review`. Final rejection requires human review.
 
-## 13. Retrieval and ranking
+Listing versions (M13 onward) are retained. Return intelligence (M20–M21) can then compare a return pattern against the listing that the buyer actually saw.
+
+## 16. Retrieval and ranking
 
 ### Lexical
 
@@ -284,9 +647,115 @@ Safely apply explicit category, brand, RAM, storage, storage type, and price con
 
 Use a configurable lightweight cross-encoder. Support reranker on and off. Start with 50 fused candidates, rerank 20, and return 10. Benchmark no reranker, rerank 10, and rerank 20. This is V3.
 
-## 14. Latency and evaluation
+## 17. RAG boundaries
 
-Do not promise an arbitrary universal latency. Measure `query_understanding_ms`, `jev_decision_ms`, `lexical_ms`, `vector_ms`, `filtering_ms`, `rrf_ms`, `reranking_ms`, `serialization_ms`, and `total_ms`. Report P50, P95, and P99.
+Retrieval-augmented generation is allowed only in M16 (buyer assistant) and M20 (root-cause evidence). Both are bounded as follows.
+
+1. **Retriever.**
+   - Buyer answers use the existing V3/V4 search.
+   - Root-cause analysis retrieves only authorized evidence sources (§19).
+   - No retriever reaches the open web.
+2. **Grounding.**
+   - Every factual claim about a product cites a retrieved product ID.
+   - Every claim about a return pattern cites evidence record IDs.
+   - Uncited claims fail validation.
+3. **Deterministic validation.**
+   - Explicit constraints are re-checked against catalog fields after generation.
+   - Citations must refer to retrieved items.
+   - Prices, specifications, and availability come from the catalog, never from model text.
+4. **Typed output.** Generation returns a Pydantic-validated structure, not free-form prose alone.
+5. **Clarification and abstention.**
+   - The system asks a clarification question when requirements are incomplete or contradictory.
+   - It abstains when retrieved evidence cannot support an answer.
+6. **Bounded workflow.**
+   - Each step runs a fixed, small number of times, with at most one repair attempt.
+   - There is no autonomous tool loop.
+   - The system takes no actions beyond answering or proposing.
+7. **Untrusted content.** Listing text, reviews, and comments are passed as data and cannot change instructions. Prompt-injection and malicious-content tests are mandatory (M17).
+8. **Versioning.** The prompt, model, retriever configuration, and policy versions are recorded with every generated output.
+
+## 18. Buyer workflow
+
+1. The buyer searches. V0–V3 are available today; V4 arrives after M12.
+2. The buyer may ask the assistant (M16) to:
+   - find products for a need;
+   - compare specific products;
+   - recommend among catalog products.
+3. The assistant can do one of three things:
+   - answer with product-ID citations;
+   - ask a clarification question;
+   - abstain.
+4. Recommendations never violate explicit constraints. Any trade-off (for example "nothing under ₹40,000 has 16 GB RAM") is stated explicitly.
+5. The assistant never places orders, applies discounts, or takes payments. It never invents prices, offers, or availability.
+6. Buyer feedback can be captured for evaluation (M25 UI).
+
+## 19. Return-intelligence workflow
+
+1. **Ingest (M18).** Ingest orders, order items, shipments, returns, reason codes, comments, reviews, and support complaints from CSV/JSON. Validate the data, attach provenance, and redact PII.
+2. **Understand (M19).**
+   - Map reason codes deterministically (the baseline).
+   - Run optional typed GenAI multi-label classification with confidence. It must handle Hinglish and misspellings.
+   - Predict the responsible area.
+   - Route low-confidence cases to review.
+3. **Cluster (M19).** Group related complaints by SKU, variant, and pattern.
+4. **Retrieve evidence (M20).** Use only authorized sources:
+   - the current listing and historical listing versions;
+   - previous returns, reviews, and support complaints;
+   - similar SKU cases;
+   - category guidelines;
+   - seller documents;
+   - marketplace policies.
+5. **Hypothesize (M20).** Produce a typed output containing:
+   - the affected SKU/variant;
+   - the observed pattern;
+   - supporting evidence references;
+   - the likely root-cause hypothesis;
+   - confidence;
+   - the responsible team;
+   - the recommended next investigation.
+
+   Abstain or send the case to manual investigation when evidence is insufficient or conflicting.
+6. **Propose (M21).** Draft a corrective action with an original-versus-proposed diff where applicable.
+7. **Review (M21).** An authorized human decides.
+8. **Apply and measure (M21–M22).** Approved catalog changes are exported or applied, the search index is refreshed, and outcomes are monitored.
+
+Return categories (where supported by data):
+
+| Category | Typical responsible area |
+|---|---|
+| sizing/fit | listing or product |
+| expectation mismatch | listing |
+| colour/image mismatch | listing (photography) |
+| incorrect specification | listing / catalog |
+| product-quality defect | quality / supplier |
+| damaged product | packaging / logistics |
+| wrong item delivered | fulfilment / warehouse |
+| logistics delay | logistics |
+| manufacturing defect | quality / supplier |
+| change of mind | customer choice |
+| suspected abuse | operations (investigation only, never automatic action) |
+| insufficient evidence | manual investigation |
+
+## 20. Human-in-the-loop workflow
+
+- **Reviewers.** Authorized roles are retailer, catalog manager, quality team, operations team, and policy specialist. During local prototyping only, the developer may act as a simulated reviewer, and the outcome is marked `simulated`.
+- **Actions.** Approve, edit, reject, request more evidence, or escalate. Every action requires a reason.
+- **What reviewers see:**
+  - the evidence;
+  - the hypothesis and confidence;
+  - the original-versus-proposed diff;
+  - the model, prompt, policy, and evidence versions.
+- **Audit.** An append-only decision history with reviewer handle, timestamp, decision, reason, and versions. Rollback history is kept.
+- **Publishing.** Nothing is published to a marketplace autonomously. Approved changes become an export file or an internal catalog update. Marketplace submission exists only through M27, and only for changes an authorized reviewer has explicitly approved.
+- **Search refresh.** An approved internal catalog change triggers the existing reindex and embedding steps. The change is then visible in search.
+
+## 21. Latency, cost, and evaluation
+
+Do not promise an arbitrary universal latency. Measure `query_understanding_ms`, `jev_decision_ms`, `lexical_ms`, `vector_ms`, `filtering_ms`, `rrf_ms`, `reranking_ms`, `serialization_ms`, and `total_ms`. Report P50, P95, and P99. Generated workflows additionally measure:
+
+- `retrieval_ms`, `generation_ms`, and `validation_ms`;
+- input and output tokens;
+- cost per request and per 1,000 requests, from actual provider-returned or published pricing recorded with its date.
 
 Create `evals/` separate from application code. Implement Precision@K, Recall@K, NDCG@K, MRR, Constraint Satisfaction Rate, irrelevant-result rate, and zero-result rate.
 
@@ -300,98 +769,230 @@ V3 = V2 + reranking
 V4 = V3 + confidence-gated Jev decisions
 ```
 
-Create 20 human-reviewed search queries covering unconstrained, brand/category, specification, price, semantic-intent, and Hinglish queries. Generated labels are never authoritative.
+The internal Golden Dataset (M9) covers:
 
-For decisions, compare deterministic, optional general LLM, Jev, and deterministic plus confidence-gated Jev. Measure accuracy, precision, recall, F1, confusion matrix, schema validity, abstention, coverage, calibration, Brier score where appropriate, latency, and cost per 1,000 decisions.
+- unconstrained queries;
+- brand/category queries;
+- specification queries;
+- price queries;
+- semantic-intent queries;
+- Hinglish queries;
+- noisy queries.
+
+Its structure:
+
+- **Dev pilot.** A 20-query development/rubric-calibration pilot. It contains only 3 Hinglish queries, and reports disclose this limited coverage.
+- **Test partition.** A separately authored, sealed test partition comes later. It contains a separately reported Hinglish slice (provisional target: at least 20% of the test set). Its size and stratification are approved when it is planned. Pilot results are never presented as final test evidence.
+
+Generated labels are never authoritative.
+
+For decisions, compare deterministic, optional general LLM, Jev, and deterministic plus confidence-gated Jev. Measure:
+
+- accuracy, precision, recall, and F1;
+- confusion matrix;
+- schema validity;
+- abstention and coverage;
+- calibration, with Brier score where appropriate;
+- latency;
+- cost per 1,000 decisions.
 
 For review routing, measure automation rate, review rate, unsafe auto-accept rate, and unnecessary review rate.
 
-## 15. Annotation and experiment tracking
+Buyer-RAG evaluation (M17):
+
+- faithfulness;
+- answer relevance;
+- citation correctness;
+- unsupported-claim rate;
+- constraint satisfaction;
+- clarification accuracy;
+- abstention accuracy;
+- false-refusal rate;
+- prompt-injection and malicious-listing robustness;
+- latency, tokens, and cost.
+
+Return intelligence (M19–M20):
+
+- per-class precision, recall, and F1;
+- macro and micro averages;
+- responsible-area accuracy;
+- cluster quality judged by humans;
+- root-cause hypothesis quality judged by humans;
+- evidence-citation correctness;
+- abstention on insufficient evidence;
+- low-confidence routing rate.
+
+Closed loop (M22):
+
+- overall, preventable, SKU-level, and variant-level return rates;
+- before/after outcomes per approved correction;
+- recommendation acceptance, edits, and rejections;
+- false recommendation rate;
+- time to resolution;
+- search-quality impact (re-run search evaluation after catalog changes);
+- estimated cost savings, with every assumption stated.
+
+Simulated or estimated impact is always labeled as such and never presented as real production impact.
+
+## 22. Annotation and experiment tracking
 
 Build a small CLI or local interface showing query, parsed constraints, optional Jev decisions, candidate products, attributes, and retrieval sources. Allow labels `relevant`, `borderline`, and `not relevant`.
 
 For listing review, show raw and normalized listing data, extracted attributes, risk signals, confidence, and proposed route. Save structured human labels.
 
-Every experiment records ID, timestamp, Git commit, catalog/dataset/golden versions, provider and model, policy/prompt version, embedding model, reranker, candidate counts, thresholds, quality, latency, cost, notes, and environment. Generate reports from actual outputs.
+Later annotation tasks follow the same pattern. Each dataset has its own versioned schema and rubric:
 
-## 16. FastAPI
+- buyer-RAG answer judgements (M17);
+- return-reason labels (M19);
+- root-cause judgements (M20).
 
-Core endpoints:
+Annotators see redacted text only. Annotators are identified by pseudonymous handles. If only one annotator exists, reports say so and do not claim inter-annotator agreement. AI is never an annotator, and AI suggestions become labels only after explicit human review.
+
+Every experiment records:
+
+- ID and timestamp;
+- Git commit;
+- catalog, dataset, and golden versions;
+- provider and model;
+- policy and prompt version;
+- embedding model and reranker;
+- candidate counts and thresholds;
+- quality, latency, and cost;
+- notes and environment.
+
+Generate reports from actual outputs.
+
+## 23. API boundaries
+
+Implemented search endpoints (M1–M8):
 
 ```text
-GET /health
-GET /search?q=...
-POST /search
+GET  /health
+GET  /search?q=...            POST /search            (V0 lexical)
+GET  /search/dense?q=...      POST /search/dense      (dense)
+GET  /search/hybrid?q=...     POST /search/hybrid     (V1)
+GET  /search/filtered?q=...   POST /search/filtered   (V2)
+GET  /search/reranked?q=...   POST /search/reranked   (V3)
 ```
 
 Use typed requests/responses and OpenAPI. Search metadata should include search version, provider, reranker state, latency, result count, and safe applied filters.
 
-Listing endpoints are deferred until their milestone:
+Deferred endpoints are created only in their milestone. The paths below are indicative, not final:
 
 ```text
-POST /listings/analyze
-POST /listings/normalize
-GET /reviews/pending
-POST /reviews/{review_id}/decision
+POST /listings/analyze                      (M13-M14)
+POST /listings/normalize                    (M13)
+POST /assistant/answer                      (M16)
+POST /returns/import                        (M18)
+GET  /returns/clusters                      (M19)
+GET  /returns/cases/{case_id}/evidence      (M20)
+GET  /reviews/pending                       (M14/M21)
+POST /reviews/{review_id}/decision          (M14/M21)
+GET  /corrections/{correction_id}/history   (M21)
+GET  /reports/outcomes                      (M22)
 ```
 
-## 17. Intended repository structure
+No endpoint places orders, issues refunds, moves money, or bans sellers, and none publishes to a marketplace without explicit authorized human approval.
 
-Create directories only when their milestone begins:
+## 24. Intended repository structure
+
+Create directories only when their milestone begins. The current layout (through M8, plus uncommitted M9 work) is:
 
 ```text
-ecommerce-search/
+intelligent-ecommerce-search/
   docs/
-    spec.md
-    architecture.md
-    data-quality.md
-    evaluation.md
-    decisions/
-  src/
-    api/
-    config/
-    models/
-    ingestion/
-    catalog/
-    normalization/
-    query_understanding/
-    decision/
-    search/
-    review/
-    observability/
+    MASTER_PLAN.md, spec.md, architecture.md, data-quality.md,
+    per-milestone search docs, decisions/ (ADR-001..ADR-007)
+  src/ecommerce_search/
+    api/ catalog/ config/ db/ decision/ embeddings/ filtering/
+    ingestion/ models/ query_understanding/ reranking/ search/
+  migrations/
   tests/
-    unit/
-    integration/
-    contract/
+    unit/ (incl. unit/golden for the M9 contracts) integration/
   evals/
-    goldens/
-    metrics/
-    runners/
-    annotation/
-    decisions/
-    reports/
+    contracts/        (M9, in progress)
   data/
-    raw/
-    processed/
-    labels/
+    seed/ labels/ processed/
   scripts/
-  pyproject.toml
-  uv.lock
-  Dockerfile
-  docker-compose.yml
-  .env.example
-  README.md
+  pyproject.toml, uv.lock, Dockerfile, docker-compose.yml, .env.example, README.md
 ```
 
-## 18. Testing, security, and observability
+Future packages, each created only in its milestone:
 
-Test parsing, catalog validation, retrieval, RRF, filtering, reranking, APIs, provider failure, timeouts, malformed responses, low confidence, fallback, empty input, nonsense, contradictory constraints, unsupported categories, and prompt-like malicious seller text.
+```text
+src/ecommerce_search/
+  normalization/       (M13)
+  assistant/           (M16)
+  generation/          (M16; provider-isolated)
+  returns/             (M18-M19)
+  evidence/            (M20)
+  review/              (M14/M21)
+  observability/       (M24)
+evals/
+  goldens/ metrics/ runners/ annotation/ reports/   (M9-M10)
+  decisions/                                        (M12, M14)
+  assistant/                                        (M17)
+  returns/                                          (M19-M22)
+```
 
-Treat seller content as untrusted data. It cannot override system instructions. Use environment variables, timeouts, limited retries, safe fallbacks, typed validation, and no secret logging.
+The M9 contract tests live in `tests/unit/golden/`, not `tests/unit/evals/`. A `tests/unit/evals` directory would shadow the real `evals` package as a namespace package.
 
-Later observability should record request ID, search version, provider/model, stage timing, result count, filters, fallback reason, review routing, errors, and aggregate latency/error/fallback/confidence metrics.
+## 25. Testing
 
-## 19. Milestones
+Test:
+
+- parsing, catalog validation, retrieval, RRF, filtering, and reranking;
+- APIs;
+- provider failure, timeouts, malformed responses, low confidence, and fallback;
+- empty input, nonsense, and contradictory constraints;
+- unsupported categories;
+- prompt-like malicious seller text.
+
+Later milestones add:
+
+- generation-provider contract tests with recorded or fake providers (routine tests never call live providers);
+- citation and constraint validators;
+- clarification and abstention paths;
+- prompt-injection fixtures in listings, reviews, and return comments;
+- PII-redaction tests;
+- return-data contract validation;
+- audit-trail immutability;
+- the rule that no code path refunds, orders, or bans, and none publishes to a marketplace without explicit authorized human approval.
+
+## 26. Security and privacy
+
+Treat seller content, customer comments, reviews, and retrieved documents as untrusted data. They cannot override system instructions.
+
+Use environment variables for secrets, timeouts, limited retries, safe fallbacks, typed validation, and no secret logging. Never hard-code credentials or commit `.env` files.
+
+Redact customer PII before prompts, logs, annotations, and evaluation artifacts. Apply access controls and documented retention to any real retailer data. Use only authorized official access for external marketplace integrations.
+
+## 27. Observability
+
+Later observability (M24) records:
+
+- request ID;
+- search version;
+- provider/model;
+- stage timing;
+- result count and filters;
+- fallback reason;
+- review routing;
+- errors;
+- aggregate latency, error, fallback, and confidence metrics.
+
+Generated workflows also record:
+
+- prompt, model, and policy versions;
+- token usage and cost;
+- validation failures;
+- abstention and clarification rates;
+- review-queue depth;
+- time to decision.
+
+Logs never contain secrets or unredacted PII.
+
+## 28. Milestones
 
 ### Milestone 0 — Specification
 
@@ -416,7 +1017,7 @@ Implement uv, Python 3.12, FastAPI, PostgreSQL, pgvector, SQLAlchemy, Alembic, D
 
 Implement schema, migrations, ingestion, approved data, indexes, and automated quality checks. Prepare a 30-product human-review sample. Do not claim review completion until a human reviews it. Stop.
 
-### Milestone 3 — Lexical baseline
+### Milestone 3 — Lexical baseline V0
 
 Implement PostgreSQL FTS, search-vector generation, indexes, retrieval, and API integration. Measure correctness and P50/P95/P99. This is V0. Stop.
 
@@ -424,7 +1025,7 @@ Implement PostgreSQL FTS, search-vector generation, indexes, retrieval, and API 
 
 Implement configurable local embeddings, generation, pgvector storage/indexes, and vector retrieval. Measure generation and query latency. Document the model decision. Stop.
 
-### Milestone 5 — Hybrid search
+### Milestone 5 — Hybrid search V1
 
 Implement lexical plus dense retrieval with RRF. Compare lexical, dense, and hybrid. Preserve ranks. This is V1. Stop.
 
@@ -432,70 +1033,387 @@ Implement lexical plus dense retrieval with RRF. Compare lexical, dense, and hyb
 
 Implement typed query understanding, deterministic parser, normalization, provider interface, and deterministic provider. Test English, short-form, numeric, and Hinglish queries. Do not implement Jev yet. Stop.
 
-### Milestone 7 — Structured filtering
+### Milestone 7 — Structured filtering V2
 
 Implement safe filters for category, brand, RAM, storage, storage type, min price, and max price. Evaluate extraction, satisfaction, zero results, and contradictions. This is V2. Stop.
 
-### Milestone 8 — Reranking
+### Milestone 8 — Reranking V3
 
 Implement configurable cross-encoder reranking with on/off modes. Benchmark no reranker, rerank 10, and rerank 20 using quality and latency. This is V3. Stop.
 
 ### Milestone 9 — Golden Dataset
 
-Implement schema, annotation tool, evaluator, and 20 query candidates. Implement retrieval metrics. Pause for real human labeling. Stop.
+M9 covers search relevance only:
 
-### Milestone 10 — Core experiment report
+```text
+Query -> candidate product -> human relevance grade
+```
 
-Compare V0–V3 from actual runs. Include configuration, quality, latency, failure cases, limitations, and measured recommendation. Stop.
+Implement:
 
-### Milestone 11 — Jev query provider
+- typed evaluation contracts;
+- deterministic candidate pooling;
+- the annotation tool;
+- the evaluator;
+- retrieval metrics;
+- 20 development-pilot query candidates, including Hinglish and noisy queries, over the internal catalog.
 
-Prerequisites: stable V0–V3, human-reviewed Golden Dataset, credentials, and verified official API behavior. Implement typed client/provider, timeout, limited retry, safe fallback, configuration, and telemetry. Use bounded decisions only. Core must still work without Jev. Stop.
+The approved pilot contains only 3 Hinglish queries. They are identified separately, and reports disclose the limited coverage. The pilot is not expanded or redesigned. The held-out test partition, with its Hinglish slice, is planned and approved separately. Pause for real human labeling.
 
-### Milestone 12 — Jev query experiment
+The approved M9 decisions cover labels, the single-annotator workflow and disclosure, pool policy, the dev/test partition, and provenance sealing. They were approved before implementation began, override the generic text here, and must be written into the M9 documentation.
+
+M9 does not include:
+
+- buyer-RAG answer labels;
+- return-reason or root-cause labels;
+- HITL implementation;
+- marketplace integration;
+- ESCI ingestion;
+- any future-milestone code.
+
+Stop.
+
+### Milestone 10 — Core Search Experiment Report
+
+Compare V0–V3 from actual runs on the human-reviewed internal Golden Dataset. Include configuration, quality, latency, failure cases, limitations, and a measured recommendation. Re-decide the provisional `rrf_k`, embedding model, and reranker pins (or no reranker).
+
+M10 is complete without ESCI.
+
+ESCI is an optional external benchmark track (§10). It may run only after the core internal M10 report is complete and its license is verified. It runs:
+
+- through its own corpus adapter, as a separately versioned corpus;
+- with labels preserved and a documented, versioned mapping (Complement not relevant by default);
+- with separate provenance, metrics output, and report.
+
+It never mixes with the internal catalog or the M9 Golden Dataset. It adds no mandatory milestone.
+
+Stop.
+
+### Milestone 11 — Jev Decision Provider
+
+Prerequisites:
+
+- stable V0–V3;
+- a human-reviewed Golden Dataset;
+- credentials;
+- verified official API behavior.
+
+Implement a typed client/provider, timeout, limited retry, safe fallback, configuration, and telemetry. Use bounded decisions only. The core must still work without Jev. Stop.
+
+### Milestone 12 — Jev Query Experiment V4
 
 Create human-reviewed decision data. Compare deterministic, optional LLM, Jev, and confidence-gated Jev. Measure classification, calibration, coverage, latency, cost, and end-to-end retrieval metrics. This is V4. Stop.
 
-### Milestone 13 — Listing normalization
+### Milestone 13 — Listing Normalization
 
-Implement raw and normalized models, deterministic unit and brand normalization, attribute candidates, compatibility checks, and contradiction detection. Preserve original values. Stop.
+Implement:
 
-### Milestone 14 — Jev listing decisions
+- raw and normalized models;
+- listing versions;
+- deterministic unit and brand normalization;
+- attribute candidates;
+- compatibility checks;
+- contradiction detection.
+
+Preserve original values. Stop.
+
+### Milestone 14 — Jev Listing Decisions
 
 Implement bounded category, subcategory, attribute-validation, ambiguity, and review-routing decisions. Do not allow invented attributes. Evaluate on human-reviewed data. Stop.
 
-### Milestone 15 — Policy-risk triage
+### Milestone 15 — Policy-Risk Triage
 
 Use explicit versioned criteria, human-reviewed examples, audit fields, and manual review. Do not implement automatic seller banning. Measure false positives and false negatives separately. Stop.
 
-### Milestone 16 — Regression CI
+### Milestone 16 — Grounded Buyer RAG Assistant
 
-Implement unit/integration CI, evaluation smoke tests, provider contract tests, and configurable thresholds. Routine CI must not require live Jev. Stop.
+Prerequisites: M10 complete. The V4 retriever is optional, used if M12 has shipped.
 
-### Milestone 17 — Observability
+Implement a bounded assistant that uses existing V3/V4 search as its retriever. It covers:
 
-Implement structured logging, request IDs, provider telemetry, stage timings, fallback/confidence/review metrics, and P50/P95/P99 reporting. Stop.
+- product discovery;
+- grounded recommendations;
+- comparisons;
+- clarification for incomplete or contradictory requirements;
+- abstention when the catalog cannot support an answer.
 
-### Milestone 18 — Frontend
+Rules:
 
-Build a simple search UI with result cards and optional debug metadata. Add reviewer UI only if listing workflow exists. Never expose hidden reasoning. Stop.
+- Output is typed and cites product IDs.
+- Deterministic validation re-checks explicit constraints and citations against catalog fields after generation.
+- Prices, specifications, and availability come only from the catalog.
+- No order, payment, discount, or refund actions.
+- The bounded generation workflow has a fixed step count and at most one repair attempt.
+- The generation provider sits behind a typed interface and is selected by ADR.
+- When the provider is unavailable, the assistant degrades to search results or abstention.
 
-### Milestone 19 — AWS
+Stop.
 
-Only after local stability, implement production image, ECR, ECS/Fargate, PostgreSQL with pgvector, Secrets Manager, CloudWatch, and Terraform. Do not introduce EKS. Require approval before chargeable actions. Stop.
+### Milestone 17 — Buyer RAG Evaluation and Safety
 
-## 20. Definition of done
+Create a separate, versioned, human-reviewed answer-evaluation dataset. It is not the M9 Golden Dataset.
 
-Core is done only when PostgreSQL/pgvector, catalog quality, lexical/dense/hybrid retrieval, RRF, deterministic understanding, structured filtering, reranking, human-reviewed Golden Dataset, evaluation, FastAPI, tests, measured latency/quality, experiment report, and explanatory README all exist.
+Measure:
 
-Jev is done only when official integration, typed validation, fallback, model/version logging, human evaluation, latency/cost measurement, calibration, justified thresholds, and deterministic-vs-Jev comparison exist.
+- faithfulness;
+- answer relevance;
+- citation correctness;
+- unsupported-claim rate;
+- constraint satisfaction;
+- clarification accuracy;
+- abstention accuracy;
+- latency;
+- token usage;
+- cost.
 
-Listing intelligence is done only when raw data is preserved, normalization and contradictions work, decisions are bounded, uncertainty reaches human review, and evaluation is human-reviewed.
+Add prompt-injection tests, malicious listing-content tests, and false-refusal tests. Report failures honestly. Stop.
 
-## 21. Final principle
+### Milestone 18 — Return Data Foundation
 
-Prefer deterministic extraction over unnecessary inference, bounded decisions over unrestricted generation, confidence gating over blind automation, human-reviewed labels over generated ground truth, measured improvement over assumed performance, and simple architecture over unnecessary infrastructure.
+Implement typed, versioned contracts and storage for:
+
+- orders and order items;
+- returns and return reason codes;
+- customer-written return comments;
+- reviews and support complaints;
+- delivery/fulfilment signals;
+- product/SKU linkage;
+- listing versions;
+- correction cases.
+
+Implement PII redaction, provenance fields, and validation. Ingest data from CSV/JSON. Build the separate, linked Return Intelligence dataset with every synthetic record marked. Preserve raw evidence separately from normalized values. Stop.
+
+### Milestone 19 — Return Reason Intelligence
+
+Implement:
+
+- deterministic baselines (reason-code mapping and keyword rules);
+- typed GenAI multi-label classification with confidence, including Hinglish and spelling-error support;
+- responsible-area prediction;
+- complaint clustering by SKU/variant/pattern;
+- low-confidence review routing.
+
+Use the §19 categories where the data supports them. Evaluate against a separate human-reviewed return-reason set, with per-class precision, recall, and F1, and compare the GenAI classifier with the deterministic baseline. Stop.
+
+### Milestone 20 — Evidence Retrieval and Root-Cause RAG
+
+Retrieve only authorized evidence:
+
+- the current listing and historical listing versions;
+- previous returns, reviews, and support complaints;
+- similar SKU cases;
+- category guidelines;
+- seller documents;
+- marketplace policies.
+
+Produce typed output containing:
+
+- the affected SKU/variant;
+- the observed pattern;
+- supporting evidence references;
+- the likely root-cause hypothesis;
+- confidence;
+- the responsible team;
+- the recommended next investigation.
+
+Require abstention or manual investigation when evidence is insufficient or conflicting. Correlation is reported as a hypothesis, never a confirmed cause. Evaluate on a separate human-reviewed root-cause set. Stop.
+
+### Milestone 21 — Corrective Action and HITL Workflow
+
+Implement corrective-action proposals:
+
+- title/description corrections;
+- size-chart corrections;
+- specification corrections;
+- product-photography requests;
+- packaging recommendations;
+- supplier-quality investigations;
+- warehouse/logistics escalations.
+
+Each proposal shows an original-versus-proposed diff.
+
+Implement the review workflow:
+
+- actions: approve, edit, reject, request more evidence, escalate;
+- an authorized-reviewer check;
+- an append-only audit trail;
+- model, prompt, policy, and evidence versions on every record;
+- rollback history.
+
+Approved changes become an export or an internal catalog update followed by a search-index refresh. There is no autonomous marketplace publishing; every marketplace publication requires explicit authorized approval (§6). Simulated developer reviews are marked `simulated`. Stop.
+
+### Milestone 22 — Closed-Loop Evaluation
+
+Measure:
+
+- overall return rate and preventable-return rate;
+- SKU and variant return rates;
+- before/after correction outcomes;
+- return-reason classification quality;
+- root-cause quality;
+- recommendation acceptance, plus human edits and rejections;
+- false recommendation rate;
+- time to resolution;
+- search-quality impact;
+- estimated cost savings, with explicit assumptions.
+
+Label every measured, simulated, and estimated figure as such. Do not present simulated or estimated impact as real production impact. Do not claim causation from before/after comparisons alone. Stop.
+
+### Milestone 23 — Regression CI
+
+Implement unit/integration CI, evaluation smoke tests, provider contract tests, and configurable thresholds. Routine CI must not require live Jev or any live generation provider. Stop.
+
+### Milestone 24 — Observability
+
+Implement:
+
+- structured logging;
+- request IDs;
+- provider telemetry;
+- stage timings;
+- fallback, confidence, and review metrics;
+- token and cost metrics;
+- P50/P95/P99 reporting.
+
+Logs never contain unredacted PII. Stop.
+
+### Milestone 25 — Dual Frontend
+
+Buyer UI:
+
+- search, filters, and product cards;
+- the assistant;
+- comparison;
+- citations;
+- clarification;
+- feedback.
+
+Retailer UI:
+
+- return dashboard;
+- affected SKUs and complaint clusters;
+- evidence viewer;
+- root-cause reports;
+- proposed listing diff;
+- HITL review queue;
+- correction history;
+- outcome reports.
+
+Build only the screens whose backend milestones exist. Never expose hidden reasoning or unredacted PII. Stop.
+
+### Milestone 26 — AWS Deployment
+
+Only after local stability, implement:
+
+- production image;
+- ECR;
+- ECS/Fargate;
+- PostgreSQL with pgvector;
+- Secrets Manager;
+- CloudWatch;
+- Terraform.
+
+Do not introduce EKS. Require approval before chargeable actions. Stop.
+
+### Milestone 27 — Optional Authorized Marketplace Integration
+
+This milestone is optional and needs authorized official access. It may cover:
+
+- authorized seller-report import;
+- return-report import;
+- export of approved corrections;
+- official API integration where access exists.
+
+No scraping and no unofficial access. The project does not pretend that Amazon, Flipkart, or any other production API access exists. M27 may submit only changes that an authorized human reviewer has explicitly approved; it never permits autonomous publishing. The portfolio MVP remains valid with CSV/JSON import and export. Stop.
+
+## 29. Definition of done
+
+**Core search** is done only when all of the following exist:
+
+- PostgreSQL/pgvector;
+- catalog quality;
+- lexical, dense, and hybrid retrieval;
+- RRF;
+- deterministic understanding;
+- structured filtering;
+- reranking;
+- a human-reviewed Golden Dataset;
+- evaluation;
+- FastAPI;
+- tests;
+- measured latency and quality;
+- an experiment report;
+- an explanatory README.
+
+**Jev** is done only when all of the following exist:
+
+- official integration;
+- typed validation;
+- fallback;
+- model/version logging;
+- human evaluation;
+- latency and cost measurement;
+- calibration;
+- justified thresholds;
+- a deterministic-vs-Jev comparison.
+
+**Listing intelligence** is done only when:
+
+- raw data is preserved;
+- normalization and contradiction detection work;
+- decisions are bounded;
+- uncertainty reaches human review;
+- evaluation is human-reviewed.
+
+**Buyer assistant** is done only when:
+
+- answers are grounded and cite product IDs;
+- constraints and citations are validated deterministically;
+- clarification and abstention work;
+- no order or payment actions exist;
+- a separate human-reviewed answer evaluation reports faithfulness, citation correctness, unsupported-claim rate, constraint satisfaction, and false-refusal rate, plus latency, tokens, and cost;
+- injection tests exist.
+
+**Return intelligence** is done only when:
+
+- raw return evidence is preserved and PII is redacted;
+- classification is compared with a deterministic baseline on human-reviewed data;
+- root-cause output is evidence-referenced and abstains when unsupported;
+- every correction passes an authorized human decision with a full audit trail and rollback;
+- closed-loop reports clearly label measured, simulated, and estimated figures.
+
+## 30. Final principles
+
+Prefer:
+
+- deterministic extraction over unnecessary inference;
+- bounded decisions over unrestricted generation;
+- grounded, cited answers over fluent unsupported ones;
+- abstention over guessing;
+- confidence gating over blind automation;
+- human authority over automated action;
+- human-reviewed labels over generated ground truth;
+- hypotheses over asserted causes;
+- measured improvement over assumed performance;
+- simple architecture over unnecessary infrastructure.
 
 ## Start now
 
-Inspect the repository and implement only Milestone 0. Create the requested specification, architecture, data-quality, and ADR documents. Do not write application code, call Jev, create frontend/AWS code, or generate fake results. Validate the documents, list files and commands, report unresolved questions, and stop.
+M0–M8 are complete. The next implementation milestone is **Milestone 9 — Golden Dataset**. Its Session B evaluation contracts exist uncommitted in the working tree.
+
+Inspect the repository and the existing M9 work before continuing. Continue only M9, which is limited to search relevance:
+
+```text
+Query -> candidate product -> human relevance grade
+```
+
+Do not create:
+
+- buyer-RAG answer labels;
+- return-reason or root-cause labels;
+- HITL code;
+- ESCI ingestion;
+- marketplace integration;
+- any code for M10 or later.
+
+Those require their own separately versioned datasets in their own milestones. Do not call Jev or any generation provider, and do not generate fake labels or results. Pause for real human labeling where M9 requires it. Report files and commands, then stop.

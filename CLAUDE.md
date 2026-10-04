@@ -1,4 +1,4 @@
-# Intelligent E-commerce Search & Decision Engine
+# Intelligent Ecommerce Search, Shopping & Return Intelligence Platform
 
 ## Primary specification
 
