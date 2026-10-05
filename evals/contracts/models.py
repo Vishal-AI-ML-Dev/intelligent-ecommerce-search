@@ -40,6 +40,7 @@ from ecommerce_search.catalog.taxonomy import (
     StorageType,
 )
 from ecommerce_search.filtering.policy import FilterOperator
+from ecommerce_search.query_understanding.models import Intent
 from ecommerce_search.search.query import QueryError, normalize_query
 from evals.contracts.constants import (
     ALLOWED_RELATIONS,
@@ -232,6 +233,10 @@ class GoldField(StrEnum):
     ANC = "anc"
     WIRELESS = "wireless"
     CONNECTIVITY = "connectivity"
+    # Soft-only signals (never hard, never fp-1, never part of eligibility). Their vocabularies
+    # are qu-1's closed sets, so a later analysis can compare them with what qu-1 extracts.
+    SEMANTIC_INTENT = "semantic_intent"
+    PRICE_PREFERENCE = "price_preference"
 
 
 # Gold fields that fp-1 can filter on (`price` covers fp-1's min_price and max_price).
@@ -246,6 +251,13 @@ FP1_GOLD_FIELDS: frozenset[GoldField] = frozenset(
         GoldField.PRICE,
     }
 )
+
+# Fields that may only be recorded as soft signals.
+SOFT_ONLY_FIELDS: frozenset[GoldField] = frozenset(
+    {GoldField.SEMANTIC_INTENT, GoldField.PRICE_PREFERENCE}
+)
+# qu-1's price-preference vocabulary (`QueryAttributes.price_preference`; `sasta` -> `low`).
+PRICE_PREFERENCE_VALUES: frozenset[str] = frozenset({"low"})
 
 # Categories a field can apply to; a missing key means every category.
 FIELD_CATEGORIES: dict[GoldField, frozenset[Category]] = {
@@ -268,6 +280,8 @@ _ENUM_VALUES: dict[GoldField, frozenset[str]] = {
     GoldField.SUBCATEGORY: frozenset().union(*SUBCATEGORIES.values()),
     GoldField.GENDER: frozenset(g.value for g in Gender),
     GoldField.CONNECTIVITY: frozenset(c.value for c in Connectivity),
+    GoldField.SEMANTIC_INTENT: frozenset(i.value for i in Intent),
+    GoldField.PRICE_PREFERENCE: PRICE_PREFERENCE_VALUES,
 }
 _INT_FIELDS = frozenset({GoldField.RAM_GB, GoldField.STORAGE_GB})
 _BOOL_FIELDS = frozenset({GoldField.ANC, GoldField.WIRELESS})
@@ -280,6 +294,13 @@ class Hardness(StrEnum):
 
 
 GoldValue = StrictBool | StrictInt | StrictStr
+
+
+def canonical_gold_value(value: GoldValue) -> str:
+    """The canonical evidence string of a gold value ("true", "16", "40000.00", "NVME")."""
+    if type(value) is bool:
+        return "true" if value else "false"
+    return str(value)
 
 
 def _check_gold_value(field: GoldField, value: GoldValue) -> None:
@@ -319,6 +340,8 @@ class GoldConstraint(_Record):
     @model_validator(mode="after")
     def _check(self) -> Self:
         _check_gold_value(self.field, self.value)
+        if self.field in SOFT_ONLY_FIELDS and self.hardness is not Hardness.SOFT:
+            raise ValueError(f"{self.field.value} can only be a soft signal")
         if self.field is GoldField.PRICE:
             if self.operator not in (FilterOperator.LTE, FilterOperator.GTE):
                 raise ValueError("price constraints use the lte or gte operator")
@@ -343,7 +366,8 @@ class ProductIntentKind(StrEnum):
 
 
 class ProductIntent(_Record):
-    """A soft series/model intent (for example `Lumen`). It never feeds eligibility (D14)."""
+    """A soft exact series/model intent (for example `Lumen`), separate from semantic intent. It
+    never feeds eligibility (D14): same-series products are never hard-eligible because of it."""
 
     query_id: QueryId
     kind: ProductIntentKind
@@ -355,6 +379,112 @@ class ProductIntent(_Record):
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.query_id, self.kind.value, self.value.casefold())
+
+
+# ---- what qu-1 extracts from each pilot query (generated) ----------------------------------
+
+
+class ExtractionTarget(StrEnum):
+    GOLD_CONSTRAINT = "gold_constraint"
+    PRODUCT_INTENT = "product_intent"
+
+
+class ExtractionStatus(StrEnum):
+    """What qu-1 returned for one gold item of one exact query. This is separate from
+    `fp1_filterable`, which only says whether fp-1 could enforce the field once supplied."""
+
+    EXTRACTED = "extracted"  # qu-1 returned the gold value
+    EXTRACTED_OTHER_VALUE = "extracted_other_value"  # qu-1 returned a different value
+    NOT_EXTRACTED = "not_extracted"  # qu-1 has the field but returned nothing for it
+    NO_PARSER_FIELD = "no_parser_field"  # qu-1 has no such field at all
+
+
+class QueryExtraction(_Record):
+    """Generated from the gold records and the deterministic qu-1/fp-1 code. It records parser
+    behaviour only: it is never a gold constraint, an eligibility status or a relevance label."""
+
+    query_id: QueryId
+    target: ExtractionTarget
+    field: StrictStr
+    operator: FilterOperator | None
+    gold_value: Annotated[StrictStr, Field(min_length=1)]
+    parser_version: Literal["qu-1"] = "qu-1"
+    lexicon_version: Literal["1"] = "1"
+    filter_policy_version: Literal["fp-1"] = "fp-1"
+    status: ExtractionStatus
+    parsed_value: StrictStr | None
+    fp1_filterable: StrictBool
+    fp1_applied: StrictBool
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.target is ExtractionTarget.GOLD_CONSTRAINT:
+            if self.field not in {f.value for f in GoldField} or self.operator is None:
+                raise ValueError("a gold_constraint extraction names a gold field and operator")
+            if self.fp1_filterable != (GoldField(self.field) in FP1_GOLD_FIELDS):
+                raise ValueError(f"fp1_filterable is wrong for {self.field}")
+        else:
+            if self.field not in {k.value for k in ProductIntentKind} or self.operator is not None:
+                raise ValueError("a product_intent extraction names an intent kind, no operator")
+            if self.status is not ExtractionStatus.NO_PARSER_FIELD or self.fp1_filterable:
+                raise ValueError("qu-1 and fp-1 have no product-intent field")
+        found = self.status in (ExtractionStatus.EXTRACTED, ExtractionStatus.EXTRACTED_OTHER_VALUE)
+        if found != (self.parsed_value is not None):
+            raise ValueError("parsed_value is set exactly when qu-1 extracted a value")
+        if self.status is ExtractionStatus.EXTRACTED and self.parsed_value != self.gold_value:
+            raise ValueError("an extracted value must equal the gold value")
+        if (
+            self.status is ExtractionStatus.EXTRACTED_OTHER_VALUE
+            and self.parsed_value == self.gold_value
+        ):
+            raise ValueError("extracted_other_value needs a value different from the gold value")
+        if self.fp1_applied and not (self.fp1_filterable and found):
+            raise ValueError("fp1_applied needs an fp-1 field that qu-1 extracted")
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        operator = "" if self.operator is None else self.operator.value
+        return (self.query_id, self.target.value, self.field, operator)
+
+
+# ---- authoring attestation (recorded) -------------------------------------------------------
+
+
+class DraftedBy(StrEnum):
+    AI_ASSISTANT = "ai_assistant"
+    HUMAN = "human"
+
+
+class AuthoringPurpose(StrEnum):
+    DEVELOPMENT_RUBRIC_CALIBRATION = "development_rubric_calibration"
+    HELD_OUT_TEST = "held_out_test"
+
+
+class AuthoringAttestation(_Record):
+    """How a query set and its gold records were authored, and who confirmed them. Written only
+    by the human-run freeze command; the confirmation time is the gold records' `recorded_at`."""
+
+    partition: Partition
+    purpose: AuthoringPurpose
+    drafted_by: DraftedBy
+    confirmed_by: AnnotatorHandle
+    confirmed_at: UtcTimestamp
+    blind_to_parser_output: StrictBool
+    final_test_evidence: StrictBool
+    input_sha256: Sha256
+    query_count: Annotated[StrictInt, Field(ge=1)]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        dev = self.purpose is AuthoringPurpose.DEVELOPMENT_RUBRIC_CALIBRATION
+        if dev != (self.partition is Partition.PILOT_DEV):
+            raise ValueError("development purpose belongs to pilot_dev, held-out test to test")
+        if dev and self.final_test_evidence:
+            raise ValueError("development/rubric-calibration data is never final test evidence")
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.input_sha256,)
 
 
 # ---- candidate pool and its private provenance ----------------------------------------------

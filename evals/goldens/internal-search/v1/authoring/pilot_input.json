@@ -1,0 +1,573 @@
+{
+  "schema_version": 1,
+  "golden_id": "internal-search",
+  "golden_version": 1,
+  "partition": "pilot_dev",
+  "purpose": "development_rubric_calibration",
+  "drafted_by": "ai_assistant",
+  "blind_to_parser_output": false,
+  "final_test_evidence": false,
+  "rubric_version": "rubric-1",
+  "queries": [
+    {
+      "query_id": "gq-p01",
+      "text": "headphones",
+      "language_style": "english",
+      "intent_family": "broad_category",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": true
+    },
+    {
+      "query_id": "gq-p02",
+      "text": "dell laptop",
+      "language_style": "english",
+      "intent_family": "brand_category",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": true
+    },
+    {
+      "query_id": "gq-p03",
+      "text": "adidas shoes",
+      "language_style": "english",
+      "intent_family": "brand_category",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false
+    },
+    {
+      "query_id": "gq-p04",
+      "text": "lenovo lumen ryzen 7 laptop",
+      "language_style": "english",
+      "intent_family": "exact_product",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false,
+      "notes": "Lumen is an exact series intent, not a hard constraint; same-series laptops with other processors are not hard-eligible."
+    },
+    {
+      "query_id": "gq-p05",
+      "text": "phone under 20k",
+      "language_style": "english",
+      "intent_family": "price",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false
+    },
+    {
+      "query_id": "gq-p06",
+      "text": "bose headphones under 15000",
+      "language_style": "english",
+      "intent_family": "price",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false,
+      "notes": "The price bound is fp-1-filterable, but qu-1 does not extract a bound written without k or a currency marker."
+    },
+    {
+      "query_id": "gq-p07",
+      "text": "laptop 16gb ram 512gb ssd",
+      "language_style": "english",
+      "intent_family": "specification",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false
+    },
+    {
+      "query_id": "gq-p08",
+      "text": "1tb nvme laptop",
+      "language_style": "english",
+      "intent_family": "specification",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false,
+      "notes": "NVMe is the storage_interface field; SSD is not stated and is not added."
+    },
+    {
+      "query_id": "gq-p09",
+      "text": "12gb ram phone 256gb storage",
+      "language_style": "english",
+      "intent_family": "specification",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false
+    },
+    {
+      "query_id": "gq-p10",
+      "text": "hp laptop 8gb 256 ssd under 40k",
+      "language_style": "english",
+      "intent_family": "combined",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": true,
+      "notes": "8gb is read as RAM and 256 as storage capacity."
+    },
+    {
+      "query_id": "gq-p11",
+      "text": "gaming laptop",
+      "language_style": "english",
+      "intent_family": "semantic_intent",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": true
+    },
+    {
+      "query_id": "gq-p12",
+      "text": "women running shoes",
+      "language_style": "english",
+      "intent_family": "specification",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false,
+      "notes": "Gender women is strict for eligibility; a unisex shoe does not satisfy it, but its relevance is left to the human annotator."
+    },
+    {
+      "query_id": "gq-p13",
+      "text": "50k ke andar gaming laptop",
+      "language_style": "hinglish",
+      "intent_family": "combined",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false
+    },
+    {
+      "query_id": "gq-p14",
+      "text": "sasta phone 8gb ram wala",
+      "language_style": "hinglish",
+      "intent_family": "specification",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false,
+      "notes": "Sasta is a soft low-price preference; no numeric price bound is implied."
+    },
+    {
+      "query_id": "gq-p15",
+      "text": "office ke liye laptop 16gb ram",
+      "language_style": "hinglish",
+      "intent_family": "semantic_intent",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false
+    },
+    {
+      "query_id": "gq-p16",
+      "text": "samsng phone 128gb",
+      "language_style": "noisy",
+      "intent_family": "combined",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false,
+      "notes": "Samsng is a misspelling of Samsung; 128gb is read as storage capacity."
+    },
+    {
+      "query_id": "gq-p17",
+      "text": "noise cancelling headfones",
+      "language_style": "noisy",
+      "intent_family": "specification",
+      "interpretations": [],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": false,
+      "notes": "Headfones is a misspelling of headphones."
+    },
+    {
+      "query_id": "gq-p18",
+      "text": "apple",
+      "language_style": "english",
+      "intent_family": "ambiguous",
+      "interpretations": [
+        "Apple-brand laptops",
+        "Apple-brand phones"
+      ],
+      "expected_eligibility": "expected_nonempty",
+      "seen_in_development": true,
+      "notes": "Brand only; no category is forced. Several catalog categories are valid interpretations."
+    },
+    {
+      "query_id": "gq-p19",
+      "text": "laptop 64gb ram",
+      "language_style": "english",
+      "intent_family": "zero_eligible",
+      "interpretations": [],
+      "expected_eligibility": "expected_empty",
+      "seen_in_development": false,
+      "notes": "No catalog laptop has 64 GB RAM."
+    },
+    {
+      "query_id": "gq-p20",
+      "text": "smartwatch",
+      "language_style": "english",
+      "intent_family": "out_of_catalog",
+      "interpretations": [],
+      "expected_eligibility": "expected_empty",
+      "seen_in_development": false,
+      "notes": "Out-of-catalog category intent: the catalog has no smartwatch category, so no constraint can be recorded and no product is hard-eligible."
+    }
+  ],
+  "gold_constraints": [
+    {
+      "query_id": "gq-p01",
+      "field": "category",
+      "operator": "eq",
+      "value": "headphones",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p02",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p02",
+      "field": "brand",
+      "operator": "eq",
+      "value": "Dell",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p03",
+      "field": "category",
+      "operator": "eq",
+      "value": "shoes",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p03",
+      "field": "brand",
+      "operator": "eq",
+      "value": "Adidas",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p04",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p04",
+      "field": "brand",
+      "operator": "eq",
+      "value": "Lenovo",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p04",
+      "field": "processor",
+      "operator": "eq",
+      "value": "AMD Ryzen 7",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p05",
+      "field": "category",
+      "operator": "eq",
+      "value": "phone",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p05",
+      "field": "price",
+      "operator": "lte",
+      "value": "20000.00",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p06",
+      "field": "category",
+      "operator": "eq",
+      "value": "headphones",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p06",
+      "field": "brand",
+      "operator": "eq",
+      "value": "Bose",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p06",
+      "field": "price",
+      "operator": "lte",
+      "value": "15000.00",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p07",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p07",
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": 16,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p07",
+      "field": "storage_gb",
+      "operator": "eq",
+      "value": 512,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p07",
+      "field": "storage_type",
+      "operator": "eq",
+      "value": "SSD",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p08",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p08",
+      "field": "storage_gb",
+      "operator": "eq",
+      "value": 1024,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p08",
+      "field": "storage_interface",
+      "operator": "eq",
+      "value": "NVME",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p09",
+      "field": "category",
+      "operator": "eq",
+      "value": "phone",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p09",
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": 12,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p09",
+      "field": "storage_gb",
+      "operator": "eq",
+      "value": 256,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p10",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p10",
+      "field": "brand",
+      "operator": "eq",
+      "value": "HP",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p10",
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": 8,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p10",
+      "field": "storage_gb",
+      "operator": "eq",
+      "value": 256,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p10",
+      "field": "storage_type",
+      "operator": "eq",
+      "value": "SSD",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p10",
+      "field": "price",
+      "operator": "lte",
+      "value": "40000.00",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p11",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p11",
+      "field": "semantic_intent",
+      "operator": "eq",
+      "value": "gaming",
+      "hardness": "soft"
+    },
+    {
+      "query_id": "gq-p12",
+      "field": "category",
+      "operator": "eq",
+      "value": "shoes",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p12",
+      "field": "subcategory",
+      "operator": "eq",
+      "value": "running",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p12",
+      "field": "gender",
+      "operator": "eq",
+      "value": "women",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p13",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p13",
+      "field": "price",
+      "operator": "lte",
+      "value": "50000.00",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p13",
+      "field": "semantic_intent",
+      "operator": "eq",
+      "value": "gaming",
+      "hardness": "soft"
+    },
+    {
+      "query_id": "gq-p14",
+      "field": "category",
+      "operator": "eq",
+      "value": "phone",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p14",
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": 8,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p14",
+      "field": "price_preference",
+      "operator": "eq",
+      "value": "low",
+      "hardness": "soft"
+    },
+    {
+      "query_id": "gq-p15",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p15",
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": 16,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p15",
+      "field": "semantic_intent",
+      "operator": "eq",
+      "value": "office",
+      "hardness": "soft"
+    },
+    {
+      "query_id": "gq-p16",
+      "field": "category",
+      "operator": "eq",
+      "value": "phone",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p16",
+      "field": "brand",
+      "operator": "eq",
+      "value": "Samsung",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p16",
+      "field": "storage_gb",
+      "operator": "eq",
+      "value": 128,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p17",
+      "field": "category",
+      "operator": "eq",
+      "value": "headphones",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p17",
+      "field": "anc",
+      "operator": "eq",
+      "value": true,
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p18",
+      "field": "brand",
+      "operator": "eq",
+      "value": "Apple",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p19",
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop",
+      "hardness": "hard"
+    },
+    {
+      "query_id": "gq-p19",
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": 64,
+      "hardness": "hard"
+    }
+  ],
+  "product_intents": [
+    {
+      "query_id": "gq-p04",
+      "kind": "series",
+      "value": "Lumen"
+    }
+  ]
+}

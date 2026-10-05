@@ -4,10 +4,11 @@ read-only catalog index) and raise a `ContractError` naming the first problem fo
 None of these functions creates, prefills, trims or repairs anything: a validator reports and
 the caller stops.
 
-Limitation (Session B): nothing calls these validators yet. No Golden data, importer or freeze
-runner exists, so they are enforced only by their unit tests. Wiring them into the runners that
-build and freeze each stage is Session C-or-later work; until then they are contracts, not
-active end-to-end enforcement.
+Wiring status (Session C1): the `queries_frozen` freeze runner
+(`evals.runners.freeze_queries`) calls the query, gold-constraint, product-intent, attestation,
+extraction and pilot validators before it writes anything. The pool, judgement, review-set and
+correction validators are still enforced only by their unit tests; wiring them into the runners
+of later stages is later-session work.
 """
 
 import hashlib
@@ -30,6 +31,7 @@ from evals.contracts.constants import (
     SINGLE_ANNOTATOR_HANDLE,
     Label,
 )
+from evals.contracts.extraction import derive_query_extraction
 from evals.contracts.manifest import (
     STAGE_ORDER,
     Manifest,
@@ -42,6 +44,7 @@ from evals.contracts.manifest import (
 )
 from evals.contracts.models import (
     FIELD_CATEGORIES,
+    AuthoringAttestation,
     ConsistencySample,
     EligibilityRecord,
     FinalJudgement,
@@ -57,6 +60,7 @@ from evals.contracts.models import (
     PoolItem,
     ProductIntent,
     ProvenanceEntry,
+    QueryExtraction,
     QueryRecord,
     QueueItem,
     ReviewReason,
@@ -192,6 +196,41 @@ def validate_product_intents(
             raise ContractError(
                 f"{intent.query_id}: {intent.value!r} is not a token of any catalog title"
             )
+
+
+def validate_attestation(
+    queries: Sequence[QueryRecord],
+    constraints: Sequence[GoldConstraint],
+    intents: Sequence[ProductIntent],
+    attestation: AuthoringAttestation,
+) -> None:
+    """The attestation covers exactly this query set, was confirmed by the approved annotator,
+    and every gold record carries that annotator and the one confirmation time."""
+    if attestation.confirmed_by != SINGLE_ANNOTATOR_HANDLE:
+        raise ContractError(
+            f"expected confirmation by {SINGLE_ANNOTATOR_HANDLE!r}, "
+            f"found {attestation.confirmed_by!r}"
+        )
+    if attestation.query_count != len(queries):
+        raise ContractError("the attestation query_count differs from the query set")
+    if any(q.partition is not attestation.partition for q in queries):
+        raise ContractError("every query must be in the attested partition")
+    for record in (*constraints, *intents):
+        if record.annotator_handle != attestation.confirmed_by:
+            raise ContractError(f"{record.query_id}: gold record from another annotator")
+        if record.recorded_at != attestation.confirmed_at:
+            raise ContractError(f"{record.query_id}: gold record time differs from confirmation")
+
+
+def validate_query_extraction(
+    queries: Sequence[QueryRecord],
+    constraints: Sequence[GoldConstraint],
+    intents: Sequence[ProductIntent],
+    extraction: Sequence[QueryExtraction],
+) -> None:
+    """The extraction records are exactly the deterministic regeneration from qu-1/fp-1."""
+    if list(extraction) != derive_query_extraction(queries, constraints, intents):
+        raise ContractError("query extraction does not match its deterministic regeneration")
 
 
 # ---- pool, pool cap and provenance ----------------------------------------------------------

@@ -9,7 +9,10 @@ Development is organized milestone by milestone. See
 ## Current status
 
 - M0–M8: complete according to repository history (summarized below).
-- M9 (Golden Dataset): in progress.
+- M9 (Golden Dataset): in progress. Session C1 is complete: the 20-query development pilot
+  (`queries_frozen`) was confirmed by the human annotator and verified. Session C2 (candidate
+  pooling) has not started, and no pools, labels or metrics exist. See
+  `docs/golden-dataset-m9.md`.
 - M10–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
   (HITL), the dual frontend and marketplace integration. M27 is optional.
 

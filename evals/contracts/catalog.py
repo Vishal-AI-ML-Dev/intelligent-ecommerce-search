@@ -7,6 +7,7 @@ a catalog that does not match its provenance file or that has any invalid record
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -39,6 +40,8 @@ class CatalogProduct:
     content_sha256: str
     title: str
     spec: Mapping[str, Any]
+    price: Decimal
+    subcategory: str | None
 
 
 @dataclass(frozen=True)
@@ -81,6 +84,8 @@ def load_catalog_index(
             content_sha256=line.content_sha256,
             title=record.title,
             spec=MappingProxyType(record.spec.model_dump(mode="json")),
+            price=record.price,
+            subcategory=record.subcategory,
         )
     return CatalogIndex(
         dataset_id=provenance.dataset_id,

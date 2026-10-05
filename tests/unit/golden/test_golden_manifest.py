@@ -20,13 +20,19 @@ from evals.contracts.manifest import (
     verify_entry,
 )
 from evals.contracts.models import (
+    AuthoringAttestation,
+    AuthoringPurpose,
     ConstraintStatus,
+    DraftedBy,
+    ExtractionStatus,
+    ExtractionTarget,
     GoldField,
     LabelChange,
     LabelChangeKind,
     Partition,
     PartitionAssignment,
     ProvenanceEntry,
+    QueryExtraction,
     ReviewReason,
     Round,
     SourceHit,
@@ -37,7 +43,7 @@ from evals.contracts.review_sets import (
     build_consistency_sample,
     derive_final_judgements,
 )
-from golden_support import HANDLE, after_delay, eligibility, gold, judgement, pool_for, query
+from golden_support import HANDLE, T0, after_delay, eligibility, gold, judgement, pool_for, query
 from pydantic import ValidationError
 
 from ecommerce_search.filtering.policy import FilterOperator
@@ -57,7 +63,8 @@ VERSIONS = ManifestVersions(
     reranker_revision="233902d25c440f23af6f7d6e94d2946bac0bee0a",
 )
 PATHS = {role: f"v1/{role.value}.jsonl" for role in Role} | {
-    Role.CONSISTENCY_SAMPLE: "v1/consistency_sample.json"
+    Role.CONSISTENCY_SAMPLE: "v1/consistency_sample.json",
+    Role.AUTHORING_ATTESTATION: "v1/authoring_attestation.json",
 }
 
 
@@ -128,6 +135,34 @@ def _files(catalog) -> dict[Role, bytes]:
         Role.QUERIES: encode_jsonl([q]),
         Role.GOLD_CONSTRAINTS: encode_jsonl([gold("gq-p01", GoldField.CATEGORY, "laptop")]),
         Role.PRODUCT_INTENTS: encode_jsonl([]),
+        Role.QUERY_EXTRACTION: encode_jsonl(
+            [
+                QueryExtraction(
+                    query_id="gq-p01",
+                    target=ExtractionTarget.GOLD_CONSTRAINT,
+                    field="category",
+                    operator=FilterOperator.EQ,
+                    gold_value="laptop",
+                    status=ExtractionStatus.EXTRACTED,
+                    parsed_value="laptop",
+                    fp1_filterable=True,
+                    fp1_applied=True,
+                )
+            ]
+        ),
+        Role.AUTHORING_ATTESTATION: encode_json_object(
+            AuthoringAttestation(
+                partition=Partition.PILOT_DEV,
+                purpose=AuthoringPurpose.DEVELOPMENT_RUBRIC_CALIBRATION,
+                drafted_by=DraftedBy.AI_ASSISTANT,
+                confirmed_by=HANDLE,
+                confirmed_at=T0,
+                blind_to_parser_output=False,
+                final_test_evidence=False,
+                input_sha256="a" * 64,
+                query_count=1,
+            )
+        ),
         Role.POOL: encode_jsonl(pool),
         Role.ELIGIBILITY: encode_jsonl(elig),
         Role.PRIMARY_JUDGEMENTS: primary_bytes,

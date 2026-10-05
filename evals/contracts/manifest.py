@@ -13,10 +13,12 @@ Hashes are non-circular:
   finished manifest, so corrections stay auditable across versions without any cycle.
 
 Lifecycle (strictly ordered; each stage is a new manifest file and earlier ones are never
-edited): `queries_frozen` → `pool_frozen` → `primary_sealed` → `labels_frozen` →
-`provenance_unsealed`. From `pool_frozen` the private provenance is represented only by its
-checksum (`provenance_binding`); it becomes an entry at `provenance_unsealed`, where its hash
-must equal that binding (D12). Every entry of a stage is carried unchanged into the next stage.
+edited): `queries_frozen` (queries, gold constraints, product intents, the generated qu-1
+extraction record and the recorded authoring attestation) → `pool_frozen` → `primary_sealed` →
+`labels_frozen` → `provenance_unsealed`. From `pool_frozen` the private provenance is
+represented only by its checksum (`provenance_binding`); it becomes an entry at
+`provenance_unsealed`, where its hash must equal that binding (D12). Every entry of a stage is
+carried unchanged into the next stage.
 `labels_frozen_at` (UTC, hashed like every other field) is the explicit freeze time: null before
 `labels_frozen`, set from it onwards and never changed; it is no earlier than the primary seal
 here, and no earlier than any included record (`validation.validate_labels_frozen_at`).
@@ -44,6 +46,7 @@ from evals.contracts.canonical import (
 )
 from evals.contracts.constants import GOLDEN_ID
 from evals.contracts.models import (
+    AuthoringAttestation,
     ConsistencySample,
     EligibilityRecord,
     FinalJudgement,
@@ -54,6 +57,7 @@ from evals.contracts.models import (
     PoolItem,
     ProductIntent,
     ProvenanceEntry,
+    QueryExtraction,
     QueryRecord,
     QueueItem,
     Round,
@@ -81,6 +85,8 @@ class Role(StrEnum):
     QUERIES = "queries"
     GOLD_CONSTRAINTS = "gold_constraints"
     PRODUCT_INTENTS = "product_intents"
+    QUERY_EXTRACTION = "query_extraction"
+    AUTHORING_ATTESTATION = "authoring_attestation"
     POOL = "pool"
     ELIGIBILITY = "eligibility"
     PRIMARY_JUDGEMENTS = "primary_judgements"
@@ -103,6 +109,8 @@ ROLE_KIND: dict[Role, EntryKind] = {
     Role.QUERIES: EntryKind.RECORDED,
     Role.GOLD_CONSTRAINTS: EntryKind.RECORDED,
     Role.PRODUCT_INTENTS: EntryKind.RECORDED,
+    Role.QUERY_EXTRACTION: EntryKind.GENERATED,
+    Role.AUTHORING_ATTESTATION: EntryKind.RECORDED,
     Role.POOL: EntryKind.GENERATED,
     Role.ELIGIBILITY: EntryKind.GENERATED,
     Role.PRIMARY_JUDGEMENTS: EntryKind.RECORDED,
@@ -116,11 +124,14 @@ ROLE_KIND: dict[Role, EntryKind] = {
     Role.PROVENANCE: EntryKind.GENERATED,
 }
 
-# Record model per role; ConsistencySample is a single-object file, every other role is JSONL.
+# Record model per role; ConsistencySample and AuthoringAttestation are single-object files,
+# every other role is JSONL.
 ROLE_MODEL: dict[Role, type[BaseModel]] = {
     Role.QUERIES: QueryRecord,
     Role.GOLD_CONSTRAINTS: GoldConstraint,
     Role.PRODUCT_INTENTS: ProductIntent,
+    Role.QUERY_EXTRACTION: QueryExtraction,
+    Role.AUTHORING_ATTESTATION: AuthoringAttestation,
     Role.POOL: PoolItem,
     Role.ELIGIBILITY: EligibilityRecord,
     Role.PRIMARY_JUDGEMENTS: Judgement,
@@ -133,7 +144,7 @@ ROLE_MODEL: dict[Role, type[BaseModel]] = {
     Role.FINAL_JUDGEMENTS: FinalJudgement,
     Role.PROVENANCE: ProvenanceEntry,
 }
-OBJECT_ROLES = frozenset({Role.CONSISTENCY_SAMPLE})
+OBJECT_ROLES = frozenset({Role.CONSISTENCY_SAMPLE, Role.AUTHORING_ATTESTATION})
 ROLE_ROUND: dict[Role, Round] = {
     Role.PRIMARY_JUDGEMENTS: Round.PRIMARY,
     Role.CONSISTENCY_JUDGEMENTS: Round.CONSISTENCY,
@@ -141,7 +152,15 @@ ROLE_ROUND: dict[Role, Round] = {
 }
 
 _ADDED_AT: dict[Stage, frozenset[Role]] = {
-    Stage.QUERIES_FROZEN: frozenset({Role.QUERIES, Role.GOLD_CONSTRAINTS, Role.PRODUCT_INTENTS}),
+    Stage.QUERIES_FROZEN: frozenset(
+        {
+            Role.QUERIES,
+            Role.GOLD_CONSTRAINTS,
+            Role.PRODUCT_INTENTS,
+            Role.QUERY_EXTRACTION,
+            Role.AUTHORING_ATTESTATION,
+        }
+    ),
     Stage.POOL_FROZEN: frozenset({Role.POOL, Role.ELIGIBILITY}),
     Stage.PRIMARY_SEALED: frozenset(
         {Role.PRIMARY_JUDGEMENTS, Role.CONSISTENCY_SAMPLE, Role.ADJUDICATION_QUEUE}

@@ -42,7 +42,7 @@ Other documents written before this revision still use the former numbers. These
 | Milestone | Status | Evidence |
 |---|---|---|
 | M0–M8 | Complete as documented | Milestone commits on `main`, pushed (`origin/main` = `0a93e52`). Per-milestone docs live in `docs/`. |
-| M9 | In progress | Session B evaluation contracts and tests exist but are uncommitted (`evals/contracts/`, `tests/unit/golden/`). No queries, pools, labels or metric results exist. |
+| M9 | In progress | Session B contracts committed and pushed (`15f3ac1`). Session C1 (uncommitted) is complete: the `queries_frozen` stage was confirmed by `ann-1` and verified (manifest `51204dae…`; details in `docs/golden-dataset-m9.md`). It is development/rubric-calibration data, not test evidence. Session C2 (candidate pooling) has not started. No pools, provenance, labels or metric results exist. |
 | M10–M27 | Not started | — |
 
 The status above was checked against git history at this revision. The test suite was not re-run as part of this documentation change.
@@ -896,7 +896,7 @@ No endpoint places orders, issues refunds, moves money, or bans sellers, and non
 
 ## 24. Intended repository structure
 
-Create directories only when their milestone begins. The current layout (through M8, plus uncommitted M9 work) is:
+Create directories only when their milestone begins. The current layout (through M8, plus M9 work in progress) is:
 
 ```text
 intelligent-ecommerce-search/
@@ -910,7 +910,11 @@ intelligent-ecommerce-search/
   tests/
     unit/ (incl. unit/golden for the M9 contracts) integration/
   evals/
-    contracts/        (M9, in progress)
+    contracts/        (M9)
+    runners/          (M9; queries-only freeze runner)
+    goldens/          (M9; internal-search/v1: pilot authoring input and the verified
+                      queries_frozen artifacts and manifest; no candidate pool,
+                      provenance, labels or metrics)
   data/
     seed/ labels/ processed/
   scripts/
@@ -1399,7 +1403,7 @@ Prefer:
 
 ## Start now
 
-M0–M8 are complete. The next implementation milestone is **Milestone 9 — Golden Dataset**. Its Session B evaluation contracts exist uncommitted in the working tree.
+M0–M8 are complete. The next implementation milestone is **Milestone 9 — Golden Dataset**. Its Session B contracts are committed (`15f3ac1`); Session C1 (pilot queries, gold constraints, eligibility and the `queries_frozen` tooling) is in the working tree, and Session C2 (candidate pooling) has not started.
 
 Inspect the repository and the existing M9 work before continuing. Continue only M9, which is limited to search relevance:
 
