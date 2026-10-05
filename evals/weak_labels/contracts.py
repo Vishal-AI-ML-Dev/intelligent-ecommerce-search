@@ -393,3 +393,118 @@ class WeakDevSealed(_Record):
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.proposal_manifest_sha256,)
+
+
+# ---- machine-only finalization (no human audit) -------------------------------------------------
+
+MACHINE_STATUS = "weak_machine_dev_sealed"
+LABEL_BASIS = "deterministic_machine_weak_labels"
+# Two human audit decisions were started, then abandoned when the machine-only track was chosen.
+# They are archived (git-ignored) and never imported into labels, metrics or statistics.
+ABANDONED_HUMAN_DECISION_COUNT = 2
+MACHINE_WARNING = (
+    "WARNING — 568/568 labels are deterministic machine-generated weak labels. Human audit "
+    "coverage: 0/568 (0%). Two started human audit decisions were abandoned, archived and "
+    "excluded. These results are provisional development diagnostics only. They are not Golden "
+    "Dataset results or final held-out test evidence."
+)
+ABANDONED_DISCLOSURE = (
+    "Two human audit decisions were started and then abandoned when the user selected the "
+    "machine-only track. They are archived for auditability and excluded from all labels, "
+    "metrics and human-audit claims."
+)
+MACHINE_DISCLOSURES: tuple[str, ...] = (
+    "This is a deterministic machine weak-label development set: 568/568 labels are "
+    "unaudited machine-generated labels from weak-label-policy-1.",
+    "Human audit coverage is 0/568. No label was reviewed, accepted or overridden by a human.",
+    ABANDONED_DISCLOSURE,
+    "It is not a human-reviewed Golden Dataset and not final held-out test evidence.",
+    "There is no delayed intra-annotator consistency measurement and no inter-annotator agreement.",
+    "Every metric computed on it is a provisional development evaluation only.",
+)
+
+
+class MachineWeakLabel(_Record):
+    """One unaudited machine-generated weak label. There is deliberately no annotator, human
+    timestamp, acceptance, override or agreement field."""
+
+    weak_set_id: Literal["weak_dev_v1"] = WEAK_SET_ID
+    label_basis: Literal["deterministic_machine_weak_labels"] = LABEL_BASIS
+    query_id: QueryId
+    product_id: ProductId
+    label: Label
+    relation: Relation
+    heuristic_confidence: Confidence
+    label_source: Literal["machine_unreviewed"] = "machine_unreviewed"
+    human_audited: Literal[False] = False
+    proposal_rule: ProposalRule
+    proposal_source: Literal["weak-label-policy-1"] = PROPOSER_HANDLE
+    proposal_policy_version: Literal["weak-label-policy-1"] = POLICY_VERSION
+    requires_human_review: StrictBool
+    signal_conflict: StrictBool
+    proposal_sha256: Sha256
+    proposal_manifest_sha256: Sha256
+    pool_manifest_sha256: Sha256
+    product_card_sha256: Sha256
+    product_content_sha256: Sha256
+    catalog_checksum_sha256: Sha256
+    reranker_model_id: StrictStr
+    reranker_revision: Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{40}$")]
+    rerank_document_version: StrictStr
+    rubric_version: RubricVersion
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        _check_relation(self.label, self.relation)
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.query_id, self.product_id)
+
+
+class VersionSystem(_Frozen):
+    """Which pooled retrieval system a reported search version is."""
+
+    version: Literal["v0", "v1", "v2", "v3"]
+    system: StrictStr
+
+
+class MachineDevSealed(_Record):
+    """The `weak_machine_dev_sealed` manifest. Deterministic (no wall-clock time). It is not
+    `weak_dev_sealed`, `primary_sealed`, `labels_frozen` or `provenance_unsealed`."""
+
+    weak_set_id: Literal["weak_dev_v1"] = WEAK_SET_ID
+    status: Literal["weak_machine_dev_sealed"] = MACHINE_STATUS
+    label_basis: Literal["deterministic_machine_weak_labels"] = LABEL_BASIS
+    policy_version: Literal["weak-label-policy-1"] = POLICY_VERSION
+    human_audit_coverage: Literal[0] = 0
+    provisional: Literal[True] = True
+    abandoned_human_decision_count: Literal[2] = ABANDONED_HUMAN_DECISION_COUNT
+    abandoned_human_decisions_included: Literal[False] = False
+    human_reviewed_golden_dataset: Literal[False] = False
+    final_test_evidence: Literal[False] = False
+    consistency_measured: Literal[False] = False
+    warning: Literal[
+        "WARNING — 568/568 labels are deterministic machine-generated weak labels. Human audit "
+        "coverage: 0/568 (0%). Two started human audit decisions were abandoned, archived and "
+        "excluded. These results are provisional development diagnostics only. They are not "
+        "Golden Dataset results or final held-out test evidence."
+    ] = MACHINE_WARNING
+    proposal_manifest_sha256: Sha256
+    pool_manifest_sha256: Sha256
+    queries_manifest_sha256: Sha256
+    provenance_binding: Sha256
+    signals_binding: Sha256
+    catalog_checksum_sha256: Sha256
+    reranker_model_id: StrictStr
+    reranker_revision: StrictStr
+    rerank_document_version: StrictStr
+    rubric_version: RubricVersion
+    evaluator_version: StrictStr
+    version_systems: tuple[VersionSystem, ...]
+    label_count: StrictInt
+    files: tuple[NamedHash, ...]
+    disclosures: tuple[StrictStr, ...] = MACHINE_DISCLOSURES
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.proposal_manifest_sha256,)

@@ -23,6 +23,7 @@ STRICT_DIRS = (
     ROOT / "data" / "processed" / "golden_pool",
 )
 PACKAGE = ROOT / "evals" / "weak_labels"
+REFUSAL_ONLY = frozenset({"primary_judgements", "golden_annotation"})
 
 
 def snapshot() -> dict[str, str]:
@@ -80,4 +81,9 @@ def test_full_weak_run_leaves_strict_paths_byte_identical(tmp_path, catalog):
 )
 def test_weak_label_code_never_references_the_strict_judgement_path(needle):
     for path in PACKAGE.glob("*.py"):
-        assert needle not in path.read_text(encoding="utf-8"), f"{path.name} uses {needle}"
+        text = path.read_text(encoding="utf-8")
+        if path.name == "machine_only.py" and needle in REFUSAL_ONLY:
+            # The machine-only preflight names these only to refuse when they exist.
+            assert text.count(needle) == 1, f"{path.name} uses {needle} beyond its refusal"
+            continue
+        assert needle not in text, f"{path.name} uses {needle}"

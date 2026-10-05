@@ -1,0 +1,184 @@
+{
+  "abandoned_human_decision_count": 2,
+  "abandoned_human_decisions": {
+    "count": 2,
+    "disclosure": "Two human audit decisions were started and then abandoned when the user selected the machine-only track. They are archived for auditability and excluded from all labels, metrics and human-audit claims.",
+    "excluded": true
+  },
+  "abandoned_human_decisions_included": false,
+  "confidence_counts": {
+    "high": 249,
+    "low": 121,
+    "medium": 198
+  },
+  "disclosures": [
+    "This is a deterministic machine weak-label development set: 568/568 labels are unaudited machine-generated labels from weak-label-policy-1.",
+    "Human audit coverage is 0/568. No label was reviewed, accepted or overridden by a human.",
+    "Two human audit decisions were started and then abandoned when the user selected the machine-only track. They are archived for auditability and excluded from all labels, metrics and human-audit claims.",
+    "It is not a human-reviewed Golden Dataset and not final held-out test evidence.",
+    "There is no delayed intra-annotator consistency measurement and no inter-annotator agreement.",
+    "Every metric computed on it is a provisional development evaluation only."
+  ],
+  "evaluator_version": "eval-1",
+  "human_audit_coverage": 0,
+  "human_audit_coverage_fraction": "0/568",
+  "label_basis": "deterministic_machine_weak_labels",
+  "label_counts": {
+    "borderline": 61,
+    "not_relevant": 295,
+    "relevant": 212
+  },
+  "label_derivation": {
+    "definition": "Every label and relation comes from the deterministic catalog/gold-constraint rules. A record is counted as model-assisted when the local cross-encoder and retrieval-consensus signals disagreed with the rule outcome and lowered its heuristic confidence (signal_conflict); otherwise it is deterministic-rule only.",
+    "deterministic_rule_only": 526,
+    "model_assisted_confidence": 42
+  },
+  "machine_only_coverage": "568/568",
+  "per_query_label_counts": {
+    "gq-p01": {
+      "borderline": 0,
+      "not_relevant": 4,
+      "relevant": 31
+    },
+    "gq-p02": {
+      "borderline": 0,
+      "not_relevant": 12,
+      "relevant": 12
+    },
+    "gq-p03": {
+      "borderline": 0,
+      "not_relevant": 14,
+      "relevant": 10
+    },
+    "gq-p04": {
+      "borderline": 3,
+      "not_relevant": 22,
+      "relevant": 1
+    },
+    "gq-p05": {
+      "borderline": 1,
+      "not_relevant": 13,
+      "relevant": 19
+    },
+    "gq-p06": {
+      "borderline": 0,
+      "not_relevant": 17,
+      "relevant": 7
+    },
+    "gq-p07": {
+      "borderline": 8,
+      "not_relevant": 10,
+      "relevant": 14
+    },
+    "gq-p08": {
+      "borderline": 7,
+      "not_relevant": 10,
+      "relevant": 20
+    },
+    "gq-p09": {
+      "borderline": 2,
+      "not_relevant": 20,
+      "relevant": 6
+    },
+    "gq-p10": {
+      "borderline": 1,
+      "not_relevant": 22,
+      "relevant": 1
+    },
+    "gq-p11": {
+      "borderline": 1,
+      "not_relevant": 14,
+      "relevant": 11
+    },
+    "gq-p12": {
+      "borderline": 3,
+      "not_relevant": 15,
+      "relevant": 6
+    },
+    "gq-p13": {
+      "borderline": 3,
+      "not_relevant": 32,
+      "relevant": 0
+    },
+    "gq-p14": {
+      "borderline": 15,
+      "not_relevant": 11,
+      "relevant": 10
+    },
+    "gq-p15": {
+      "borderline": 15,
+      "not_relevant": 4,
+      "relevant": 20
+    },
+    "gq-p16": {
+      "borderline": 1,
+      "not_relevant": 20,
+      "relevant": 3
+    },
+    "gq-p17": {
+      "borderline": 0,
+      "not_relevant": 4,
+      "relevant": 20
+    },
+    "gq-p18": {
+      "borderline": 0,
+      "not_relevant": 4,
+      "relevant": 21
+    },
+    "gq-p19": {
+      "borderline": 1,
+      "not_relevant": 23,
+      "relevant": 0
+    },
+    "gq-p20": {
+      "borderline": 0,
+      "not_relevant": 24,
+      "relevant": 0
+    }
+  },
+  "policy_version": "weak-label-policy-1",
+  "pool_manifest_sha256": "4c26628ac45cd8dd1c31411e586df2c518c492ffbcd95145d19c1965a67e5897",
+  "proposal_manifest_sha256": "9dc1fab28fbd89e9151424cd5990375728c71a6c3fc7a802d20f1526d0fa8b6e",
+  "provisional": true,
+  "relation_counts": {
+    "complement": 6,
+    "exact_match": 119,
+    "off_target": 265,
+    "out_of_catalog": 24,
+    "partial": 12,
+    "satisfies_intent": 93,
+    "substitute": 49
+  },
+  "requires_human_review_count": 319,
+  "rule_counts": {
+    "ambiguous_interpretation_match": 21,
+    "ambiguous_other_category": 0,
+    "brand_only_violation": 47,
+    "category_mismatch": 35,
+    "category_only_match": 31,
+    "complement_category": 6,
+    "direct_match": 118,
+    "hard_unknown": 0,
+    "multiple_hard_violations": 64,
+    "near_miss_substitute": 49,
+    "no_hard_constraints": 0,
+    "out_of_catalog_query": 24,
+    "price_preference_met": 10,
+    "price_preference_unmet": 8,
+    "semantic_partial": 15,
+    "semantic_supported": 17,
+    "semantic_unsupported": 30,
+    "series_absent": 0,
+    "series_exact_match": 1,
+    "series_partial": 3,
+    "single_hard_violation": 89
+  },
+  "status": "weak_machine_dev_sealed",
+  "total_machine_labels": 568,
+  "unaudited_confidence_counts": {
+    "high": 249,
+    "low": 121,
+    "medium": 198
+  },
+  "warning": "WARNING — 568/568 labels are deterministic machine-generated weak labels. Human audit coverage: 0/568 (0%). Two started human audit decisions were abandoned, archived and excluded. These results are provisional development diagnostics only. They are not Golden Dataset results or final held-out test evidence."
+}

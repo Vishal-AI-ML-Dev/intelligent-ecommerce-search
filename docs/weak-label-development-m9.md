@@ -1,26 +1,36 @@
-# M9 optional track — AI-assisted weak-label development set (`weak_dev_v1`)
+# M9 optional track — deterministic machine weak-label development set (`weak_dev_v1`)
 
-> **PROVISIONAL — AI-assisted weak labels with a 100-pair non-blind human audit. Not final
-> human-reviewed test evidence.**
+> **WARNING — 568/568 labels are deterministic machine-generated weak labels. Human audit
+> coverage: 0/568 (0%). Two started human audit decisions were abandoned, archived and excluded.
+> These results are provisional development diagnostics only. They are not Golden Dataset
+> results or final held-out test evidence.**
 
-`weak_dev_v1` is a **human-audited provisional development set** built from **AI/model-assisted
-label proposals**. It is **not a human-reviewed Golden Dataset** and **not final held-out test
-evidence**. There is **no delayed intra-annotator consistency measurement** and no
-inter-annotator agreement. Any metric computed on it is a **provisional metric only**.
+The machine-only development evaluation is complete. `weak_dev_v1` is a **deterministic machine
+weak-label development set**:
+- every label is an **unaudited machine-generated label** from `weak-label-policy-1`;
+- every metric on it is a **provisional development evaluation**;
+- it is **not a human-reviewed Golden Dataset** and **not final held-out test evidence**;
+- human audit coverage is zero: no label was reviewed, accepted or overridden by a human;
+- there is no delayed intra-annotator consistency measurement and no inter-annotator agreement.
 
-It is a separate track. The strict Golden Dataset lifecycle (`docs/golden-dataset-m9.md`)
-remains paused at 0/568 primary judgements. This track does not start strict annotation, the
-72-hour consistency clock or M10, and it writes nothing into the strict paths.
+Two human audit decisions were started and then abandoned when the user selected the
+machine-only track. They are archived for auditability and excluded from all labels, metrics and
+human-audit claims. See "Abandoned audit archive".
+
+The strict Golden Dataset lifecycle (`docs/golden-dataset-m9.md`) is separate and stays paused at
+0/568 primary judgements. The strict Golden Dataset is incomplete and final M10 evidence is
+incomplete. This track did not start strict annotation, the 72-hour consistency clock or M10, and
+it writes nothing into the strict paths.
 
 ## Status
 
 | Step | State |
 |---|---|
-| Proposal generation (`weak-label-policy-1`) | Done. Two independent fresh-process runs were byte-identical; stored and verified |
-| Audit queue (`weak-audit-1`, 100 pairs) | Done (generated with the proposals) |
-| Human audit of the 100 pairs (`ann-1`) | **Not started.** No audit decision exists |
-| `weak_dev_sealed` assembly | Not run (it needs all 100 human decisions) |
-| Audit report and provisional V0–V3 metrics | Not run (they need `weak_dev_sealed`) |
+| Proposal generation (`weak-label-policy-1`) | Done (`07416a3`). Two fresh-process runs were byte-identical; stored and verified |
+| Audit queue (`weak-audit-1`, 100 pairs) | Generated, but not used: the user chose the machine-only path |
+| Human audit | **Not performed (0/100).** Two started decisions were abandoned and archived (see below) |
+| `weak_dev_sealed` (audited assembly) | Not run, and not applicable to the machine-only path |
+| **Machine-only finalization (`weak_machine_dev_sealed`)** | **Done.** 568/568 machine labels, provisional V0–V3 metrics and report; two fresh-process builds byte-identical |
 
 ## Identities
 
@@ -155,7 +165,7 @@ Because every pilot query is audited, every query type is covered: semantic (`gq
 ambiguous (`gq-p18`), zero-eligible (`gq-p19`) and out-of-catalog (`gq-p20`). The queue
 validator enforces this coverage.
 
-## The audit (human work, not done)
+## The audit tooling (not used; human audit coverage 0)
 
 ```text
 uv run python -m evals.weak_labels audit --annotator ann-1
@@ -200,7 +210,7 @@ Other commands:
 - `validate`: re-check the decision file.
 - `verify`: re-verify the generation.
 
-## After the audit (human-run, not done)
+## Audited assembly (tooling only; not run)
 
 ```text
 uv run python -m evals.weak_labels assemble --annotator ann-1
@@ -246,6 +256,9 @@ Every report carries the provisional banner. Nothing is written to an M10 report
 | `uv run --offline python -m evals.weak_labels propose` | Two fresh runs byte-identical; proposals written; manifest `9dc1fab2…` |
 | `uv run --offline python -m evals.weak_labels verify` | Verified: 568 proposals, 100 audit pairs, 319 flagged for review |
 | `uv run python -m evals.weak_labels status` | 0 of 100 audit pairs decided |
+| `uv run --offline python -m evals.weak_labels assemble-machine-only` (no flag) | Refused: `--acknowledge-unaudited` is required (exit 1) |
+| `uv run --offline python -m evals.weak_labels assemble-machine-only --acknowledge-unaudited` | Two fresh-process builds byte-identical; `weak_machine_dev_sealed`, 568 machine_unreviewed labels |
+| `uv run --offline python -m evals.weak_labels verify-machine-only` (twice) | Every machine-only file regenerated byte for byte |
 
 ## Judgment calls (policy choices, open to revision)
 
@@ -261,8 +274,147 @@ Every report carries the provisional banner. Nothing is written to an M10 report
 - **Queue order** is by query, then slot. The auditor therefore sees five pairs of one query in a
   row.
 
+## Machine-only finalization (`evals/weak_labels/machine_only.py`)
+
+```text
+uv run --offline python -m evals.weak_labels assemble-machine-only --acknowledge-unaudited
+uv run --offline python -m evals.weak_labels verify-machine-only
+```
+
+**Identity.** The output identity, recorded in `machine-only/manifest.json`
+(`MachineDevSealed`, deterministic, no wall-clock time):
+
+| Field | Value |
+|---|---|
+| `status` | `weak_machine_dev_sealed` |
+| `label_basis` | `deterministic_machine_weak_labels` |
+| `policy_version` | `weak-label-policy-1` |
+| `human_audit_coverage` | `0` |
+| `provisional` | `true` |
+| `abandoned_human_decision_count` | `2` |
+| `abandoned_human_decisions_included` | `false` |
+
+It is not `weak_dev_sealed`, `primary_sealed`, `labels_frozen` or `provenance_unsealed`.
+
+**Refusals.** The command requires `--acknowledge-unaudited`. It refuses when any of these holds:
+- an audit lock or any audit decision is active;
+- the audit root points into the abandoned-audit archive;
+- the archive metadata is missing, or does not record exactly two excluded decisions;
+- the proposals, pool, cards or private signals binding do not verify;
+- a strict judgement, seal or consistency file exists;
+- the outputs already exist;
+- the two fresh-process builds differ.
+
+The archived decision files are never opened. Only the archive's metadata record is checked.
+
+**Labels.** `labels.jsonl` holds 568 `MachineWeakLabel` records. Every record has:
+- `label_source=machine_unreviewed`, `human_audited=false` and `proposal_source=weak-label-policy-1`;
+- the label, relation and heuristic confidence;
+- the rule, the `requires_human_review` flag and the signal-conflict flag;
+- the proposal, proposal-manifest, pool-manifest, card and content hashes;
+- the catalog, model, policy and rubric versions.
+
+No record has an annotator handle, a human timestamp, an acceptance or override, or an agreement
+field, and no record carries `ann-1`.
+
+| Count | Value |
+|---|---|
+| Labels | 212 relevant, 61 borderline, 295 not_relevant |
+| Relations | 119 exact_match, 93 satisfies_intent, 49 substitute, 12 partial, 6 complement, 265 off_target, 24 out_of_catalog |
+| Heuristic confidence (all unaudited) | 249 high, 198 medium, 121 low |
+| Deterministic-rule only / model-assisted | 526 / 42 |
+| `requires_human_review` | 319 |
+| Machine-only coverage / human audit coverage | 568/568 / 0/568 |
+
+Every label and relation comes from the deterministic rules. "Model-assisted" counts the
+records whose heuristic confidence was lowered because the local cross-encoder and retrieval
+consensus disagreed with the rule outcome (`signal_conflict`).
+
+**Metrics.** V0 = `v0_lexical`, V1 = `v1_hybrid`, V2 = `v2_filtered`, V3 = `v3_reranked_d20` (the
+configured default `search_rerank_depth=20`). The pooling-only sources `dense_only` and
+`v3_reranked_d10` are not reported.
+
+Each version is scored from its top-20 list in the verified private pool provenance with the
+`eval-1` definitions (strict and lenient, hard and fp-1 CSR, per-query and macro). Values are
+macro means over the queries where the metric is defined (`n`).
+
+| Metric | V0 | V1 | V2 | V3 |
+|---|---|---|---|---|
+| Precision@5 (strict) | 0.4500 | 0.6100 | 0.7000 | 0.7100 |
+| Precision@10 (strict) | 0.3950 | 0.5500 | 0.6300 | 0.6250 |
+| Precision@10 (lenient) | 0.4000 | 0.6400 | 0.6850 | 0.6750 |
+| Recall@5 (strict, n=17) | 0.2914 | 0.4103 | 0.4962 | 0.4797 |
+| Recall@10 (strict, n=17) | 0.4348 | 0.6231 | 0.7358 | 0.7299 |
+| MRR@10 (strict, n=17) | 0.5588 | 0.8647 | 1.0000 | 0.9314 |
+| NDCG@5 (n=19) | 0.4943 | 0.7450 | 0.8498 | 0.8247 |
+| NDCG@10 (n=19) | 0.4756 | 0.7584 | 0.8449 | 0.8150 |
+| CSR@10 hard | 1.0000 (n=10) | 0.6263 (n=19) | 0.8722 (n=18) | 0.8722 (n=18) |
+| CSR@10 fp-1 | 1.0000 (n=10) | 0.6737 (n=19) | 0.9444 (n=18) | 0.9444 (n=18) |
+| Irrelevant-result rate@10 | 0.0000 (n=10) | 0.3600 (n=20) | 0.2105 (n=19) | 0.2211 (n=19) |
+| Zero-result rate | 0.5000 | 0.0000 | 0.0500 | 0.0500 |
+
+The full table (lenient values, per-query values) is in
+`machine-only/reports/provisional-v0-v3.md` and `machine-only/metrics/*.json`. Two cautions for
+reading it:
+- V0 returns nothing for 10 of the 20 queries, so its CSR and irrelevant-result rate cover only
+  10 queries.
+- These values do not show that any version is better: the labels are unaudited heuristics
+  (see the limitations).
+
+**Outputs.** `evals/weaksets/internal-search/v1/machine-only/` holds:
+- `labels.jsonl`, `manifest.json` and `proposal-summary.json`;
+- `metrics/v0.json`, `metrics/v1.json`, `metrics/v2.json`, `metrics/v3.json` and
+  `metrics/comparison.json`;
+- `reports/provisional-v0-v3.md`.
+
+Every metric file and the report carry the mandatory warning and the metadata: label basis,
+human audit coverage 0, abandoned-decision count 2, provisional, policy version, and the
+proposal and pool manifest hashes. No human statistic is reported anywhere: no agreement,
+accuracy, override rate, confusion matrix or annotator consistency.
+
+**Determinism.** `assemble-machine-only` built all nine files in two fresh child processes and
+in-process. It wrote only after all three were byte-identical (`machine-only/manifest.json`
+SHA-256 `f021d9709572ec32295e310639d5aa9e89a140e97fa532e75cb2635779ebd95f`).
+`verify-machine-only`, run afterwards in two further fresh processes, regenerated every file byte
+for byte.
+
+The operational record (`assembled_at`, run facts) is in the git-ignored
+`data/processed/weak_labels/4c26628ac45cd8dd/machine-only-run.json`, outside the deterministic
+bytes.
+
+## Abandoned audit archive
+
+The user had opened the non-blind audit, then chose the machine-only track and quit with `q`.
+With the user's approval, the complete audit work directory was moved atomically and unedited
+from `data/processed/weak_audit/9dc1fab28fbd89e9/` to the git-ignored
+`data/processed/weak_audit_archive/abandoned-2026-10-05-9dc1fab28fbd89e9/`. It contains two
+`ann-1` acceptances, both for `gq-p01`: `SYN-HDP-0045` and `SYN-HDP-0029`.
+
+| File | SHA-256 (identical before and after the move) |
+|---|---|
+| `audit_decisions.jsonl` | `5a507df49409c585161af6d775da3a905e9ae791c7106cefb526af46f79d81d1` |
+| `binding.json` | `d804d88dc383f845517dd4ac81ad795ea138c2e7274cb566d6c58d33fac494fc` |
+
+The metadata record `abandoned-2026-10-05-9dc1fab28fbd89e9.archive.json`, beside the folder,
+records:
+- `status: abandoned_partial_audit` and `decision_count: 2`;
+- `included_in_machine_labels`, `included_in_metrics` and `included_in_human_audit_statistics`
+  all `false`;
+- both paths, the file hashes and `archived_at`.
+
+The archive is never committed and never imported. The active audit has 0 decisions.
+
 ## Limitations
 
+- **Unaudited machine labels.** All 568 labels are unaudited machine-generated weak labels
+  (human audit coverage 0/568). Their accuracy is unknown, and every metric is a provisional
+  development diagnostic.
+- **Labels can favour some versions.** The heuristics reuse the retrieval signals and the gold
+  constraints that V2/V3 filter on, which may favour those versions.
+- **Abandoned decisions.** Two started human audit decisions were abandoned, archived and
+  excluded.
+- The audit-related limitations below (anchoring, sampling, exposure) apply only if a human
+  audit is ever run.
 - **Non-blind audit.** The auditor sees the proposal, so agreement is biased upward (anchoring)
   and is not an accuracy estimate.
 - **Unrepresentative sample.** The 100 pairs are stratified, not uniform. Rates do not extrapolate

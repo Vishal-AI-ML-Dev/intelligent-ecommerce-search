@@ -15,10 +15,11 @@ an M10 report path), and claims no accuracy for unaudited machine labels.
 """
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
 
 from evals.contracts.constants import LABEL_ORDER, Label
+from evals.contracts.models import EligibilityRecord, PoolProvenance
 from evals.metrics.retrieval import (
     EVALUATOR_VERSION,
     MacroValue,
@@ -234,6 +235,29 @@ def audit_report_markdown(report: dict) -> str:
 # ---- provisional metrics -----------------------------------------------------------------------
 
 
+def system_metrics(
+    provenance: PoolProvenance,
+    labels: Mapping[str, Mapping[str, Label]],
+    eligibility: Mapping[tuple[str, str], EligibilityRecord],
+) -> dict[str, tuple[list[QueryMetrics], tuple[MacroValue, ...]]]:
+    """`eval-1` per-query and macro metrics of every pooled system's top-20 list in the
+    verified provenance, against the given labels (pure)."""
+
+    def lookup(query_id: str, product_id: str) -> EligibilityRecord:
+        return eligibility[(query_id, product_id)]
+
+    runs: dict[str, dict[str, tuple[str, ...]]] = {}
+    for run in provenance.source_runs:
+        runs.setdefault(run.system.value, {})[run.query_id] = run.product_ids
+    out = {}
+    for system, ranked in runs.items():
+        if set(ranked) != set(labels):
+            raise WeakLabelError(f"{system}: the run and the labels cover different queries")
+        per_query = [query_metrics(q, list(ranked[q]), labels[q], lookup) for q in sorted(labels)]
+        out[system] = (per_query, macro(per_query))
+    return out
+
+
 def provisional_metrics(context: AuditContext, weak: SealedWeakSet) -> dict:
     provenance = context.facts.provenance
     if provenance is None:
@@ -241,29 +265,16 @@ def provisional_metrics(context: AuditContext, weak: SealedWeakSet) -> dict:
     labels: dict[str, dict[str, Label]] = {}
     for f in weak.finals:
         labels.setdefault(f.query_id, {})[f.product_id] = f.label
-    eligibility = context.facts.eligibility
-
-    def lookup(query_id: str, product_id: str):
-        return eligibility[(query_id, product_id)]
-
-    runs: dict[str, dict[str, tuple[str, ...]]] = {}
-    for run in provenance.source_runs:
-        runs.setdefault(run.system.value, {})[run.query_id] = run.product_ids
-    systems = []
-    for system, ranked in runs.items():
-        if set(ranked) != set(labels):
-            raise WeakLabelError(f"{system}: the run and the labels cover different queries")
-        per_query: list[QueryMetrics] = [
-            query_metrics(q, list(ranked[q]), labels[q], lookup) for q in sorted(labels)
-        ]
-        aggregated: tuple[MacroValue, ...] = macro(per_query)
-        systems.append(
-            {
-                "system": system,
-                "macro": [v.model_dump(mode="json") for v in aggregated],
-                "per_query": [q.model_dump(mode="json") for q in per_query],
-            }
-        )
+    systems = [
+        {
+            "system": system,
+            "macro": [v.model_dump(mode="json") for v in aggregated],
+            "per_query": [q.model_dump(mode="json") for q in per_query],
+        }
+        for system, (per_query, aggregated) in system_metrics(
+            provenance, labels, context.facts.eligibility
+        ).items()
+    ]
     sources = [f.label_source.value for f in weak.finals]
     return {
         "report_version": REPORT_VERSION,

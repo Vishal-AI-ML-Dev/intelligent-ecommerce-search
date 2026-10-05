@@ -13,6 +13,10 @@ Commands:
 * `validate`: re-check the audit decision file.
 * `assemble --annotator ann-1`: after all 100 decisions, seal `weak_dev_sealed`.
 * `audit-report`, `metrics`: provisional reports on the sealed weak set.
+* `assemble-machine-only --acknowledge-unaudited`: the machine-only path (no human audit):
+  568 unaudited machine labels, provisional V0–V3 metrics and report, built twice in fresh
+  processes (`evals.weak_labels.machine_only`).
+* `verify-machine-only`: regenerate every machine-only file and compare bytes.
 
 Usage:
   uv run --offline python -m evals.weak_labels propose
@@ -23,6 +27,8 @@ Usage:
   uv run python -m evals.weak_labels assemble --annotator ann-1
   uv run --offline python -m evals.weak_labels audit-report
   uv run --offline python -m evals.weak_labels metrics
+  uv run --offline python -m evals.weak_labels assemble-machine-only --acknowledge-unaudited
+  uv run --offline python -m evals.weak_labels verify-machine-only
 """
 
 import argparse
@@ -32,10 +38,10 @@ from pathlib import Path
 
 from evals.contracts.canonical import ContractError
 from evals.runners.golden_io import write_exclusive
-from evals.weak_labels import reports
+from evals.weak_labels import machine_only, reports
 from evals.weak_labels.assembly import assemble, verify_sealed
 from evals.weak_labels.audit import AUDIT_ROOT, AuditContext, AuditStore, audit
-from evals.weak_labels.contracts import AUDIT_SIZE, BANNER
+from evals.weak_labels.contracts import AUDIT_SIZE, BANNER, MACHINE_WARNING
 from evals.weak_labels.generation import (
     DEFAULT_WEAK_DIR,
     WEAKSET_ROOT,
@@ -73,6 +79,14 @@ def build_parser() -> argparse.ArgumentParser:
     seal.add_argument("--annotator", required=True)
     commands.add_parser("audit-report", help="provisional audit report (after the seal)")
     commands.add_parser("metrics", help="provisional V0-V3 metrics (after the seal)")
+    machine = commands.add_parser(
+        "assemble-machine-only",
+        help="finalize unaudited machine-only labels, provisional metrics and report",
+    )
+    machine.add_argument("--acknowledge-unaudited", action="store_true")
+    commands.add_parser("verify-machine-only", help="regenerate machine-only outputs; no writes")
+    machine_child = commands.add_parser("_machine_only", help=argparse.SUPPRESS)
+    machine_child.add_argument("--out", type=Path, required=True)
     child = commands.add_parser("_generate", help=argparse.SUPPRESS)
     child.add_argument("--out", type=Path, required=True)
     return parser
@@ -92,6 +106,24 @@ def main(argv: list[str] | None = None) -> int:
             from evals.weak_labels.runner import propose
 
             return propose(args.weak_dir)
+        if args.command == "_machine_only":  # pragma: no cover - a fresh child process
+            return machine_only.child_main(args.out)
+        if args.command in ("assemble-machine-only", "verify-machine-only"):
+            paths = machine_only.MachinePaths(weak_dir=args.weak_dir, audit_root=args.audit_root)
+            print(MACHINE_WARNING)
+            if args.command == "assemble-machine-only":
+                manifest = machine_only.assemble_machine_only(
+                    paths, acknowledge_unaudited=args.acknowledge_unaudited
+                )
+                print("determinism: two fresh-process builds byte-identical")
+            else:
+                manifest = machine_only.verify_machine_only(paths)
+                print("verified: every machine-only file regenerates byte for byte")
+            print(
+                f"{manifest.status}: {manifest.label_count} machine_unreviewed labels; human "
+                f"audit coverage {manifest.human_audit_coverage}/{manifest.label_count}"
+            )
+            return 0
         if args.command == "verify":
             context = _context(args.weak_dir, with_provenance=True)
             manifest = context.generation.manifest
