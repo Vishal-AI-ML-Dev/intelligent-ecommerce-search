@@ -505,6 +505,44 @@ curl -X POST http://127.0.0.1:8000/search/reranked -H "Content-Type: application
   Per-run P50/P95/P99 tables, cold loads, memory, determinism and the run-to-run drift are in
   `docs/search-reranked-m8.md` §7; they are cost figures, not a recommendation.
 
+## Golden Dataset and provisional evaluation (Milestone 9)
+
+Status: **partially complete.**
+
+Completed:
+
+- 20 development queries frozen (`queries_frozen`, development/rubric-calibration data).
+- 568-pair candidate pool frozen (`pool_frozen`).
+- Annotation tooling (blind annotation CLI, primary-seal tooling), and deterministic pooling and
+  evaluation tooling (`eval-1`).
+- 568 machine-generated weak labels (`weak_dev_v1`, `weak_machine_dev_sealed`).
+- Provisional V0–V3 development metrics on those weak labels.
+
+Not completed:
+
+- strict human annotation: 0/568;
+- the primary seal;
+- the 72-hour-delayed human consistency round (re-labelling `ceil(20% × N)` items, reported as
+  intra-annotator consistency);
+- adjudication;
+- the labels freeze;
+- provenance unsealing;
+- the separately authored, sealed 20-query held-out test partition (with its Hinglish slice);
+- a final human-reviewed Golden Dataset;
+- final M10-quality evaluation evidence.
+
+Disclosures:
+
+- The weak-label human audit is 0/100. Two started human audit decisions were abandoned,
+  archived and excluded from all labels, metrics and human-audit claims.
+- `ann-1` has now seen machine proposals for this pool, so a later strict annotation of the
+  same pool is not fully blind.
+- The machine-only results are provisional development diagnostics, not Golden Dataset results
+  or held-out test evidence.
+
+Details: [`docs/golden-dataset-m9.md`](docs/golden-dataset-m9.md) (strict track) and
+[`docs/weak-label-development-m9.md`](docs/weak-label-development-m9.md) (machine-only track).
+
 ## `GET /health`
 
 Readiness-oriented. Returns `200` with `status: "ok"` when PostgreSQL is
