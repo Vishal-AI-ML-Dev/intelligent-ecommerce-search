@@ -21,7 +21,10 @@ Development is organized milestone by milestone. See
   - Strict M9 remains paused at 0/568: the strict Golden Dataset is incomplete, and final M10
     evidence is incomplete.
   - See `docs/weak-label-development-m9.md`.
-- M10–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
+- M10: officially not complete (it needs the human-reviewed Golden Dataset). A provisional
+  development analysis of the machine-label V0–V3 results is in
+  `docs/m10-provisional-evaluation.md` (labels 100% machine-generated, 0% human audit).
+- M11–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
   (HITL), the dual frontend and marketplace integration. M27 is optional.
 
 Milestone 1 (Foundation): typed settings, FastAPI app with `GET /health`,
