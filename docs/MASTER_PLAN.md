@@ -41,10 +41,14 @@ Other documents written before this revision still use the former numbers. These
 
 | Milestone | Status | Evidence |
 |---|---|---|
-| M0–M8 | Complete as documented | Milestone commits on `main`, pushed (`origin/main` = `0a93e52`). Per-milestone docs live in `docs/`. |
-| M9 | In progress | Session B contracts (`15f3ac1`) and Session C1 (`6009fa3`, `queries_frozen` manifest `51204dae…`, confirmed by `ann-1`) are committed. Session C2 froze `pool_frozen` (manifest `4c26628a…`, 568 pairs, private provenance bound by checksum only) and added the blind annotation CLI, primary-seal tooling and the retrieval-metric evaluator (synthetic fixtures only). Development/rubric-calibration data, not test evidence. No human labels or metric results exist. Details in `docs/golden-dataset-m9.md`. |
-| M9 (optional provisional track) | Machine-only development evaluation completed | `weak_dev_v1` (`weak_machine_dev_sealed`): 568/568 labels are machine generated (`weak-label-policy-1`) and human audit coverage is zero. Two started human audit decisions were archived and excluded. No delayed consistency measurement exists, and all V0–V3 metrics are provisional. Strict M9 remains paused at 0/568; the strict Golden Dataset is incomplete, and final M10 evidence is incomplete. Details in `docs/weak-label-development-m9.md`. |
-| M10–M27 | Not started | — |
+| M0–M8 | Complete as documented | Milestone commits on `main`. `0a93e52` is the historical M8 boundary commit. Per-milestone docs live in `docs/`. |
+| M9 Sessions B, C1 and C2 | Complete | Session B contracts (`15f3ac1`) and Session C1 (`6009fa3`, `queries_frozen` manifest `51204dae…`, confirmed by `ann-1`) are committed. Session C2 froze `pool_frozen` (manifest `4c26628a…`, 568 pairs, private provenance bound by checksum only) and added the blind annotation CLI, primary-seal tooling and the retrieval-metric evaluator (synthetic fixtures only). Development/rubric-calibration data, not test evidence. Details in `docs/golden-dataset-m9.md`. |
+| M9 strict human annotation and later strict steps | Deferred at 0/568 | No human labels exist. The strict Golden Dataset is incomplete. |
+| M9 (optional machine-only development track) | Complete | `weak_dev_v1` (`weak_machine_dev_sealed`): 568/568 labels are machine generated (`weak-label-policy-1`). No delayed consistency measurement exists, and all V0–V3 metrics are provisional. Details in `docs/weak-label-development-m9.md`. |
+| M9 weak-label audit (`weak-audit-1`) | Deferred at 0/100 | Human audit coverage is zero. Two abandoned human audit decisions remain archived and excluded. |
+| M10 provisional development analysis | Complete | Committed as `73c67c1`. Analysis of existing machine-only metrics; development evidence, not test evidence. Details in `docs/m10-provisional-evaluation.md`. |
+| M10 official human-reviewed report | Incomplete (not started) | Requires the strict M9 Golden Dataset, which is deferred. |
+| M11–M27 | Not started | M27 remains optional. |
 
 The status above was checked against git history at this revision. The test suite was not re-run as part of this documentation change.
 
