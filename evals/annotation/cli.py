@@ -8,9 +8,11 @@ Commands:
   and the `card-1` product card. Never shows a source, rank, score, inclusion reason, parser
   output, filter, seller, availability, rating or review count. Nothing is prefilled or
   suggested. Every confirmed judgement is saved atomically before the next pair; `q` stops and a
-  later run resumes at the first unjudged pair. A session holds an exclusive lock on its work
-  directory; a second session refuses to start, and a lock left by a hard kill must be removed
-  by hand after checking that no session is running (there is no override).
+  later run resumes at the first unjudged pair. End of input (EOF) at any prompt ends the
+  session the same way (exit code 0) and never saves a partly answered pair. A session holds
+  an exclusive lock on its work directory; a second session refuses to start, and a lock left
+  by a hard kill must be removed by hand after checking that no session is running (there is
+  no override).
 * `validate`: re-check the working file against the frozen pool.
 
 Usage:
@@ -64,6 +66,25 @@ QUIT = "q"
 
 class Quit(Exception):
     """The annotator stopped; everything confirmed so far is saved."""
+
+
+class InputEnded(Quit):
+    """Input ended (EOF) at a prompt: handled exactly like `q`, the pair is not saved."""
+
+
+INPUT_ENDED_MESSAGE = "Input ended; progress saved. Resume by running the annotation command again."
+
+
+def _eof_as_quit(ask: Ask) -> Ask:
+    """Every prompt answers EOF by ending the session cleanly instead of crashing."""
+
+    def wrapped(prompt: str) -> str:
+        try:
+            return ask(prompt)
+        except EOFError:
+            raise InputEnded from None
+
+    return wrapped
 
 
 def query_block(context: PoolContext, item: PoolItem) -> str:
@@ -187,6 +208,7 @@ def annotate(
 def _annotate_locked(
     context: PoolContext, store: WorkStore, *, ask: Ask, say: Say, now: Now
 ) -> int:
+    ask = _eof_as_quit(ask)
     store.initialize(now=now())
     judgements = store.load(now=now())
     todo = pending(context, judgements)
@@ -201,6 +223,9 @@ def _annotate_locked(
         say(render_card(context.catalog.products[item.product_id]))
         try:
             judgement = ask_judgement(context, item, ask, say, now)
+        except InputEnded:
+            say(INPUT_ENDED_MESSAGE)
+            return saved
         except Quit:
             say(f"stopped; {saved} judgement(s) saved this session")
             return saved

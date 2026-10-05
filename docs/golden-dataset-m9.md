@@ -480,6 +480,14 @@ Binding time:
   seals the round, and the seal then binds the exact bytes by SHA-256. The pool, content and
   card hash checks remain mandatory.
 
+Stopping:
+- Type `q` at any prompt to stop. End of input (EOF, for example when stdin is not a terminal)
+  ends the session the same way, with exit code 0 and the message "Input ended; progress
+  saved. Resume by running the annotation command again."
+- Either way, every confirmed judgement is kept, a partly answered pair is never saved, and the
+  lock is released. Annotation needs an interactive terminal; a non-interactive `!` command
+  ends at the first prompt.
+
 Session lock:
 - `annotate` creates `annotation.lock` in the work directory with exclusive creation before
   reading any judgement. It holds only the pool manifest hash, the annotator handle, the
