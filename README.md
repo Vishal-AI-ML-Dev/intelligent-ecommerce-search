@@ -14,6 +14,11 @@ Development is organized milestone by milestone. See
   deterministic candidate pool (`pool_frozen`, 568 query-product pairs) and added the blind
   annotation CLI, the primary-seal tooling and the retrieval-metric evaluator. No human labels
   or metric results exist yet. See `docs/golden-dataset-m9.md`.
+- M9 optional provisional track (`weak_dev_v1`): AI/model-assisted label proposals for the 568
+  frozen pairs and a deterministic 100-pair queue for a non-blind human audit. The proposals are
+  generated; the human audit has not started. This is not a human-reviewed Golden Dataset and
+  not final test evidence; the strict lifecycle stays at 0/568. See
+  `docs/weak-label-development-m9.md`.
 - M10–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
   (HITL), the dual frontend and marketplace integration. M27 is optional.
 

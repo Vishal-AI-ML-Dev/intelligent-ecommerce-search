@@ -43,6 +43,7 @@ Other documents written before this revision still use the former numbers. These
 |---|---|---|
 | M0–M8 | Complete as documented | Milestone commits on `main`, pushed (`origin/main` = `0a93e52`). Per-milestone docs live in `docs/`. |
 | M9 | In progress | Session B contracts (`15f3ac1`) and Session C1 (`6009fa3`, `queries_frozen` manifest `51204dae…`, confirmed by `ann-1`) are committed. Session C2 froze `pool_frozen` (manifest `4c26628a…`, 568 pairs, private provenance bound by checksum only) and added the blind annotation CLI, primary-seal tooling and the retrieval-metric evaluator (synthetic fixtures only). Development/rubric-calibration data, not test evidence. No human labels or metric results exist. Details in `docs/golden-dataset-m9.md`. |
+| M9 (optional provisional track) | Proposals generated; audit not started | `weak_dev_v1`: AI/model-assisted proposals (`weak-label-policy-1`) and a 100-pair non-blind audit queue (`weak-audit-1`). Not a human-reviewed Golden Dataset and not test evidence; the strict lifecycle is unchanged. Details in `docs/weak-label-development-m9.md`. |
 | M10–M27 | Not started | — |
 
 The status above was checked against git history at this revision. The test suite was not re-run as part of this documentation change.
