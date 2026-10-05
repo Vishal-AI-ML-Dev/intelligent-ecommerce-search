@@ -6,9 +6,12 @@ of it is a real query definition, gold constraint, pool, provenance or human lab
 
 from datetime import UTC, datetime, timedelta
 
+from evals.contracts.cards import card_sha256
 from evals.contracts.constants import Label, Relation
 from evals.contracts.models import (
     FP1_GOLD_FIELDS,
+    SOURCE_ORDER,
+    CompletionStatus,
     Confidence,
     ConstraintCheck,
     ConstraintStatus,
@@ -20,11 +23,20 @@ from evals.contracts.models import (
     IntentFamily,
     Judgement,
     LanguageStyle,
+    NamedValue,
     Partition,
     PoolItem,
+    PoolProvenance,
+    PoolReport,
+    ProvenanceEntry,
+    QueryPoolSummary,
     QueryRecord,
     Round,
+    RunContext,
+    SourceRun,
+    SystemCount,
     overall_status,
+    run_id_for,
 )
 from evals.contracts.validation import blind_order_key
 
@@ -92,6 +104,7 @@ def pool_for(query_id: str, product_ids: list[str], catalog) -> list[PoolItem]:
             query_id=query_id,
             product_id=product_id,
             product_content_sha256=catalog.products[product_id].content_sha256,
+            card_sha256=card_sha256(catalog.products[product_id]),
             blind_position=position,
         )
         for position, product_id in enumerate(ordered, start=1)
@@ -151,3 +164,90 @@ def eligibility(
 
 def after_delay(hours: float) -> datetime:
     return T0 + timedelta(hours=hours)
+
+
+def run_context(**overrides) -> RunContext:
+    """A SYNTHETIC run context (fixture values, not a real run)."""
+    fields = dict(
+        queries_manifest_sha256="1" * 64,
+        dataset_id="synthetic-seed",
+        dataset_version="1",
+        dataset_checksum_sha256="2c1c5fa43eec5f7346df40c17e57c07f6594ab1833c5d9d4c862e6d2e8bbbbc8",
+        pool_policy="pool-1",
+        blind_order="blind-1",
+        source_top_k=20,
+        settings=(NamedValue(name="search_rrf_k", value="100"),),
+        model_pins=(NamedValue(name="embedding_model_id", value="fixture"),),
+        component_versions=(NamedValue(name="parser", value="qu-1"),),
+        library_versions=(NamedValue(name="torch", value="fixture"),),
+        runtime_trees=(NamedValue(name="src", value="0" * 40),),
+    )
+    fields.update(overrides)
+    return RunContext(**fields)
+
+
+def provenance_bundle(entries: list[ProvenanceEntry], context: RunContext | None = None):
+    """A SYNTHETIC provenance bundle whose source runs are derived from the entries' hits
+    (every (query, system) must have contiguous ranks 1..n)."""
+    context = context or run_context()
+    ranked: dict[tuple[str, object], dict[int, str]] = {}
+    for entry in entries:
+        for hit in entry.sources:
+            ranked.setdefault((entry.query_id, hit.system), {})[hit.rank] = entry.product_id
+    runs = []
+    for (query_id, system), by_rank in ranked.items():
+        assert sorted(by_rank) == list(range(1, len(by_rank) + 1))
+        runs.append(
+            SourceRun(
+                query_id=query_id,
+                system=system,
+                endpoint="/search",
+                search_version="v0_lexical",
+                top_k=context.source_top_k,
+                product_ids=tuple(by_rank[r] for r in sorted(by_rank)),
+                reranker=None
+                if system.value not in ("v3_reranked_d10", "v3_reranked_d20")
+                else {"enabled": True, "depth": 10, "status": "applied", "reranked_count": 1},
+            )
+        )
+    return PoolProvenance(
+        run_id=run_id_for(context),
+        run_context=context,
+        source_runs=tuple(sorted(runs, key=lambda r: r.sort_key())),
+        entries=tuple(sorted(entries, key=lambda e: e.sort_key())),
+    )
+
+
+def pool_report(pool: list[PoolItem]) -> PoolReport:
+    """A SYNTHETIC aggregate report consistent with `pool` (no hard constraints, no sources)."""
+    sizes: dict[str, int] = {}
+    for item in pool:
+        sizes[item.query_id] = sizes.get(item.query_id, 0) + 1
+    summaries = tuple(
+        QueryPoolSummary(
+            query_id=query_id,
+            hard_constraint_count=0,
+            eligible_count=None,
+            unknown_count=None,
+            completion=CompletionStatus.NO_HARD_CONSTRAINTS,
+            completion_added=0,
+            source_result_counts=tuple(SystemCount(system=s, count=0) for s in SOURCE_ORDER),
+            union_size=size,
+            negatives_same_category=0,
+            negatives_other_category=0,
+            negative_shortfall=4,
+            pool_size=size,
+            within_cap=size <= 60,
+        )
+        for query_id, size in sorted(sizes.items())
+    )
+    return PoolReport(
+        pool_policy="pool-1",
+        source_top_k=20,
+        max_pool_size=60,
+        completion_cap=25,
+        negatives_per_query=4,
+        queries=summaries,
+        total_pool_items=len(pool),
+        all_within_cap=all(s.within_cap for s in summaries),
+    )

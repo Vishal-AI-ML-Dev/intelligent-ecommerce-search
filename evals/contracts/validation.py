@@ -4,11 +4,17 @@ read-only catalog index) and raise a `ContractError` naming the first problem fo
 None of these functions creates, prefills, trims or repairs anything: a validator reports and
 the caller stops.
 
-Wiring status (Session C1): the `queries_frozen` freeze runner
-(`evals.runners.freeze_queries`) calls the query, gold-constraint, product-intent, attestation,
-extraction and pilot validators before it writes anything. The pool, judgement, review-set and
-correction validators are still enforced only by their unit tests; wiring them into the runners
-of later stages is later-session work.
+Wiring status (Session C2):
+- The `queries_frozen` freeze runner (`evals.runners.freeze_queries`) calls the query,
+  gold-constraint, product-intent, attestation, extraction and pilot validators before it writes
+  anything.
+- The pool runner (`evals.runners.build_pool`) calls the pool, cap, provenance and eligibility
+  validators.
+- The annotation store and the primary-seal tooling (`evals.annotation`,
+  `evals.runners.seal_primary`) call the judgement-vs-eligibility, single-annotator,
+  primary-round and seal-time validators.
+- The consistency, adjudication, final-label and correction validators are still enforced only
+  by their unit tests.
 """
 
 import hashlib
@@ -20,6 +26,7 @@ from datetime import datetime
 from ecommerce_search.catalog.taxonomy import SUBCATEGORIES, Category
 from ecommerce_search.filtering.policy import FilterOperator
 from evals.contracts.canonical import ContractError
+from evals.contracts.cards import card_sha256
 from evals.contracts.catalog import CatalogIndex
 from evals.contracts.constants import (
     BLIND_ORDER_VERSION,
@@ -293,8 +300,8 @@ def check_pool_cap(
 def validate_pool(
     queries: Sequence[QueryRecord], pool: Sequence[PoolItem], catalog: CatalogIndex
 ) -> None:
-    """Pool items reference known queries and catalog products with their current content
-    hashes; positions follow the deterministic blind order; and every pool fits the cap."""
+    """Pool items reference known queries and catalog products with their current content and
+    card hashes; positions follow the deterministic blind order; and every pool fits the cap."""
     query_ids = {q.query_id for q in queries}
     _unique(_pairs(pool), "pool items")
     by_query: dict[str, list[PoolItem]] = defaultdict(list)
@@ -306,6 +313,8 @@ def validate_pool(
             raise ContractError(f"pool item for unknown product {item.product_id!r}")
         if product.content_sha256 != item.product_content_sha256:
             raise ContractError(f"{item.product_id}: product content hash differs from the catalog")
+        if card_sha256(product) != item.card_sha256:
+            raise ContractError(f"{item.product_id}: product card hash differs from the catalog")
         by_query[item.query_id].append(item)
     for query_id, items in by_query.items():
         expected = sorted(items, key=lambda i: blind_order_key(query_id, i.product_id))

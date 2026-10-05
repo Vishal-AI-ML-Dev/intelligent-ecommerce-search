@@ -42,7 +42,7 @@ Other documents written before this revision still use the former numbers. These
 | Milestone | Status | Evidence |
 |---|---|---|
 | M0–M8 | Complete as documented | Milestone commits on `main`, pushed (`origin/main` = `0a93e52`). Per-milestone docs live in `docs/`. |
-| M9 | In progress | Session B contracts committed and pushed (`15f3ac1`). Session C1 (uncommitted) is complete: the `queries_frozen` stage was confirmed by `ann-1` and verified (manifest `51204dae…`; details in `docs/golden-dataset-m9.md`). It is development/rubric-calibration data, not test evidence. Session C2 (candidate pooling) has not started. No pools, provenance, labels or metric results exist. |
+| M9 | In progress | Session B contracts (`15f3ac1`) and Session C1 (`6009fa3`, `queries_frozen` manifest `51204dae…`, confirmed by `ann-1`) are committed. Session C2 froze `pool_frozen` (manifest `4c26628a…`, 568 pairs, private provenance bound by checksum only) and added the blind annotation CLI, primary-seal tooling and the retrieval-metric evaluator (synthetic fixtures only). Development/rubric-calibration data, not test evidence. No human labels or metric results exist. Details in `docs/golden-dataset-m9.md`. |
 | M10–M27 | Not started | — |
 
 The status above was checked against git history at this revision. The test suite was not re-run as part of this documentation change.
@@ -1403,7 +1403,7 @@ Prefer:
 
 ## Start now
 
-M0–M8 are complete. The next implementation milestone is **Milestone 9 — Golden Dataset**. Its Session B contracts are committed (`15f3ac1`); Session C1 (pilot queries, gold constraints, eligibility and the `queries_frozen` tooling) is in the working tree, and Session C2 (candidate pooling) has not started.
+M0–M8 are complete. The next implementation milestone is **Milestone 9 — Golden Dataset**. Its Session B contracts (`15f3ac1`) and Session C1 (`6009fa3`, `queries_frozen`) are committed; Session C2 (`pool_frozen`, blind annotation CLI, primary-seal tooling, retrieval-metric evaluator) is committed. The next step is human primary annotation by `ann-1`.
 
 Inspect the repository and the existing M9 work before continuing. Continue only M9, which is limited to search relevance:
 

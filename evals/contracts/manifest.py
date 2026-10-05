@@ -14,9 +14,10 @@ Hashes are non-circular:
 
 Lifecycle (strictly ordered; each stage is a new manifest file and earlier ones are never
 edited): `queries_frozen` (queries, gold constraints, product intents, the generated qu-1
-extraction record and the recorded authoring attestation) → `pool_frozen` → `primary_sealed` →
-`labels_frozen` → `provenance_unsealed`. From `pool_frozen` the private provenance is
-represented only by its checksum (`provenance_binding`); it becomes an entry at
+extraction record and the recorded authoring attestation) → `pool_frozen` (the public pool, its
+eligibility records and the aggregate pool report) → `primary_sealed` → `labels_frozen` →
+`provenance_unsealed`. From `pool_frozen` the private provenance (one `PoolProvenance` object
+file) is represented only by its checksum (`provenance_binding`); it becomes an entry at
 `provenance_unsealed`, where its hash must equal that binding (D12). Every entry of a stage is
 carried unchanged into the next stage.
 `labels_frozen_at` (UTC, hashed like every other field) is the explicit freeze time: null before
@@ -55,8 +56,9 @@ from evals.contracts.models import (
     LabelChange,
     PartitionAssignment,
     PoolItem,
+    PoolProvenance,
+    PoolReport,
     ProductIntent,
-    ProvenanceEntry,
     QueryExtraction,
     QueryRecord,
     QueueItem,
@@ -89,6 +91,7 @@ class Role(StrEnum):
     AUTHORING_ATTESTATION = "authoring_attestation"
     POOL = "pool"
     ELIGIBILITY = "eligibility"
+    POOL_REPORT = "pool_report"
     PRIMARY_JUDGEMENTS = "primary_judgements"
     CONSISTENCY_SAMPLE = "consistency_sample"
     ADJUDICATION_QUEUE = "adjudication_queue"
@@ -113,6 +116,7 @@ ROLE_KIND: dict[Role, EntryKind] = {
     Role.AUTHORING_ATTESTATION: EntryKind.RECORDED,
     Role.POOL: EntryKind.GENERATED,
     Role.ELIGIBILITY: EntryKind.GENERATED,
+    Role.POOL_REPORT: EntryKind.GENERATED,
     Role.PRIMARY_JUDGEMENTS: EntryKind.RECORDED,
     Role.CONSISTENCY_SAMPLE: EntryKind.GENERATED,
     Role.ADJUDICATION_QUEUE: EntryKind.GENERATED,
@@ -124,8 +128,7 @@ ROLE_KIND: dict[Role, EntryKind] = {
     Role.PROVENANCE: EntryKind.GENERATED,
 }
 
-# Record model per role; ConsistencySample and AuthoringAttestation are single-object files,
-# every other role is JSONL.
+# Record model per role.
 ROLE_MODEL: dict[Role, type[BaseModel]] = {
     Role.QUERIES: QueryRecord,
     Role.GOLD_CONSTRAINTS: GoldConstraint,
@@ -134,6 +137,7 @@ ROLE_MODEL: dict[Role, type[BaseModel]] = {
     Role.AUTHORING_ATTESTATION: AuthoringAttestation,
     Role.POOL: PoolItem,
     Role.ELIGIBILITY: EligibilityRecord,
+    Role.POOL_REPORT: PoolReport,
     Role.PRIMARY_JUDGEMENTS: Judgement,
     Role.CONSISTENCY_SAMPLE: ConsistencySample,
     Role.ADJUDICATION_QUEUE: QueueItem,
@@ -142,9 +146,12 @@ ROLE_MODEL: dict[Role, type[BaseModel]] = {
     Role.LABEL_CHANGES: LabelChange,
     Role.PARTITIONS: PartitionAssignment,
     Role.FINAL_JUDGEMENTS: FinalJudgement,
-    Role.PROVENANCE: ProvenanceEntry,
+    Role.PROVENANCE: PoolProvenance,
 }
-OBJECT_ROLES = frozenset({Role.CONSISTENCY_SAMPLE, Role.AUTHORING_ATTESTATION})
+# Single-object files; every other role is JSONL.
+OBJECT_ROLES = frozenset(
+    {Role.CONSISTENCY_SAMPLE, Role.AUTHORING_ATTESTATION, Role.POOL_REPORT, Role.PROVENANCE}
+)
 ROLE_ROUND: dict[Role, Round] = {
     Role.PRIMARY_JUDGEMENTS: Round.PRIMARY,
     Role.CONSISTENCY_JUDGEMENTS: Round.CONSISTENCY,
@@ -161,7 +168,7 @@ _ADDED_AT: dict[Stage, frozenset[Role]] = {
             Role.AUTHORING_ATTESTATION,
         }
     ),
-    Stage.POOL_FROZEN: frozenset({Role.POOL, Role.ELIGIBILITY}),
+    Stage.POOL_FROZEN: frozenset({Role.POOL, Role.ELIGIBILITY, Role.POOL_REPORT}),
     Stage.PRIMARY_SEALED: frozenset(
         {Role.PRIMARY_JUDGEMENTS, Role.CONSISTENCY_SAMPLE, Role.ADJUDICATION_QUEUE}
     ),

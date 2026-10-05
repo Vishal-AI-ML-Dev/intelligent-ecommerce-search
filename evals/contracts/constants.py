@@ -25,6 +25,20 @@ MAX_POOL_SIZE_PER_QUERY = 60
 # Blind presentation order of a pool: sha256(f"{BLIND_ORDER_VERSION}|{query_id}|{product_id}").
 BLIND_ORDER_VERSION = "blind-1"
 
+# ---- pool generation under pool-1 (M9 Session C2) --------------------------------------------
+# Every candidate source is called with this top_k; it equals POOL_DEPTH, so every returned hit
+# is inside the pooling depth.
+POOL_SOURCE_TOP_K = POOL_DEPTH
+# The two V3 reranked sources differ only in the reranker depth.
+V3_RERANK_DEPTHS: tuple[int, ...] = (10, 20)
+# Negatives order: sha256(f"{POOL_POLICY_VERSION}|{query_id}|{product_id}"); two per tier.
+NEGATIVES_PER_TIER = 2
+# The annotation-facing product card projection and its hash (`evals.contracts.cards`).
+CARD_VERSION = "card-1"
+# Private pool provenance bundle and public aggregate pool report formats.
+PROVENANCE_VERSION = "prov-1"
+POOL_REPORT_VERSION = "pool-report-1"
+
 # ---- single-annotator review workflow (D5 final + final corrections 2 and 3) -----------------
 CONSISTENCY_SAMPLE_VERSION = "cs-1"
 CONSISTENCY_BLIND_ORDER_VERSION = "consistency-1"

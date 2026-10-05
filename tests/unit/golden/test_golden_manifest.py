@@ -43,7 +43,18 @@ from evals.contracts.review_sets import (
     build_consistency_sample,
     derive_final_judgements,
 )
-from golden_support import HANDLE, T0, after_delay, eligibility, gold, judgement, pool_for, query
+from golden_support import (
+    HANDLE,
+    T0,
+    after_delay,
+    eligibility,
+    gold,
+    judgement,
+    pool_for,
+    pool_report,
+    provenance_bundle,
+    query,
+)
 from pydantic import ValidationError
 
 from ecommerce_search.filtering.policy import FilterOperator
@@ -65,6 +76,8 @@ VERSIONS = ManifestVersions(
 PATHS = {role: f"v1/{role.value}.jsonl" for role in Role} | {
     Role.CONSISTENCY_SAMPLE: "v1/consistency_sample.json",
     Role.AUTHORING_ATTESTATION: "v1/authoring_attestation.json",
+    Role.POOL_REPORT: "v1/pool_report.json",
+    Role.PROVENANCE: "v1/provenance.json",
 }
 
 
@@ -165,6 +178,7 @@ def _files(catalog) -> dict[Role, bytes]:
         ),
         Role.POOL: encode_jsonl(pool),
         Role.ELIGIBILITY: encode_jsonl(elig),
+        Role.POOL_REPORT: encode_json_object(pool_report(pool)),
         Role.PRIMARY_JUDGEMENTS: primary_bytes,
         Role.CONSISTENCY_SAMPLE: encode_json_object(sample),
         Role.ADJUDICATION_QUEUE: encode_jsonl(queue),
@@ -175,7 +189,7 @@ def _files(catalog) -> dict[Role, bytes]:
             [PartitionAssignment(query_id="gq-p01", partition=Partition.PILOT_DEV)]
         ),
         Role.FINAL_JUDGEMENTS: encode_jsonl(derive_final_judgements(primaries, adjudications)),
-        Role.PROVENANCE: encode_jsonl(provenance),
+        Role.PROVENANCE: encode_json_object(provenance_bundle(provenance)),
     }
 
 

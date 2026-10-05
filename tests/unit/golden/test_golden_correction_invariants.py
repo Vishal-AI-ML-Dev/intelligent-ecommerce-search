@@ -338,6 +338,7 @@ def test_missing_records_raise_contract_errors_not_key_errors(catalog):
             query_id="gq-p01",
             product_id="NOPE-1",
             product_content_sha256="a" * 64,
+            card_sha256="b" * 64,
             blind_position=1,
         )
     ]

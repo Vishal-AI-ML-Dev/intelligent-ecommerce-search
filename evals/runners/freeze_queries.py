@@ -15,7 +15,9 @@ Subcommands:
 Safety: every path must stay inside `evals/goldens/` with no `..`, symlink or junction on the
 way; nothing that already exists is overwritten; all files are staged in a temporary directory
 and hard-linked into place with exclusive creation, manifest last, and any failure removes what
-this run created. It creates no pool, provenance, label or metric file.
+this run created. Every command refuses to start while a stale `.freeze-staging-*` directory
+from an interrupted freeze exists (`golden_io.refuse_stale_staging`). It creates no pool,
+provenance, label or metric file.
 
 Usage:
   uv run python -m evals.runners.freeze_queries preview
@@ -27,9 +29,7 @@ Usage:
 import argparse
 import json
 import os
-import shutil
 import sys
-import tempfile
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -84,6 +84,14 @@ from evals.contracts.validation import (
     validate_queries,
     validate_query_extraction,
 )
+from evals.runners.golden_io import (
+    FreezeError,
+    read_frozen,
+    refuse_stale_staging,
+    safe_child,
+)
+from evals.runners.golden_io import safe_golden_dir as _safe_golden_dir
+from evals.runners.golden_io import write_exclusive as _write_exclusive
 
 ALLOWED_ROOT = ROOT / "evals" / "goldens"
 DEFAULT_GOLDEN_DIR = ALLOWED_ROOT / "internal-search" / "v1"
@@ -99,56 +107,12 @@ ARTIFACT_PATHS: dict[Role, str] = {
 GOLDEN_VERSION = 1
 
 
-class FreezeError(ContractError):
-    """The stage cannot be frozen or verified; nothing was written (or it was rolled back)."""
-
-
-# ---- paths --------------------------------------------------------------------------------
-
-
-def _is_link(path: Path) -> bool:
-    return path.is_symlink() or path.is_junction()
-
-
 def safe_golden_dir(path: Path, allowed_root: Path = ALLOWED_ROOT) -> Path:
-    """`path` as an absolute directory strictly inside `allowed_root`, reached without `..` and
-    without any symlink or junction component (checked on the unresolved path)."""
-    if ".." in path.parts:
-        raise FreezeError("the golden directory must not contain '..'")
-    absolute = path if path.is_absolute() else Path.cwd() / path
-    root = allowed_root if allowed_root.is_absolute() else Path.cwd() / allowed_root
-    try:
-        relative = absolute.relative_to(root)
-    except ValueError:
-        raise FreezeError(f"the golden directory must be inside {allowed_root}") from None
-    if not relative.parts:
-        raise FreezeError("the golden directory must be below the allowed root, not the root")
-    current = root
-    if _is_link(current):
-        raise FreezeError("the allowed root must not be a symlink or junction")
-    for part in relative.parts:
-        current = current / part
-        if _is_link(current):
-            raise FreezeError(f"symlinks and junctions are refused: {current}")
-    if not absolute.is_dir():
-        raise FreezeError(f"the golden directory does not exist: {absolute}")
-    if absolute.resolve() != root.resolve() / relative:
-        raise FreezeError("the golden directory resolves outside its expected location")
-    return absolute
-
-
-def _safe_child(golden_dir: Path, relative: str) -> Path:
-    target = golden_dir / relative
-    current = golden_dir
-    for part in Path(relative).parts:
-        current = current / part
-        if _is_link(current):
-            raise FreezeError(f"symlinks and junctions are refused: {current}")
-    return target
+    return _safe_golden_dir(path, allowed_root)
 
 
 def read_input(golden_dir: Path) -> tuple[PilotInput, bytes]:
-    path = _safe_child(golden_dir, INPUT_PATH)
+    path = safe_child(golden_dir, INPUT_PATH)
     if not path.is_file():
         raise FreezeError(f"the pilot input does not exist: {path}")
     data = path.read_bytes()
@@ -258,41 +222,8 @@ def write_exclusive(
     *,
     link: Callable[[Path, Path], None] = os.link,
 ) -> None:
-    """Write every file or none. Targets must not exist (not even as broken links); files are
-    staged and fsynced in a temporary directory inside `golden_dir`, then hard-linked into place
-    with exclusive creation (the manifest last). A failure removes every target this call
-    created, its staging directory and any directory it created."""
-    ordered = sorted(files, key=lambda p: (p == MANIFEST_PATH, p))
-    targets = {relative: _safe_child(golden_dir, relative) for relative in ordered}
-    existing = [str(t) for t in targets.values() if os.path.lexists(t)]
-    if existing:
-        raise FreezeError(f"refusing to overwrite frozen artifacts: {existing}")
-    created_dirs: list[Path] = []
-    placed: list[Path] = []
-    staging = Path(tempfile.mkdtemp(prefix=".freeze-staging-", dir=golden_dir))
-    try:
-        for index, relative in enumerate(ordered):
-            staged = staging / f"{index:02d}"
-            with open(staged, "xb") as handle:
-                handle.write(files[relative])
-                handle.flush()
-                os.fsync(handle.fileno())
-        for index, relative in enumerate(ordered):
-            target = targets[relative]
-            parent = target.parent
-            if not parent.exists():
-                parent.mkdir()
-                created_dirs.append(parent)
-            link(staging / f"{index:02d}", target)  # fails if the target appeared meanwhile
-            placed.append(target)
-    except BaseException:
-        for target in reversed(placed):
-            target.unlink(missing_ok=True)
-        for directory in reversed(created_dirs):
-            directory.rmdir()
-        raise
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
+    """All-or-nothing exclusive write with the manifest linked last (`golden_io`)."""
+    _write_exclusive(golden_dir, files, last=MANIFEST_PATH, link=link)
 
 
 # ---- commands -------------------------------------------------------------------------------
@@ -316,6 +247,7 @@ def freeze(
     if annotator != SINGLE_ANNOTATOR_HANDLE:
         raise FreezeError(f"refused: only {SINGLE_ANNOTATOR_HANDLE!r} can confirm the pilot")
     golden_dir = safe_golden_dir(golden_dir, allowed_root)
+    refuse_stale_staging(golden_dir)
     draft, data = read_input(golden_dir)
     if sha256_hex(data) != input_sha256:
         raise FreezeError("refused: the input file differs from the reviewed SHA-256")
@@ -330,13 +262,6 @@ def freeze(
     return manifest
 
 
-def _read_frozen(golden_dir: Path, relative: str) -> bytes:
-    path = _safe_child(golden_dir, relative)
-    if not path.is_file():
-        raise FreezeError(f"missing frozen file: {path}")
-    return path.read_bytes()
-
-
 def verify(
     golden_dir: Path,
     *,
@@ -346,8 +271,9 @@ def verify(
     """Read-only: the manifest, every entry's bytes, the regenerated extraction, the input
     binding and every stage validator."""
     golden_dir = safe_golden_dir(golden_dir, allowed_root)
+    refuse_stale_staging(golden_dir)
     catalog = catalog or load_catalog_index()
-    manifest = decode_manifest(_read_frozen(golden_dir, MANIFEST_PATH))
+    manifest = decode_manifest(read_frozen(golden_dir, MANIFEST_PATH))
     if manifest.stage is not Stage.QUERIES_FROZEN or manifest.golden_version != GOLDEN_VERSION:
         raise FreezeError("expected the version 1 queries_frozen manifest")
     if (manifest.dataset_id, manifest.dataset_version, manifest.dataset_checksum_sha256) != (
@@ -360,7 +286,7 @@ def verify(
     for entry in manifest.entries:
         if entry.path != ARTIFACT_PATHS[entry.role]:
             raise FreezeError(f"unexpected path for {entry.role.value}: {entry.path}")
-        content[entry.role] = _read_frozen(golden_dir, entry.path)
+        content[entry.role] = read_frozen(golden_dir, entry.path)
         verify_entry(entry, content[entry.role])
     queries = decode_jsonl(content[Role.QUERIES], QueryRecord)
     constraints = decode_jsonl(content[Role.GOLD_CONSTRAINTS], GoldConstraint)
@@ -386,6 +312,7 @@ def preview_text(golden_dir: Path, *, allowed_root: Path = ALLOWED_ROOT) -> str:
     """The table and generated bytes the annotator reviews. Uses a placeholder time only to run
     validation; nothing is written and the placeholder never reaches a file."""
     golden_dir = safe_golden_dir(golden_dir, allowed_root)
+    refuse_stale_staging(golden_dir)
     draft, data = read_input(golden_dir)
     catalog = load_catalog_index()
     placeholder = datetime(2000, 1, 1, tzinfo=UTC)

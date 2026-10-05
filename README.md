@@ -10,9 +10,10 @@ Development is organized milestone by milestone. See
 
 - M0–M8: complete according to repository history (summarized below).
 - M9 (Golden Dataset): in progress. Session C1 is complete: the 20-query development pilot
-  (`queries_frozen`) was confirmed by the human annotator and verified. Session C2 (candidate
-  pooling) has not started, and no pools, labels or metrics exist. See
-  `docs/golden-dataset-m9.md`.
+  (`queries_frozen`) was confirmed by the human annotator and verified. Session C2 froze the
+  deterministic candidate pool (`pool_frozen`, 568 query-product pairs) and added the blind
+  annotation CLI, the primary-seal tooling and the retrieval-metric evaluator. No human labels
+  or metric results exist yet. See `docs/golden-dataset-m9.md`.
 - M10–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
   (HITL), the dual frontend and marketplace integration. M27 is optional.
 

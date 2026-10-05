@@ -42,6 +42,8 @@ class CatalogProduct:
     spec: Mapping[str, Any]
     price: Decimal
     subcategory: str | None
+    description: str | None = None
+    currency: str = "INR"
 
 
 @dataclass(frozen=True)
@@ -86,6 +88,8 @@ def load_catalog_index(
             spec=MappingProxyType(record.spec.model_dump(mode="json")),
             price=record.price,
             subcategory=record.subcategory,
+            description=record.description,
+            currency=str(record.currency),
         )
     return CatalogIndex(
         dataset_id=provenance.dataset_id,

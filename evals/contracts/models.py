@@ -10,6 +10,8 @@ carry no wall-clock time, machine path or handle, so a regeneration from the sam
 checked byte for byte; the consistency sample's only time is the seal time it is bound to.
 """
 
+import hashlib
+import json
 import re
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -492,11 +494,15 @@ class AuthoringAttestation(_Record):
 
 class PoolItem(_Record):
     """One (query, product) pair shown to the annotator. No source, rank, score or inclusion
-    reason is stored here (D4); those live only in the sealed provenance."""
+    reason is stored here (D4); those live only in the sealed provenance.
+
+    `product_content_sha256` is the catalog's normalized record hash and `card_sha256` the hash
+    of the exact `card-1` projection shown to the annotator (`evals.contracts.cards`)."""
 
     query_id: QueryId
     product_id: ProductId
     product_content_sha256: Sha256
+    card_sha256: Sha256
     blind_position: Position
 
     def sort_key(self) -> tuple[str, ...]:
@@ -552,6 +558,220 @@ class ProvenanceEntry(_Record):
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.query_id, self.product_id)
+
+
+class NamedValue(_Frozen):
+    """One named run fact (a setting, a model pin, a library version, a tree hash)."""
+
+    name: Annotated[StrictStr, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_./:-]{0,127}$")]
+    value: Annotated[StrictStr, Field(max_length=200)]
+
+
+def _check_named(values: tuple[NamedValue, ...], what: str) -> None:
+    names = [v.name for v in values]
+    if names != sorted(set(names)):
+        raise ValueError(f"{what} must have unique names, sorted by name")
+
+
+class RunContext(_Frozen):
+    """Everything a pool run depends on. It carries no wall-clock time, machine path, database
+    name or random identifier, so two independent runs of the same inputs have the same
+    context and therefore the same `run_id`."""
+
+    queries_manifest_sha256: Sha256
+    dataset_id: Annotated[StrictStr, Field(min_length=1)]
+    dataset_version: Annotated[StrictStr, Field(min_length=1)]
+    dataset_checksum_sha256: Sha256
+    pool_policy: Annotated[StrictStr, Field(min_length=1)]
+    blind_order: Annotated[StrictStr, Field(min_length=1)]
+    source_top_k: Annotated[StrictInt, Field(ge=1, le=50)]
+    settings: tuple[NamedValue, ...]
+    model_pins: tuple[NamedValue, ...]
+    component_versions: tuple[NamedValue, ...]
+    library_versions: tuple[NamedValue, ...]
+    runtime_trees: tuple[NamedValue, ...]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        for name in (
+            "settings",
+            "model_pins",
+            "component_versions",
+            "library_versions",
+            "runtime_trees",
+        ):
+            _check_named(getattr(self, name), name)
+        return self
+
+
+class RerankerMode(_Frozen):
+    enabled: StrictBool
+    depth: Annotated[StrictInt, Field(ge=1, le=50)]
+    status: Annotated[StrictStr, Field(pattern=r"^[a-z_]{1,64}$")]
+    reranked_count: Count
+
+
+class SourceRun(_Frozen):
+    """One source's response to one query: its ranked product ids and how it was produced.
+    Private (part of the sealed provenance), never shown to the annotator."""
+
+    query_id: QueryId
+    system: SourceSystem
+    endpoint: Annotated[StrictStr, Field(pattern=r"^/search(?:/[a-z]+)?$")]
+    search_version: Annotated[StrictStr, Field(pattern=r"^[a-z0-9_]{1,64}$")]
+    top_k: Annotated[StrictInt, Field(ge=1, le=50)]
+    product_ids: tuple[ProductId, ...]
+    applied_filters: tuple[Annotated[StrictStr, Field(max_length=500)], ...] = ()
+    ignored_constraints: tuple[Annotated[StrictStr, Field(max_length=500)], ...] = ()
+    parser_version: StrictStr | None = None
+    filter_policy_version: StrictStr | None = None
+    dense_status: StrictStr | None = None
+    reranker: RerankerMode | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if len(self.product_ids) > self.top_k:
+            raise ValueError("a source returned more products than its top_k")
+        if len(set(self.product_ids)) != len(self.product_ids):
+            raise ValueError("a source returned a product twice")
+        is_v3 = self.system in (SourceSystem.V3_RERANKED_D10, SourceSystem.V3_RERANKED_D20)
+        if is_v3 != (self.reranker is not None):
+            raise ValueError("exactly the V3 sources carry a reranker mode")
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.query_id, f"{SOURCE_ORDER.index(self.system):02d}")
+
+
+def run_id_for(context: RunContext) -> str:
+    """The deterministic run identity: the first 16 hex digits of the context's SHA-256."""
+    body = context.model_dump(mode="json")
+    text = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+class PoolProvenance(_Record):
+    """The private, sealed pool provenance (D12): the run context, every source's ranked
+    response, and why each pooled product is in the pool. Only its file SHA-256 is bound
+    (`provenance_binding`) until labels freeze; it becomes a manifest entry only at
+    `provenance_unsealed`."""
+
+    provenance_version: Literal["prov-1"] = "prov-1"
+    run_id: Annotated[StrictStr, Field(pattern=r"^[0-9a-f]{16}$")]
+    run_context: RunContext
+    source_runs: tuple[SourceRun, ...]
+    entries: tuple[ProvenanceEntry, ...]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.run_id != run_id_for(self.run_context):
+            raise ValueError("run_id does not match the run context")
+        run_keys = [r.sort_key() for r in self.source_runs]
+        if run_keys != sorted(set(run_keys)):
+            raise ValueError("source runs must be unique and sorted by (query, system)")
+        entry_keys = [e.sort_key() for e in self.entries]
+        if entry_keys != sorted(set(entry_keys)):
+            raise ValueError("entries must be unique and sorted by (query, product)")
+        expected: dict[tuple[str, str], list[tuple[SourceSystem, int]]] = {}
+        for run in self.source_runs:
+            if run.top_k != self.run_context.source_top_k:
+                raise ValueError(f"{run.query_id}/{run.system.value}: unexpected top_k")
+            for rank, product_id in enumerate(run.product_ids, start=1):
+                expected.setdefault((run.query_id, product_id), []).append((run.system, rank))
+        for entry in self.entries:
+            hits = [(h.system, h.rank) for h in entry.sources]
+            if hits != expected.pop((entry.query_id, entry.product_id), []):
+                raise ValueError(
+                    f"{entry.query_id}/{entry.product_id}: sources differ from the source runs"
+                )
+        if expected:
+            raise ValueError("a source hit has no provenance entry")
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.run_id,)
+
+
+class CompletionStatus(StrEnum):
+    """Why eligibility completion did or did not add products to a query's pool."""
+
+    APPLIED = "applied"  # 1..cap products satisfy every hard constraint; the missing were added
+    NO_HARD_CONSTRAINTS = "no_hard_constraints"
+    ZERO_ELIGIBLE = "zero_eligible"
+    OVER_COMPLETION_CAP = "over_completion_cap"  # never truncated: nothing is added
+
+
+class SystemCount(_Frozen):
+    system: SourceSystem
+    count: Count
+
+
+class QueryPoolSummary(_Frozen):
+    """Aggregate counts for one query's pool. No product id, rank, score or per-product
+    inclusion reason appears here."""
+
+    query_id: QueryId
+    hard_constraint_count: Count
+    eligible_count: Count | None  # None when the query has no hard constraint
+    unknown_count: Count | None
+    completion: CompletionStatus
+    completion_added: Count
+    source_result_counts: tuple[SystemCount, ...]
+    union_size: Count
+    negatives_same_category: Count
+    negatives_other_category: Count
+    negative_shortfall: Count
+    pool_size: Count
+    within_cap: StrictBool
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if [c.system for c in self.source_result_counts] != list(SOURCE_ORDER):
+            raise ValueError("source_result_counts list every system once, in system order")
+        negatives = self.negatives_same_category + self.negatives_other_category
+        if self.pool_size != self.union_size + self.completion_added + negatives:
+            raise ValueError("pool_size must equal union + completion + negatives")
+        if (self.eligible_count is None) != (self.hard_constraint_count == 0):
+            raise ValueError("eligible_count is null exactly when there is no hard constraint")
+        if self.completion_added > 0 and self.completion is not CompletionStatus.APPLIED:
+            raise ValueError("only an applied completion adds products")
+        return self
+
+
+class PoolReport(_Record):
+    """The deterministic, public aggregate report of a frozen pool (role `pool_report`)."""
+
+    report_version: Literal["pool-report-1"] = "pool-report-1"
+    pool_policy: Annotated[StrictStr, Field(min_length=1)]
+    source_top_k: Annotated[StrictInt, Field(ge=1, le=50)]
+    max_pool_size: Annotated[StrictInt, Field(ge=1)]
+    completion_cap: Annotated[StrictInt, Field(ge=0)]
+    negatives_per_query: Annotated[StrictInt, Field(ge=0)]
+    queries: tuple[QueryPoolSummary, ...]
+    total_pool_items: Count
+    all_within_cap: StrictBool
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        ids = [q.query_id for q in self.queries]
+        if ids != sorted(set(ids)):
+            raise ValueError("query summaries must be unique and sorted by query_id")
+        if self.total_pool_items != sum(q.pool_size for q in self.queries):
+            raise ValueError("total_pool_items must be the sum of the pool sizes")
+        if self.all_within_cap != all(q.within_cap for q in self.queries):
+            raise ValueError("all_within_cap must follow from the per-query flags")
+        for q in self.queries:
+            if q.within_cap != (q.pool_size <= self.max_pool_size):
+                raise ValueError(f"{q.query_id}: within_cap does not match the cap")
+            found = q.negatives_same_category + q.negatives_other_category
+            if found + q.negative_shortfall != self.negatives_per_query:
+                raise ValueError(f"{q.query_id}: negatives and shortfall must add up")
+            if q.completion_added > self.completion_cap:
+                raise ValueError(f"{q.query_id}: completion exceeds its cap")
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.report_version,)
 
 
 # ---- derived constraint eligibility ---------------------------------------------------------

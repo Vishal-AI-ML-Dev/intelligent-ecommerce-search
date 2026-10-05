@@ -284,9 +284,11 @@ def test_preview_writes_nothing(capsys):
     assert _tree(REAL_DIR) == before
 
 
-def test_the_golden_directory_holds_no_pool_provenance_label_or_metric_file():
-    """The queries stage never creates later-stage artifacts."""
-    for name in ("pool.jsonl", "eligibility.jsonl", "provenance.jsonl"):
-        assert not (REAL_DIR / name).exists()
-    assert not list(REAL_DIR.rglob("*judgement*")) and not list(REAL_DIR.rglob("*metric*"))
+def test_the_golden_directory_holds_no_provenance_label_or_metric_file():
+    """The queries stage never creates later-stage artifacts. Since Session C2 the public
+    `pool_frozen` files exist, but the private provenance never enters the golden directory and
+    no judgement, consistency sample, label or metric file exists before human annotation."""
     assert Role.POOL not in stage_roles(Stage.QUERIES_FROZEN)
+    for pattern in ("*provenance*", "*judgement*", "*consistency*", "*label*", "*metric*"):
+        assert not list(REAL_DIR.rglob(pattern)), pattern
+    assert not (REAL_DIR / "manifests" / "3-primary_sealed.json").exists()
