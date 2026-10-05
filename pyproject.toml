@@ -55,6 +55,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "S"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers --strict-config"
 markers = [
     "integration: requires a running PostgreSQL with pgvector (docker compose up -d db)",

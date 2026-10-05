@@ -1,2 +1,3 @@
 data/seed/* text eol=lf
 data/labels/* text eol=lf
+evals/goldens/** text eol=lf
