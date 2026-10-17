@@ -33,10 +33,34 @@ refuses missing, duplicated, reordered, incomplete or altered records, other set
 model pins or another query checksum.
 Artifacts (git-ignored): data/processed/rerank_benchmark/<experiment_id>.{samples.jsonl,json,md}.
 
+Local-snapshot mode (M10, `--local-snapshot`): the same predeclared protocol on the current
+working tree, for work that is not committed yet. It does not relax the M8 mode, which stays the
+default and unchanged. Instead of a clean tree at a reviewed commit it requires:
+- the production commit is an ancestor of HEAD;
+- every guarded path that differs from the production commit (committed since, or uncommitted)
+  is declared with `--accept-guarded-change PATH=BLOB`, BLOB being the working-tree file's git
+  blob hash (or `deleted`); an undeclared, unknown or mismatched declaration is refused;
+- a binding SHA-256 over the source fingerprint (every tracked and untracked file under src/,
+  migrations/, scripts/, data/seed/ and the runtime config files), the declared guarded
+  differences, the Python and library versions, the model pins, the settings and the protocol
+  equals the reviewed `--binding-sha256` (printed by `--preflight`), in the parent and in every
+  run process;
+- a new `--output-dir` inside data/processed/ that is git-ignored, empty or absent and not the M8
+  result directory (nothing is overwritten or mixed).
+The experiment id is `rerank-m10-local-<binding sha256 prefix>`. HEAD alone does not reproduce
+such a run; the header records the binding, the source fingerprint and how many uncommitted
+paths there were. The PostgreSQL server facts are recorded at run time but are not part of the
+binding.
+
 Usage (execution requires a separate approval):
   HF_HUB_OFFLINE=1 uv run --offline python scripts/benchmark_reranked.py --execute
   uv run --offline python scripts/benchmark_reranked.py --verify <artifact .json>
   uv run --offline python scripts/benchmark_reranked.py --print-protocol
+  HF_HUB_OFFLINE=1 uv run --offline python scripts/benchmark_reranked.py --preflight \\
+      --local-snapshot [--accept-guarded-change PATH=BLOB ...] --output-dir <data/processed/...>
+  HF_HUB_OFFLINE=1 uv run --offline python scripts/benchmark_reranked.py --execute \\
+      --local-snapshot --accept-guarded-change PATH=BLOB ... --binding-sha256 <hex> \\
+      --output-dir <data/processed/...>
 """
 
 import argparse
@@ -52,7 +76,8 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
@@ -75,7 +100,14 @@ from benchmark_dense import (  # noqa: E402
 )
 from benchmark_dense import environment as server_environment  # noqa: E402
 from benchmark_hybrid import check_output_dir, dropped_after  # noqa: E402
-from benchmark_lexical import _git, dumps, read_samples, source_fingerprint, summarize  # noqa: E402
+from benchmark_lexical import (  # noqa: E402
+    _git,
+    dumps,
+    is_relevant,
+    read_samples,
+    source_fingerprint,
+    summarize,
+)
 
 # ---- pinned provenance ---------------------------------------------------------------------------
 
@@ -88,6 +120,11 @@ EXPERIMENT_PREFIX = "rerank-m8-latency-"
 EXPERIMENT_ID_RE = re.compile(r"rerank-m8-latency-[0-9a-f]{12}")
 SEED_PRODUCTS = 240
 OFFLINE_ENV = {"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "HF_HUB_DISABLE_TELEMETRY": "1"}
+# Local-snapshot mode (M10): bound to a reviewed binding hash instead of a clean reviewed commit.
+LOCAL_MODE = "local_snapshot"
+LOCAL_EXPERIMENT_PREFIX = "rerank-m10-local-"
+LOCAL_EXPERIMENT_ID_RE = re.compile(r"rerank-m10-local-[0-9a-f]{12}")
+BLOB_RE = re.compile(r"[0-9a-f]{40}|deleted")
 
 # ---- predeclared query set: the committed M5 hybrid queries, unchanged --------------------------
 
@@ -386,6 +423,173 @@ def check_provenance(root: Path, git: Callable[..., bytes] = _git) -> dict:
     }
 
 
+# ---- local-snapshot provenance (M10; pure with injected dependencies; unit-tested) --------------
+
+
+@dataclass(frozen=True)
+class LocalSnapshot:
+    """The operator's explicit local-snapshot declaration: every accepted guarded-path difference
+    (path -> working-tree blob hash or `deleted`) and the reviewed binding hash (None only for
+    `--preflight`, which prints it)."""
+
+    accepted: Mapping[str, str]
+    binding_sha256: str | None = None
+
+
+def parse_accepted(values: Sequence[str] | None) -> dict[str, str]:
+    """`PATH=BLOB` declarations; duplicates and malformed values are refused."""
+    accepted: dict[str, str] = {}
+    for value in values or ():
+        path, sep, blob = value.partition("=")
+        if not sep or not path or not BLOB_RE.fullmatch(blob):
+            raise ProvenanceError(
+                f"--accept-guarded-change must be PATH=<40-hex blob>|deleted, got {value!r}"
+            )
+        if path in accepted:
+            raise ProvenanceError(f"guarded path declared twice: {path}")
+        accepted[path] = blob
+    return accepted
+
+
+def _porcelain_paths(data: bytes) -> list[str]:
+    """Paths of `git status --porcelain=v1 -z` entries (both sides of a rename or copy)."""
+    tokens = [t for t in data.decode("utf-8").split("\0") if t]
+    paths, index = [], 0
+    while index < len(tokens):
+        entry = tokens[index]
+        paths.append(entry[3:])
+        if entry[:1] in ("R", "C"):
+            index += 1
+            if index < len(tokens):
+                paths.append(tokens[index])
+        index += 1
+    return paths
+
+
+def _blob_at(root: Path, git: Callable[..., bytes], rev: str, path: str) -> str:
+    try:
+        return git(root, "rev-parse", f"{rev}:{path}").decode().strip()
+    except GitError:
+        return "absent"
+
+
+def _working_blob(root: Path, git: Callable[..., bytes], path: str) -> str:
+    if not (root / path).is_file():
+        return "deleted"
+    return git(root, "hash-object", "--", path).decode().strip()
+
+
+def guarded_differences(root: Path, git: Callable[..., bytes] = _git) -> list[dict]:
+    """Every guarded path whose content differs from the production commit, committed since it
+    or uncommitted, with its production, HEAD and working-tree blob hashes."""
+    diff = git(root, "diff", "--name-only", PRODUCTION_COMMIT, "HEAD", "--", *GUARDED_PATHS)
+    committed = {line.strip() for line in diff.decode().splitlines() if line.strip()}
+    status = git(
+        root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", *GUARDED_PATHS
+    )
+    uncommitted = set(_porcelain_paths(status))
+    return [
+        {
+            "path": path,
+            "production_blob": _blob_at(root, git, PRODUCTION_COMMIT, path),
+            "head_blob": _blob_at(root, git, "HEAD", path),
+            "working_blob": _working_blob(root, git, path),
+            "committed_since_production": path in committed,
+            "uncommitted": path in uncommitted,
+        }
+        for path in sorted(committed | uncommitted)
+    ]
+
+
+def check_local_snapshot(
+    root: Path,
+    accepted: Mapping[str, str],
+    git: Callable[..., bytes] = _git,
+    fingerprint: Callable[[Path], dict] = source_fingerprint,
+) -> dict:
+    """The local-snapshot provenance: the production commit is an ancestor of HEAD and every
+    guarded-path difference is declared exactly. Nothing is ignored silently."""
+    head = git(root, "rev-parse", "HEAD").decode().strip()
+    try:
+        git(root, "merge-base", "--is-ancestor", PRODUCTION_COMMIT, head)
+    except GitError:
+        raise ProvenanceError(
+            f"the production commit {PRODUCTION_COMMIT} is missing or not an ancestor of HEAD"
+        ) from None
+    differences = guarded_differences(root, git)
+    found = {d["path"]: d["working_blob"] for d in differences}
+    problems = [
+        f"undeclared guarded difference: --accept-guarded-change {path}={blob}"
+        for path, blob in found.items()
+        if path not in accepted
+    ]
+    problems += [
+        f"declared guarded path does not differ from the production commit: {path}"
+        for path in sorted(accepted)
+        if path not in found
+    ]
+    problems += [
+        f"guarded path {path} is now {found[path]}, not the declared {accepted[path]}"
+        for path in sorted(accepted)
+        if path in found and accepted[path] != found[path]
+    ]
+    if problems:
+        raise ProvenanceError("guarded paths are not accounted for: " + "; ".join(problems))
+    source = fingerprint(root)
+    status = _porcelain_paths(git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all"))
+    return {
+        "mode": LOCAL_MODE,
+        "harness_head": head,
+        "production_commit": PRODUCTION_COMMIT,
+        "guarded": list(GUARDED_PATHS),
+        "guarded_differences": differences,
+        "source_tree_sha256": source["source_tree_sha256"],
+        "source_working_tree_dirty": source["git_working_tree_dirty"],
+        "uncommitted_paths": len(status),
+        "uncommitted_paths_outside_source": sum(1 for p in status if not is_relevant(p)),
+    }
+
+
+def local_binding(provenance: dict, identity: dict, settings: dict, models: dict) -> dict:
+    """Everything a local-snapshot run is bound to (uncommitted-path counts are recorded in the
+    provenance but are not part of the binding)."""
+    return {
+        "mode": LOCAL_MODE,
+        "production_commit": PRODUCTION_COMMIT,
+        "source_tree_sha256": provenance["source_tree_sha256"],
+        "guarded_differences": provenance["guarded_differences"],
+        "python": {
+            "implementation": platform.python_implementation(),
+            "version": platform.python_version(),
+        },
+        "libraries": library_versions(),
+        "models": models,
+        "base_settings": settings,
+        "arm_settings": {arm: arm_settings(arm) for arm in ARMS},
+        "protocol_sha256": sha256_text(dumps(PREDECLARED)),
+        "query_set_sha256": identity["query_set_sha256"],
+    }
+
+
+def binding_sha256(binding: dict) -> str:
+    return sha256_text(dumps(binding))
+
+
+def local_experiment_id(binding_hash: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{64}", binding_hash or ""):
+        raise BenchmarkError("the binding hash is not a SHA-256")
+    return f"{LOCAL_EXPERIMENT_PREFIX}{binding_hash[:12]}"
+
+
+def check_local_output_dir(root: Path, out_dir: Path, git: Callable[..., bytes] = _git) -> Path:
+    """A new, git-ignored directory under data/processed/ that is not the M8 result directory."""
+    resolved = check_output_dir(root, out_dir, git)
+    m8 = OUTPUT_DIR.resolve()
+    if resolved == m8 or m8 in resolved.parents or resolved in m8.parents:
+        raise BenchmarkError("the M8 result directory is preserved; choose a new output directory")
+    return check_fresh_output(resolved)
+
+
 def check_base_settings(settings, rrf_k_status: str) -> dict:
     """Refuse unless the effective configuration is exactly the approved base configuration and
     the default model pins. Values are refused, not merely recorded."""
@@ -485,12 +689,15 @@ def check_header(header: dict, models: dict | None = None) -> list[str]:
     problems = []
     provenance = header.get("provenance") or {}
     head = str(provenance.get("harness_head"))
-    if not re.fullmatch(r"[0-9a-f]{40}", head):
-        problems.append("header harness HEAD is missing or not a commit id")
-    elif header.get("experiment_id") != experiment_id_for(head):
-        problems.append("experiment id is not derived from the harness HEAD")
-    if not EXPERIMENT_ID_RE.fullmatch(str(header.get("experiment_id"))):
-        problems.append("experiment id is not a reranker benchmark id")
+    if provenance.get("mode") == LOCAL_MODE:
+        problems += check_local_header(header, models)
+    else:
+        if not re.fullmatch(r"[0-9a-f]{40}", head):
+            problems.append("header harness HEAD is missing or not a commit id")
+        elif header.get("experiment_id") != experiment_id_for(head):
+            problems.append("experiment id is not derived from the harness HEAD")
+        if not EXPERIMENT_ID_RE.fullmatch(str(header.get("experiment_id"))):
+            problems.append("experiment id is not a reranker benchmark id")
     if provenance.get("production_commit") != PRODUCTION_COMMIT:
         problems.append("header production commit differs from the reviewed V3 commit")
     if provenance.get("guarded") != list(GUARDED_PATHS):
@@ -514,13 +721,56 @@ def check_header(header: dict, models: dict | None = None) -> list[str]:
     return problems
 
 
+def check_local_header(header: dict, models: dict | None = None) -> list[str]:
+    """Identity a local-snapshot header must carry: the experiment id derived from the binding,
+    a binding that hashes to its recorded SHA-256 and agrees with the header's own source
+    fingerprint, libraries, models, settings and protocol."""
+    problems = []
+    provenance = header.get("provenance") or {}
+    binding = provenance.get("binding")
+    recorded = str(provenance.get("binding_sha256"))
+    if not isinstance(binding, dict) or binding_sha256(binding) != recorded:
+        return ["local-snapshot binding is missing or does not hash to its recorded SHA-256"]
+    if not re.fullmatch(r"[0-9a-f]{40}", str(provenance.get("harness_head"))):
+        problems.append("header harness HEAD is missing or not a commit id")
+    if not LOCAL_EXPERIMENT_ID_RE.fullmatch(str(header.get("experiment_id"))) or (
+        header.get("experiment_id") != local_experiment_id(recorded)
+    ):
+        problems.append("experiment id is not derived from the local-snapshot binding")
+    source = header.get("source") or {}
+    if binding.get("source_tree_sha256") != source.get("source_tree_sha256") or (
+        binding.get("source_tree_sha256") != provenance.get("source_tree_sha256")
+    ):
+        problems.append("binding source fingerprint differs from the header source fingerprint")
+    if binding.get("guarded_differences") != provenance.get("guarded_differences"):
+        problems.append("binding guarded differences differ from the header provenance")
+    if binding.get("libraries") != header.get("libraries"):
+        problems.append("binding library versions differ from the header")
+    if binding.get("models") != header.get("models") or (
+        models is not None and binding.get("models") != models
+    ):
+        problems.append("binding models differ from the header or the pinned models")
+    if binding.get("base_settings") != header.get("base_settings") or binding.get(
+        "arm_settings"
+    ) != header.get("arm_settings"):
+        problems.append("binding settings differ from the header settings")
+    if binding.get("protocol_sha256") != sha256_text(dumps(PREDECLARED)):
+        problems.append("binding protocol differs from the predeclared protocol")
+    if binding.get("mode") != LOCAL_MODE or binding.get("production_commit") != PRODUCTION_COMMIT:
+        problems.append("binding mode or production commit is not the local-snapshot identity")
+    return problems
+
+
 def check_child_args(args: argparse.Namespace, development_db: str) -> None:
     """The child accepts only the exact arguments its parent passes for a predeclared run."""
     if not isinstance(args.run, int) or args.run not in ARM_SCHEDULE:
         raise BenchmarkError(f"child run must be 1..{RUNS}")
     if (args.warmup, args.samples) != (WARMUP_PER_QUERY, TIMED_PER_QUERY):
         raise BenchmarkError("child sampling differs from the predeclared protocol")
-    if not EXPERIMENT_ID_RE.fullmatch(args.experiment_id or ""):
+    if getattr(args, "local_snapshot", False):
+        if args.experiment_id != local_experiment_id(args.binding_sha256 or ""):
+            raise BenchmarkError("child experiment id is not derived from the reviewed binding")
+    elif not EXPERIMENT_ID_RE.fullmatch(args.experiment_id or ""):
         raise BenchmarkError("child experiment id is not a reranker benchmark id")
     if not args.out or ROOT.resolve() in Path(args.out).resolve().parents:
         raise BenchmarkError("child output must be a file outside the repository")
@@ -1207,6 +1457,17 @@ def markdown(summary: dict) -> str:
         "",
         f"- Harness HEAD `{h['provenance']['harness_head']}`; production commit "
         f"`{h['provenance']['production_commit']}`",
+        *(
+            [
+                f"- Local snapshot (not reproducible from HEAD): binding "
+                f"`{h['provenance']['binding_sha256']}`, source tree "
+                f"`{h['provenance']['source_tree_sha256']}`, guarded differences "
+                f"{[d['path'] for d in h['provenance']['guarded_differences']]}, "
+                f"{h['provenance']['uncommitted_paths']} uncommitted paths"
+            ]
+            if h["provenance"].get("mode") == LOCAL_MODE
+            else []
+        ),
         f"- Queries: {h['query_identity']['count']} (sha256 "
         f"`{h['query_identity']['query_set_sha256']}`)",
         f"- Embedding `{h['models']['embedding']['model_id']}@"
@@ -1457,12 +1718,16 @@ def library_versions() -> dict:
     return out
 
 
-def preflight(settings) -> dict:
+def preflight(settings, local: LocalSnapshot | None = None) -> dict:
     """Every invariant the benchmark depends on, before any setup, database or model work.
-    Runs in the parent and again in every child."""
+    Runs in the parent and again in every child. With `local`, the local-snapshot provenance
+    replaces the clean-tree check and the binding must equal the reviewed one (if given)."""
     from ecommerce_search.search.hybrid import RRF_K_STATUS as runtime_status
 
-    provenance = check_provenance(ROOT)
+    if local is None:
+        provenance = check_provenance(ROOT)
+    else:
+        provenance = check_local_snapshot(ROOT, local.accepted)
     identity = query_identity()
     hybrid.check_protocol_identity()
     base = check_base_settings(settings, runtime_status)
@@ -1470,7 +1735,21 @@ def preflight(settings) -> dict:
     import psutil
 
     peak_rss_bytes(psutil.Process())  # refuse now if peak RSS is not measurable
+    if local is not None:
+        binding = local_binding(provenance, identity, base, models)
+        digest = binding_sha256(binding)
+        if local.binding_sha256 is not None and local.binding_sha256 != digest:
+            raise ProvenanceError(
+                f"the local-snapshot binding is {digest}, not the reviewed {local.binding_sha256}"
+            )
+        provenance = {**provenance, "binding": binding, "binding_sha256": digest}
     return {"provenance": provenance, "identity": identity, "settings": base, "models": models}
+
+
+def local_from_args(args: argparse.Namespace) -> LocalSnapshot | None:
+    if not getattr(args, "local_snapshot", False):
+        return None
+    return LocalSnapshot(parse_accepted(args.accept_guarded_change), args.binding_sha256)
 
 
 def child_main(args: argparse.Namespace) -> int:  # pragma: no cover - needs a database and model
@@ -1483,7 +1762,7 @@ def child_main(args: argparse.Namespace) -> int:  # pragma: no cover - needs a d
     process = psutil.Process()
     settings = get_settings()
     check_child_args(args, settings.postgres_db)
-    checked = preflight(settings)
+    checked = preflight(settings, local_from_args(args))
     name = args.database
     queries = checked["identity"]["queries"]
     models = checked["models"]
@@ -1666,7 +1945,55 @@ def database_exists(admin, name: str) -> bool:  # pragma: no cover - reads the s
     return bool(found)
 
 
-def parent_main() -> int:  # pragma: no cover - runs the benchmark
+def local_child_args(local: LocalSnapshot | None, binding_hash: str | None) -> list[str]:
+    """The extra child arguments of a local-snapshot run (none in the M8 mode)."""
+    if local is None:
+        return []
+    argv = ["--local-snapshot", "--binding-sha256", str(binding_hash)]
+    for path, blob in sorted(local.accepted.items()):
+        argv += ["--accept-guarded-change", f"{path}={blob}"]
+    return argv
+
+
+def run_preflight(local: LocalSnapshot | None, output_dir: Path | None) -> int:
+    """Print every identity a run would be bound to; no database, no model load, no writes."""
+    from ecommerce_search.config import get_settings
+
+    install_network_guard()
+    os.environ.update(OFFLINE_ENV)
+    checked = preflight(get_settings(), local)
+    provenance = checked["provenance"]
+    if local is None:
+        out_dir = check_output_dir(ROOT, OUTPUT_DIR)
+        check_fresh_output(out_dir)
+        experiment_id = experiment_id_for(provenance["harness_head"])
+    else:
+        out_dir = check_local_output_dir(ROOT, output_dir)  # type: ignore[arg-type]
+        experiment_id = local_experiment_id(provenance["binding_sha256"])
+        for diff in provenance["guarded_differences"]:
+            print(
+                f"guarded difference {diff['path']}: production {diff['production_blob']}, "
+                f"HEAD {diff['head_blob']}, working tree {diff['working_blob']} "
+                f"(committed since production: {diff['committed_since_production']}, "
+                f"uncommitted: {diff['uncommitted']})"
+            )
+        print(f"source_tree_sha256 {provenance['source_tree_sha256']}")
+        print(
+            f"uncommitted paths {provenance['uncommitted_paths']} "
+            f"({provenance['uncommitted_paths_outside_source']} outside the fingerprinted source)"
+        )
+        print(f"binding_sha256 {provenance['binding_sha256']}")
+    print(f"harness HEAD {provenance['harness_head']}")
+    print(f"production commit {provenance['production_commit']}")
+    print(f"experiment id {experiment_id}")
+    print(f"output directory {out_dir.relative_to(ROOT).as_posix()} (free)")
+    print("preflight OK: no database, no model load, nothing written")
+    return 0
+
+
+def parent_main(
+    local: LocalSnapshot | None = None, output_dir: Path | None = None
+) -> int:  # pragma: no cover - runs the benchmark
     from sqlalchemy import create_engine
 
     from ecommerce_search.config import get_settings
@@ -1676,10 +2003,14 @@ def parent_main() -> int:  # pragma: no cover - runs the benchmark
     install_network_guard()
     os.environ.update(OFFLINE_ENV)
     settings = get_settings()
-    checked = preflight(settings)
+    checked = preflight(settings, local)
     provenance = checked["provenance"]
-    out_dir = check_output_dir(ROOT, OUTPUT_DIR)
-    experiment_id = experiment_id_for(provenance["harness_head"])
+    if local is None:
+        out_dir = check_output_dir(ROOT, OUTPUT_DIR)
+        experiment_id = experiment_id_for(provenance["harness_head"])
+    else:
+        out_dir = check_local_output_dir(ROOT, output_dir)  # type: ignore[arg-type]
+        experiment_id = local_experiment_id(provenance["binding_sha256"])
     paths = artifact_paths(check_fresh_output(out_dir), experiment_id)
     power_start = power_status()
     if power_start.get("available") and not power_start.get("ac_online"):
@@ -1730,6 +2061,7 @@ def parent_main() -> int:  # pragma: no cover - runs the benchmark
                     str(WARMUP_PER_QUERY),
                     "--samples",
                     str(TIMED_PER_QUERY),
+                    *local_child_args(local, provenance.get("binding_sha256")),
                 ]
                 run_started = time.perf_counter()
                 with dropped_after(admin, name, settings.postgres_db):
@@ -1775,7 +2107,21 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--print-protocol", action="store_true", help="print the predeclared protocol"
     )
+    mode.add_argument(
+        "--preflight", action="store_true", help="check and print the run identity; no run"
+    )
     mode.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--local-snapshot", action="store_true", help="M10 local-snapshot mode (see the docstring)"
+    )
+    parser.add_argument(
+        "--accept-guarded-change",
+        action="append",
+        metavar="PATH=BLOB",
+        help="declare one guarded-path difference (local-snapshot mode only)",
+    )
+    parser.add_argument("--binding-sha256", help="the reviewed local-snapshot binding hash")
+    parser.add_argument("--output-dir", type=Path, help="new output directory (local mode only)")
     parser.add_argument("--run", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--database", help=argparse.SUPPRESS)
     parser.add_argument("--experiment-id", help=argparse.SUPPRESS)
@@ -1785,8 +2131,24 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def check_mode_args(args: argparse.Namespace) -> None:
+    """Local-snapshot options exist only in the local-snapshot mode; the M8 mode is unchanged."""
+    local_options = (args.accept_guarded_change, args.binding_sha256, args.output_dir)
+    if not args.local_snapshot:
+        if any(option is not None for option in local_options):
+            raise BenchmarkError("local-snapshot options require --local-snapshot")
+        return
+    if not (args.execute or args.preflight or args.child):
+        raise BenchmarkError("--local-snapshot applies only to --preflight and --execute")
+    if args.execute and (args.binding_sha256 is None or args.output_dir is None):
+        raise BenchmarkError("--execute --local-snapshot needs --binding-sha256 and --output-dir")
+    if args.preflight and args.output_dir is None:
+        raise BenchmarkError("--preflight --local-snapshot needs --output-dir")
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    check_mode_args(args)
     if args.print_protocol:
         print(protocol_text())
         return 0
@@ -1796,7 +2158,9 @@ def main(argv=None) -> int:
         return 1 if problems else 0
     if args.child:
         return child_main(args)
-    return parent_main()
+    if args.preflight:
+        return run_preflight(local_from_args(args), args.output_dir)
+    return parent_main(local_from_args(args), args.output_dir)
 
 
 if __name__ == "__main__":
