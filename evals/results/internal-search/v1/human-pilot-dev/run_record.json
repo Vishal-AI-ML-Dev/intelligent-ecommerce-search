@@ -1,0 +1,306 @@
+{
+  "disclosures": [
+    "Development-scoped evaluation on the human-reviewed pilot/dev Golden Dataset (review-2). It is development / rubric-calibration data, not held-out test evidence; no held-out performance claim is permitted.",
+    "Recorded retrieval runs: the ranked lists are the top-20 source runs in the unsealed pool provenance, recorded before labelling and scored here with the newly frozen human labels. No retrieval was re-run and no latency was measured.",
+    "Not official M10 completion. rrf_k and the embedding model are not re-decided here; any recommendation drawn from these results is development-scoped.",
+    "Pooled recall: the denominator counts only the relevant pairs in the judged pool (pool-1), so recall is biased upward where more products are relevant than were pooled.",
+    "V3-d10 at K=20: ranks 11-20 of the depth-10 lists were not reranked and keep the fused V2 order, so V3-d10@20 mixes reranked and unreranked results.",
+    "Unjudged results count as not relevant and are counted separately (unjudged@K). Every evaluated list was pooled, so unjudged@K is expected to be 0; it is computed, not assumed.",
+    "Label limitations (see docs/golden-dataset-m9.md): the primary annotator (ann-1) saw machine label proposals and was AI-assisted on the rubric; blindness was procedural; inter-annotator agreement describes the cs-1 sample only; optional adjudication candidates were not re-adjudicated.",
+    "Small slices: the pilot has few Hinglish and noisy queries; per-query and per-slice values are anecdotes, not estimates. No significance test is run.",
+    "The machine-label provisional M10 analysis (docs/m10-provisional-evaluation.md) is separate historical evidence and is not combined with these results."
+  ],
+  "evaluation_source": {
+    "code_files": [
+      {
+        "git_state": "committed_unchanged",
+        "path": "evals/metrics/retrieval.py",
+        "sha256": "fe0bf6a9b0bc12d6a4dfc7b0775669931679010b7298ac08945931ee617b8de8"
+      },
+      {
+        "git_state": "untracked",
+        "path": "evals/runners/evaluate_human_pilot_dev.py",
+        "sha256": "f26d8daa80135e64a3a1a80abbeb6428816fb086f3ac2ddea91a9fd00c030cc5"
+      },
+      {
+        "git_state": "untracked",
+        "path": "evals/runners/unseal_provenance.py",
+        "sha256": "a676a32524d2b8e60bafa0f851b2555ac6d641ead2f8398e59781214c56cd8d1"
+      },
+      {
+        "git_state": "committed_unchanged",
+        "path": "evals/contracts/canonical.py",
+        "sha256": "eb2d26cb6efdefc506207a7e1d06e11c07e80de3a9377e988c3406e54940b45a"
+      },
+      {
+        "git_state": "modified",
+        "path": "evals/contracts/constants.py",
+        "sha256": "a1c8657121fc461e9f7a8b1495bfcfb75072540e85df106435e379bae8b2748e"
+      },
+      {
+        "git_state": "modified",
+        "path": "evals/contracts/manifest.py",
+        "sha256": "42564b12101ca67b2dc61d10c6b6a5b5e24d11ad51c4ee36605ad8f4ce18afe1"
+      },
+      {
+        "git_state": "modified",
+        "path": "evals/contracts/models.py",
+        "sha256": "a290d60398a36682e56e0f227473a796967b2251e92f72d3c5d0646c576098a5"
+      }
+    ],
+    "git_head": "8c57bdbdbf70496b50fc28fa7c59c3ca5e543069",
+    "golden_files": [
+      {
+        "git_state": "untracked",
+        "path": "final_judgements.jsonl",
+        "sha256": "42cd3a6a67465069e149f7ad1c54a1d92a1af1cb49f52198b8a2ecdb68ce50bd"
+      },
+      {
+        "git_state": "committed_unchanged",
+        "path": "eligibility.jsonl",
+        "sha256": "3505da68df2f7cbe562504416774c5b013b7335ce96c66efe788c5927ed8aff5"
+      },
+      {
+        "git_state": "untracked",
+        "path": "provenance.json",
+        "sha256": "fc6526f9863ede2eb48b3fe3162dfc804b7138f21e26c8c7576d70f704a078a8"
+      },
+      {
+        "git_state": "untracked",
+        "path": "manifests/5-labels_frozen.json",
+        "sha256": "835141b2b5109e6d603f1db21fd6073c3641ed10acb2f02f014dd5bdbfcefa02"
+      },
+      {
+        "git_state": "untracked",
+        "path": "manifests/6-provenance_unsealed.json",
+        "sha256": "8a9771b264742cd65410a8372523007b0d0d8d09d66454fda000324d2e67e570"
+      }
+    ],
+    "retrieval_runtime_trees_equal_head": true,
+    "statements": [
+      "The evaluation code was not fully committed when this ran: each source file is identified by its SHA-256 and git state, not by a commit.",
+      "The golden chain files were not committed when this ran: they are identified by their manifest and file SHA-256 values.",
+      "The working tree was not clean (53 uncommitted paths); the git HEAD alone does not reproduce this evaluation."
+    ],
+    "uncommitted_path_count": 53,
+    "working_tree_clean": false
+  },
+  "evaluation_version": "hpd-1",
+  "evaluator": {
+    "config": {
+      "decimals": 10,
+      "evaluator_version": "eval-1",
+      "gains": [
+        [
+          "relevant",
+          2
+        ],
+        [
+          "borderline",
+          1
+        ],
+        [
+          "not_relevant",
+          0
+        ]
+      ],
+      "k_values": [
+        5,
+        10,
+        20
+      ],
+      "lenient_labels": [
+        "borderline",
+        "relevant"
+      ],
+      "primary_definition": "strict",
+      "primary_k": 10,
+      "strict_labels": [
+        "relevant"
+      ]
+    },
+    "source_path": "evals/metrics/retrieval.py",
+    "source_sha256": "fe0bf6a9b0bc12d6a4dfc7b0775669931679010b7298ac08945931ee617b8de8",
+    "version": "eval-1"
+  },
+  "golden": {
+    "dataset_checksum_sha256": "2c1c5fa43eec5f7346df40c17e57c07f6594ab1833c5d9d4c862e6d2e8bbbbc8",
+    "dataset_id": "synthetic-seed",
+    "dataset_version": "1",
+    "eligibility_count": 568,
+    "eligibility_sha256": "3505da68df2f7cbe562504416774c5b013b7335ce96c66efe788c5927ed8aff5",
+    "final_decided_in": {
+      "adjudication": 76,
+      "consensus": 21,
+      "primary": 471
+    },
+    "final_judgement_count": 568,
+    "final_judgements_sha256": "42cd3a6a67465069e149f7ad1c54a1d92a1af1cb49f52198b8a2ecdb68ce50bd",
+    "final_labels": {
+      "borderline": 261,
+      "not_relevant": 83,
+      "relevant": 224
+    },
+    "golden_id": "internal-search",
+    "golden_version": 1,
+    "labels_frozen_at": "2026-10-17T03:32:53.373671+00:00",
+    "labels_frozen_manifest_sha256": "16358129b12bc094660bca739aff4e8a5edc3c9e080cd5d868a19549d2e2136c",
+    "partitions": {
+      "pilot_dev": 20,
+      "test": 0
+    },
+    "partitions_sha256": "033735f19e56f56de89733f7687d191380377fc97ed61d5061ec255550c24162",
+    "provenance_binding": "fc6526f9863ede2eb48b3fe3162dfc804b7138f21e26c8c7576d70f704a078a8",
+    "provenance_sha256": "fc6526f9863ede2eb48b3fe3162dfc804b7138f21e26c8c7576d70f704a078a8",
+    "provenance_unsealed_manifest_sha256": "413b72edd507bf34a3302297b05180a392f4c1a28715451de5296beaafa43002",
+    "review_protocol": "review-2",
+    "versions": {
+      "blind_order": "blind-1",
+      "consistency_sample": "cs-1",
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+      "embedding_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+      "filter_policy": "fp-1",
+      "lexicon": "1",
+      "parser": "qu-1",
+      "pool_policy": "pool-1",
+      "reranker_model": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "233902d25c440f23af6f7d6e94d2946bac0bee0a",
+      "rubric": "rubric-1"
+    }
+  },
+  "outputs": {
+    "metrics/v0_lexical.json": "abab581f40960bd4b1dc64ad10651e45ef8f2c35d9ac045dc3821df863c28258",
+    "metrics/v1_hybrid.json": "61a38d0adfe131906fa31e7e79c18e75b8d63b5cb7352121bd89ea0936e459e9",
+    "metrics/v2_filtered.json": "b18c60fec080670399e6b79b4bdfe6eae998ff0dd1e306744d570c56b5d8f5cd",
+    "metrics/v3_reranked_d10.json": "6d270698e4e3b68bbcce710159eb2362d5f134fae6c775a0c63e59ab2fb78c4b",
+    "metrics/v3_reranked_d20.json": "4a47ced6f23a6a576dae41b1f5373326de54ab494cbb369377fbdda114d7dbee",
+    "summary.json": "b7311102b8003e04fe3dbf14a1a3a024214987069304e9e90cd67f4ef59771f3"
+  },
+  "record_version": 1,
+  "retrieval_runs": {
+    "component_versions": {
+      "document_version": "1",
+      "embedding_text_version": "1",
+      "filter_policy": "fp-1",
+      "lexicon": "1",
+      "parser": "qu-1",
+      "rerank_document_version": "rd-1",
+      "rrf_k_status": "provisional"
+    },
+    "configuration_sha256": "045a73ed83ebf4002b609cef18adc765940975a0a585555ff1d155410e7c0f0e",
+    "kind": "recorded pool-provenance source runs (not fresh retrieval runs)",
+    "library_versions": {
+      "fastapi": "0.142.2",
+      "pgvector": "0.5.0",
+      "psycopg": "3.3.6",
+      "sentence-transformers": "6.1.0",
+      "sqlalchemy": "2.1.1",
+      "tokenizers": "0.23.2",
+      "torch": "2.14.1+cpu",
+      "transformers": "5.18.0"
+    },
+    "model_pins": {
+      "embedding_config_sha256": "6d5cfc238e11c60053e8227b5206d295ef4f06b3fcfbd8d359c2bbb96efb743b",
+      "embedding_model_id": "sentence-transformers/all-MiniLM-L6-v2",
+      "embedding_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+      "reranker_config_sha256": "b30e3ddda48b373d0d929ee16aeec5a2282680b927e47340c5c58c7b299bdef2",
+      "reranker_model_id": "cross-encoder/ms-marco-MiniLM-L6-v2",
+      "reranker_revision": "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+    },
+    "not_evaluated": [
+      "dense_only"
+    ],
+    "provenance_run_id": "045a73ed83ebf400",
+    "runtime_trees": {
+      "alembic.ini": "e643da5b2c5655c4ceda1f5725899ee1dcfa8ab1",
+      "data/seed": "3f3cd824de27c8a2d946761b20ddf3a1fba9e233",
+      "migrations": "0efcdb7c95195ff638f33ae7412218ad4f43416f",
+      "src": "52260b30bca7d2fcc760cf0b5fca1896ba3e9a9f",
+      "uv.lock": "cd92faf5700044cbaafed740bf6693ce65c9bd60"
+    },
+    "settings": {
+      "embedding_batch_size": "32",
+      "reranker_batch_size": "16",
+      "reranker_enabled": "true",
+      "search_candidate_k": "50",
+      "search_default_top_k": "10",
+      "search_dense_k": "50",
+      "search_lexical_k": "50",
+      "search_max_query_length": "200",
+      "search_rerank_depth": "20",
+      "search_rrf_k": "100"
+    },
+    "source_top_k": 20,
+    "systems": [
+      {
+        "empty_queries": 10,
+        "endpoints": [
+          "/search"
+        ],
+        "label": "V0",
+        "queries": 20,
+        "reranker_depths": [],
+        "search_versions": [
+          "v0_lexical"
+        ],
+        "system": "v0_lexical"
+      },
+      {
+        "empty_queries": 0,
+        "endpoints": [
+          "/search/hybrid"
+        ],
+        "label": "V1",
+        "queries": 20,
+        "reranker_depths": [],
+        "search_versions": [
+          "v1_hybrid"
+        ],
+        "system": "v1_hybrid"
+      },
+      {
+        "empty_queries": 1,
+        "endpoints": [
+          "/search/filtered"
+        ],
+        "label": "V2",
+        "queries": 20,
+        "reranker_depths": [],
+        "search_versions": [
+          "v2_filtered"
+        ],
+        "system": "v2_filtered"
+      },
+      {
+        "empty_queries": 1,
+        "endpoints": [
+          "/search/reranked"
+        ],
+        "label": "V3",
+        "queries": 20,
+        "reranker_depths": [
+          20
+        ],
+        "search_versions": [
+          "v3_reranked"
+        ],
+        "system": "v3_reranked_d20"
+      },
+      {
+        "empty_queries": 1,
+        "endpoints": [
+          "/search/reranked"
+        ],
+        "label": "V3-d10 (secondary)",
+        "queries": 20,
+        "reranker_depths": [
+          10
+        ],
+        "search_versions": [
+          "v3_reranked"
+        ],
+        "system": "v3_reranked_d10"
+      }
+    ]
+  }
+}

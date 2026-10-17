@@ -1,0 +1,624 @@
+{
+  "evaluation_version": "hpd-1",
+  "evaluator_version": "eval-1",
+  "k_values": [
+    5,
+    10,
+    20
+  ],
+  "note": "Macro means over the queries where defined (n defined, excluded undefined). Every metric at every K is in metrics/<system>.json.",
+  "primary_definition": "strict",
+  "primary_k": 10,
+  "systems": [
+    {
+      "label": "V0",
+      "primary": [
+        {
+          "definition": "strict",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.4000000000"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.4000000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "recall",
+          "n": 18,
+          "value": "0.3997994538"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "recall",
+          "n": 19,
+          "value": "0.1732742139"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 18,
+          "value": "0.5555555556"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 19,
+          "value": "0.5263157895"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "ndcg",
+          "n": 19,
+          "value": "0.4655663108"
+        },
+        {
+          "definition": "hard",
+          "excluded": 10,
+          "k": 10,
+          "metric": "csr",
+          "n": 10,
+          "value": "1.0000000000"
+        },
+        {
+          "definition": "fp1",
+          "excluded": 10,
+          "k": 10,
+          "metric": "csr",
+          "n": 10,
+          "value": "1.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 10,
+          "k": 10,
+          "metric": "irrelevant_result_rate",
+          "n": 10,
+          "value": "0.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": 10,
+          "metric": "unjudged",
+          "n": 20,
+          "value": "0.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": null,
+          "metric": "zero_result",
+          "n": 20,
+          "value": "0.5000000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 18,
+          "k": null,
+          "metric": "correct_empty",
+          "n": 2,
+          "value": "1.0000000000"
+        }
+      ],
+      "query_count": 20,
+      "returned_total": {
+        "10": 80,
+        "20": 116,
+        "5": 46
+      },
+      "system": "v0_lexical",
+      "unjudged_total": {
+        "10": 0,
+        "20": 0,
+        "5": 0
+      },
+      "zero_result_queries": 10
+    },
+    {
+      "label": "V1",
+      "primary": [
+        {
+          "definition": "strict",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.5650000000"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.9150000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "recall",
+          "n": 18,
+          "value": "0.5809398047"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "recall",
+          "n": 19,
+          "value": "0.3929442686"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 18,
+          "value": "0.8166666667"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 19,
+          "value": "1.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "ndcg",
+          "n": 19,
+          "value": "0.8941755305"
+        },
+        {
+          "definition": "hard",
+          "excluded": 1,
+          "k": 10,
+          "metric": "csr",
+          "n": 19,
+          "value": "0.6263157895"
+        },
+        {
+          "definition": "fp1",
+          "excluded": 1,
+          "k": 10,
+          "metric": "csr",
+          "n": 19,
+          "value": "0.6736842105"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": 10,
+          "metric": "irrelevant_result_rate",
+          "n": 20,
+          "value": "0.0850000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": 10,
+          "metric": "unjudged",
+          "n": 20,
+          "value": "0.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": null,
+          "metric": "zero_result",
+          "n": 20,
+          "value": "0.0000000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 18,
+          "k": null,
+          "metric": "correct_empty",
+          "n": 2,
+          "value": "0.0000000000"
+        }
+      ],
+      "query_count": 20,
+      "returned_total": {
+        "10": 200,
+        "20": 400,
+        "5": 100
+      },
+      "system": "v1_hybrid",
+      "unjudged_total": {
+        "10": 0,
+        "20": 0,
+        "5": 0
+      },
+      "zero_result_queries": 0
+    },
+    {
+      "label": "V2",
+      "primary": [
+        {
+          "definition": "strict",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.6550000000"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.8250000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "recall",
+          "n": 18,
+          "value": "0.7114466273"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "recall",
+          "n": 19,
+          "value": "0.3440782526"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 18,
+          "value": "0.9513888889"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 19,
+          "value": "0.9473684211"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "ndcg",
+          "n": 19,
+          "value": "0.8753235072"
+        },
+        {
+          "definition": "hard",
+          "excluded": 2,
+          "k": 10,
+          "metric": "csr",
+          "n": 18,
+          "value": "0.8722222222"
+        },
+        {
+          "definition": "fp1",
+          "excluded": 2,
+          "k": 10,
+          "metric": "csr",
+          "n": 18,
+          "value": "0.9444444444"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "irrelevant_result_rate",
+          "n": 19,
+          "value": "0.0631578947"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": 10,
+          "metric": "unjudged",
+          "n": 20,
+          "value": "0.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": null,
+          "metric": "zero_result",
+          "n": 20,
+          "value": "0.0500000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 18,
+          "k": null,
+          "metric": "correct_empty",
+          "n": 2,
+          "value": "0.5000000000"
+        }
+      ],
+      "query_count": 20,
+      "returned_total": {
+        "10": 177,
+        "20": 302,
+        "5": 91
+      },
+      "system": "v2_filtered",
+      "unjudged_total": {
+        "10": 0,
+        "20": 0,
+        "5": 0
+      },
+      "zero_result_queries": 1
+    },
+    {
+      "label": "V3",
+      "primary": [
+        {
+          "definition": "strict",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.6500000000"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.8250000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "recall",
+          "n": 18,
+          "value": "0.7058910718"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "recall",
+          "n": 19,
+          "value": "0.3440782526"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 18,
+          "value": "0.8888888889"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 19,
+          "value": "0.9473684211"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "ndcg",
+          "n": 19,
+          "value": "0.8655075724"
+        },
+        {
+          "definition": "hard",
+          "excluded": 2,
+          "k": 10,
+          "metric": "csr",
+          "n": 18,
+          "value": "0.8722222222"
+        },
+        {
+          "definition": "fp1",
+          "excluded": 2,
+          "k": 10,
+          "metric": "csr",
+          "n": 18,
+          "value": "0.9444444444"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "irrelevant_result_rate",
+          "n": 19,
+          "value": "0.0631578947"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": 10,
+          "metric": "unjudged",
+          "n": 20,
+          "value": "0.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": null,
+          "metric": "zero_result",
+          "n": 20,
+          "value": "0.0500000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 18,
+          "k": null,
+          "metric": "correct_empty",
+          "n": 2,
+          "value": "0.5000000000"
+        }
+      ],
+      "query_count": 20,
+      "returned_total": {
+        "10": 177,
+        "20": 302,
+        "5": 91
+      },
+      "system": "v3_reranked_d20",
+      "unjudged_total": {
+        "10": 0,
+        "20": 0,
+        "5": 0
+      },
+      "zero_result_queries": 1
+    },
+    {
+      "label": "V3-d10 (secondary)",
+      "primary": [
+        {
+          "definition": "strict",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.6550000000"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 0,
+          "k": 10,
+          "metric": "precision",
+          "n": 20,
+          "value": "0.8250000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "recall",
+          "n": 18,
+          "value": "0.7114466273"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "recall",
+          "n": 19,
+          "value": "0.3440782526"
+        },
+        {
+          "definition": "strict",
+          "excluded": 2,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 18,
+          "value": "0.8907407407"
+        },
+        {
+          "definition": "lenient",
+          "excluded": 1,
+          "k": 10,
+          "metric": "reciprocal_rank",
+          "n": 19,
+          "value": "0.9473684211"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "ndcg",
+          "n": 19,
+          "value": "0.8665294994"
+        },
+        {
+          "definition": "hard",
+          "excluded": 2,
+          "k": 10,
+          "metric": "csr",
+          "n": 18,
+          "value": "0.8722222222"
+        },
+        {
+          "definition": "fp1",
+          "excluded": 2,
+          "k": 10,
+          "metric": "csr",
+          "n": 18,
+          "value": "0.9444444444"
+        },
+        {
+          "definition": "none",
+          "excluded": 1,
+          "k": 10,
+          "metric": "irrelevant_result_rate",
+          "n": 19,
+          "value": "0.0631578947"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": 10,
+          "metric": "unjudged",
+          "n": 20,
+          "value": "0.0000000000"
+        },
+        {
+          "definition": "none",
+          "excluded": 0,
+          "k": null,
+          "metric": "zero_result",
+          "n": 20,
+          "value": "0.0500000000"
+        },
+        {
+          "definition": "strict",
+          "excluded": 18,
+          "k": null,
+          "metric": "correct_empty",
+          "n": 2,
+          "value": "0.5000000000"
+        }
+      ],
+      "query_count": 20,
+      "returned_total": {
+        "10": 177,
+        "20": 302,
+        "5": 91
+      },
+      "system": "v3_reranked_d10",
+      "unjudged_total": {
+        "10": 0,
+        "20": 0,
+        "5": 0
+      },
+      "zero_result_queries": 1
+    }
+  ]
+}
