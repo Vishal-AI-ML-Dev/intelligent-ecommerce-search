@@ -2,34 +2,43 @@
 
 > **WARNING — 568/568 labels are deterministic machine-generated weak labels. Human audit
 > coverage: 0/568 (0%). Two started human audit decisions were abandoned, archived and excluded.
-> These results are provisional development diagnostics only. They are not Golden Dataset
-> results or final held-out test evidence.**
+> A later 100-entry rapid non-blind acceptance attempt did not establish substantive review and
+> was also archived and excluded. These results are provisional development diagnostics only.
+> They are not Golden Dataset results or final held-out test evidence.**
 
 The machine-only development evaluation is complete. `weak_dev_v1` is a **deterministic machine
 weak-label development set**:
 - every label is an **unaudited machine-generated label** from `weak-label-policy-1`;
 - every metric on it is a **provisional development evaluation**;
 - it is **not a human-reviewed Golden Dataset** and **not final held-out test evidence**;
-- human audit coverage is zero: no label was reviewed, accepted or overridden by a human;
+- human audit coverage is zero: no active label was reviewed, accepted or overridden by a human;
 - there is no delayed intra-annotator consistency measurement and no inter-annotator agreement.
 
 Two human audit decisions were started and then abandoned when the user selected the
 machine-only track. They are archived for auditability and excluded from all labels, metrics and
 human-audit claims. See "Abandoned audit archive".
 
-The strict Golden Dataset lifecycle (`docs/golden-dataset-m9.md`) is separate and stays paused at
-0/568 primary judgements. The strict Golden Dataset is incomplete and final M10 evidence is
-incomplete. This track did not start strict annotation, the 72-hour consistency clock or M10, and
-it writes nothing into the strict paths.
+A later 100-entry rapid non-blind acceptance attempt was recorded by `ann-1` on 2026-10-06. It
+took about 98 seconds, with a median gap of 0.35 seconds between decisions, so substantive review
+of each query, product card and proposal was not established. It was archived privately and
+excluded from labels, metrics, validated human-audit coverage and accuracy claims. Active
+meaningful weak-audit coverage remains 0/100. See "Rapid-acceptance archive".
+
+The strict Golden Dataset lifecycle (`docs/golden-dataset-m9.md`) is separate. When this track
+was committed (`aa0962c`), the strict track was paused at 0/568 primary judgements. Since then
+(2026-10-17), the strict human-reviewed pilot/dev Golden Dataset is complete under `review-2`,
+with disclosed limitations. The held-out test dataset is deferred, and official M10 has not
+started. This track did not start strict annotation, the
+72-hour consistency clock or M10, and it writes nothing into the strict paths.
 
 ## Status
 
 | Step | State |
 |---|---|
 | Proposal generation (`weak-label-policy-1`) | Done (`07416a3`). Two fresh-process runs were byte-identical; stored and verified |
-| Audit queue (`weak-audit-1`, 100 pairs) | Generated, but not used: the user chose the machine-only path |
-| Human audit | **Not performed (0/100).** Two started decisions were abandoned and archived (see below) |
-| `weak_dev_sealed` (audited assembly) | Not run, and not applicable to the machine-only path |
+| Audit queue (`weak-audit-1`, 100 pairs) | Generated. Used only by the two archived attempts (abandoned; rapid acceptance); no active decisions |
+| Human audit | **Not established (0/100 active).** Two started decisions were abandoned and archived; a later 100-entry rapid acceptance attempt was archived and excluded (see below) |
+| `weak_dev_sealed` (audited assembly) | No active output. It was run once on the rapid acceptance attempt; those outputs were never committed and were moved to the private archive |
 | **Machine-only finalization (`weak_machine_dev_sealed`)** | **Done.** 568/568 machine labels, provisional V0–V3 metrics and report; two fresh-process builds byte-identical |
 
 ## Identities
@@ -165,7 +174,7 @@ Because every pilot query is audited, every query type is covered: semantic (`gq
 ambiguous (`gq-p18`), zero-eligible (`gq-p19`) and out-of-catalog (`gq-p20`). The queue
 validator enforces this coverage.
 
-## The audit tooling (not used; human audit coverage 0)
+## The audit tooling (no active decisions; human audit coverage 0)
 
 ```text
 uv run python -m evals.weak_labels audit --annotator ann-1
@@ -210,7 +219,7 @@ Other commands:
 - `validate`: re-check the decision file.
 - `verify`: re-verify the generation.
 
-## Audited assembly (tooling only; not run)
+## Audited assembly (tooling only; no active output)
 
 ```text
 uv run python -m evals.weak_labels assemble --annotator ann-1
@@ -404,6 +413,40 @@ records:
 
 The archive is never committed and never imported. The active audit has 0 decisions.
 
+## Rapid-acceptance archive
+
+On 2026-10-06 `ann-1` opened a fresh audit work directory and recorded 100 decisions for the 100
+queued pairs. All 100 accepted the proposal and none overrode it. The run took about 98 seconds,
+with a median gap of 0.35 seconds between decisions. This timing does not demonstrate that each
+query, product card and proposal received substantive independent review. The run is treated as
+rapid operator acceptance, not as evidence of label accuracy. `assemble`, `audit-report` and
+`metrics` were then run, producing `weak_dev_sealed` outputs. Every final label equalled its
+machine proposal, and every comparable V0–V3 metric was identical to the machine-only outputs.
+
+With the user's approval, the run was archived and excluded:
+- the unedited work directory was moved atomically from
+  `data/processed/weak_audit/9dc1fab28fbd89e9/` to the git-ignored
+  `data/processed/weak_audit_archive/rapid-acceptance-2026-10-06-9dc1fab28fbd89e9/`;
+- the seven never-committed public outputs (`audit_decisions.jsonl`, `weak_final_labels.jsonl`,
+  `weak_dev_sealed.json` and `reports/{audit_report,provisional_metrics}.{json,md}`) were moved
+  out of `evals/weaksets/internal-search/v1/` into that archive's `removed-public-outputs/`;
+- the decisions and their per-decision timestamps are not published.
+
+| File | SHA-256 (identical before and after the move) |
+|---|---|
+| `audit_decisions.jsonl` | `d101d18f0ef913d08cda284823296940d681feb807648882493967b7eef5385e` |
+| `binding.json` | `6aedd5c055937f56c9bb860c3bfa9b3b24b127610dfb5d0b6a8a59fa44448b80` |
+
+The metadata record `rapid-acceptance-2026-10-06-9dc1fab28fbd89e9.archive.json`, beside the
+folder, records:
+- `status: archived_rapid_acceptance_attempt`, `decision_count: 100` (100 accepted, 0 overridden);
+- the binding, the hashes of every archived file and the measured timing;
+- `included_in_machine_labels`, `included_in_metrics`, `included_in_human_audit_statistics`,
+  `included_in_validated_human_audit_coverage` and `included_in_accuracy_claims`, all `false`.
+
+It is separate from the abandoned two-decision archive, which is unchanged. The committed
+machine-only outputs remain the canonical provisional evidence.
+
 ## Limitations
 
 - **Unaudited machine labels.** All 568 labels are unaudited machine-generated weak labels
@@ -413,8 +456,11 @@ The archive is never committed and never imported. The active audit has 0 decisi
   constraints that V2/V3 filter on, which may favour those versions.
 - **Abandoned decisions.** Two started human audit decisions were abandoned, archived and
   excluded.
-- The audit-related limitations below (anchoring, sampling, exposure) apply only if a human
-  audit is ever run.
+- **Rapid acceptance attempt.** A 100-entry rapid non-blind acceptance attempt (about 98
+  seconds, median gap 0.35 seconds) did not establish substantive review. It was archived and
+  excluded and is not human-audit coverage.
+- The audit-related limitations below (anchoring, sampling) apply to any future human audit. The
+  exposure limitation already applies.
 - **Non-blind audit.** The auditor sees the proposal, so agreement is biased upward (anchoring)
   and is not an accuracy estimate.
 - **Unrepresentative sample.** The 100 pairs are stratified, not uniform. Rates do not extrapolate
@@ -425,9 +471,10 @@ The archive is never committed and never imported. The active audit has 0 decisi
 - **Not test evidence.** The 20 pilot queries are development/rubric-calibration data, not a
   held-out test set. Pooled recall is biased where more than 25 products are eligible.
 - **Effect on the strict track.** Auditing these proposals exposes `ann-1` to machine labels for
-  100 pooled pairs, and the committed proposals cover all 568. Any later strict blind annotation
-  of the same pool is no longer fully blind for this annotator. This is disclosed here and must
-  be disclosed in any later strict report.
+  100 pooled pairs, and the committed proposals cover all 568. The archived rapid acceptance
+  attempt already showed `ann-1` the proposals for all 100 queued pairs. Any later strict blind
+  annotation of the same pool is no longer fully blind for this annotator. This is disclosed here
+  and must be disclosed in any later strict report.
 - **The cross-encoder** is the provisional M8 compatibility pin (ADR-007), not a quality winner.
 - **Byte identity** held across two runs on this machine with the recorded library versions. It
   is not claimed across other hardware or library versions.

@@ -10,7 +10,13 @@
 > - **This is development evidence only.** It is not Golden Dataset evidence and not held-out
 >   test evidence. The 20 queries are the development pilot.
 > - **M10 is not officially complete.** MASTER_PLAN M10 requires a comparison on the
->   human-reviewed Golden Dataset, and strict M9 is paused at 0/568.
+>   human-reviewed Golden Dataset. Strict status when this analysis was committed (`73c67c1`):
+>   strict M9 was paused at 0/568. Current status (2026-10-17): the strict
+>   human-reviewed pilot/dev Golden Dataset is complete under `review-2`; the held-out test
+>   dataset is deferred; official M10 is not complete. A separate development-scoped report on
+>   the human-reviewed pilot/dev labels is a draft for review
+>   (`docs/m10-human-pilot-dev-evaluation.md`). This analysis stays machine-label only, and the
+>   two are not combined.
 >
 > Every conclusion below is a **machine-label development conclusion**.
 
@@ -247,12 +253,20 @@ wherever it suffices. The priorities below are therefore ordered deterministic-f
 
 ## Status
 
-- **Strict annotation: 0/568.** Strict M9 is paused at 0/568 primary judgements. There is no
-  primary seal, consistency round, adjudication, labels freeze, provenance unsealing or held-out
-  test partition.
-- **Weak-label audit: 0/100.** No machine label was reviewed, accepted or overridden by a human.
+- **Strict annotation: 0/568 (when this analysis was committed, `73c67c1`).** Strict M9 was
+  paused at 0/568 primary judgements. There was no primary seal, consistency round,
+  adjudication, labels freeze, provenance unsealing or held-out test partition. *Update
+  2026-10-17:* the human-reviewed pilot/dev Golden Dataset is now complete under `review-2`:
+  568 frozen labels, provenance unsealed. No consistency round was run, by amendment. The
+  held-out test partition remains deferred. Nothing in this document changes.
+- **Weak-label audit: 0/100.** No active machine label was reviewed, accepted or overridden by a
+  human. A later 100-entry rapid non-blind acceptance attempt (about 98 seconds, median gap 0.35
+  seconds) did not establish substantive review; it was archived and excluded and changes nothing
+  here.
 - **Abandoned decisions: 2, archived and excluded.** They are not in any label, metric or
   statistic.
 - **Provisional M10:** this document exists. It is a development analysis on machine labels only.
-- **Official M10: incomplete.** The report on the human-reviewed Golden Dataset has not been
-  produced. `docs/MASTER_PLAN.md` is unchanged.
+- **Official M10: not complete.** When this document was written, no report on the
+  human-reviewed Golden Dataset existed and `docs/MASTER_PLAN.md` was unchanged. *Update
+  2026-10-17:* a development-scoped pilot/dev report is a draft for review
+  (`docs/m10-human-pilot-dev-evaluation.md`). Nothing in this document changes.

@@ -43,14 +43,16 @@ Other documents written before this revision still use the former numbers. These
 |---|---|---|
 | M0–M8 | Complete as documented | Milestone commits on `main`. `0a93e52` is the historical M8 boundary commit. Per-milestone docs live in `docs/`. |
 | M9 Sessions B, C1 and C2 | Complete | Session B contracts (`15f3ac1`) and Session C1 (`6009fa3`, `queries_frozen` manifest `51204dae…`, confirmed by `ann-1`) are committed. Session C2 froze `pool_frozen` (manifest `4c26628a…`, 568 pairs, private provenance bound by checksum only) and added the blind annotation CLI, primary-seal tooling and the retrieval-metric evaluator (synthetic fixtures only). Development/rubric-calibration data, not test evidence. Details in `docs/golden-dataset-m9.md`. |
-| M9 strict human annotation and later strict steps | Deferred at 0/568 | No human labels exist. The strict Golden Dataset is incomplete. |
+| M9 human-reviewed pilot/dev Golden Dataset (strict track) | Complete under `review-2`, with disclosed limitations (scope designation approved 2026-10-17); committed with this revision | Golden version 1, 20 `pilot_dev` queries: 568 final pilot/dev labels frozen (`labels_frozen` `16358129…`); 114 independent second-human (`ann-2`) reviews sealed; 76 mandatory adjudications and 21 joint resolutions completed; 218 optional candidates not re-adjudicated; provenance unsealed (`provenance_unsealed` `413b72ed…`) and the chain verified. Limitations: `ann-1` saw machine proposals and was AI-assisted on the rubric; blindness is procedural; agreement describes the cs-1 sample only. Development/rubric-calibration data, not held-out test evidence. Details in `docs/golden-dataset-m9.md`. |
+| M9 review protocol amendment `review-2` | Approved 2026-10-15; carried out on real data | Blind second-human review (`ann-2`) of the cs-1 sample with inter-annotator agreement on that sample only; joint consensus adjudication. Replaces the 72-hour intra-annotator consistency round, which is not measured. Details in `docs/golden-dataset-m9.md`. |
+| M9 held-out test dataset | Deferred | Separately authored, sealed test partition with a separately reported Hinglish slice (provisional ≥20%). Size and stratification not approved; nothing authored. No held-out performance claims are permitted. |
 | M9 (optional machine-only development track) | Complete | `weak_dev_v1` (`weak_machine_dev_sealed`): 568/568 labels are machine generated (`weak-label-policy-1`). No delayed consistency measurement exists, and all V0–V3 metrics are provisional. Details in `docs/weak-label-development-m9.md`. |
-| M9 weak-label audit (`weak-audit-1`) | Deferred at 0/100 | Human audit coverage is zero. Two abandoned human audit decisions remain archived and excluded. |
+| M9 weak-label audit (`weak-audit-1`) | Deferred at 0/100 | Active human audit coverage is zero. Two abandoned human audit decisions remain archived and excluded. A later 100-entry rapid non-blind acceptance attempt (about 98 seconds, median gap 0.35 s) did not establish substantive review; it is archived privately and excluded. |
 | M10 provisional development analysis | Complete | Committed as `73c67c1`. Analysis of existing machine-only metrics; development evidence, not test evidence. Details in `docs/m10-provisional-evaluation.md`. |
-| M10 official human-reviewed report | Incomplete (not started) | Requires the strict M9 Golden Dataset, which is deferred. |
+| M10 official human-reviewed report | Not complete; development-scoped draft for review | `docs/m10-human-pilot-dev-evaluation.md` compares V0–V3 on the 20 human-reviewed pilot/dev queries and reports fresh `/search/reranked` latency on a different 17-query set (V0/V1 latency not measured). No reranker approved for development scope only (2026-10-17); configuration unchanged. `rrf_k` and the embedding model are not re-decided. No held-out evidence, because the held-out test dataset is deferred. |
 | M11–M27 | Not started | M27 remains optional. |
 
-The status above was checked against git history at this revision. The test suite was not re-run as part of this documentation change.
+The status above was checked against git history at this revision. The M9 strict-track rows were checked on 2026-10-17 against the read-only verification of the golden chain, which is committed with this revision. The test suite was not re-run as part of this documentation change.
 
 ## 1. Business problem
 
@@ -1070,6 +1072,10 @@ Implement:
 The approved pilot contains only 3 Hinglish queries. They are identified separately, and reports disclose the limited coverage. The pilot is not expanded or redesigned. The held-out test partition, with its Hinglish slice, is planned and approved separately. Pause for real human labeling.
 
 The approved M9 decisions cover labels, the single-annotator workflow and disclosure, pool policy, the dev/test partition, and provenance sealing. They were approved before implementation began, override the generic text here, and must be written into the M9 documentation.
+
+Amendment `review-2` (approved 2026-10-15, after the primary round was complete): the single-annotator decision's delayed intra-annotator consistency round is replaced by a blind second-human review of the same cs-1 sample, reported as inter-annotator agreement on that label-stratified sample only. Disagreements are resolved by joint consensus of both humans, and an unresolved disagreement blocks the label freeze. Intra-annotator consistency is not measured. The original decision text is preserved as history in the M9 documentation.
+
+Scope designation (approved by the owner, 2026-10-17): "M9 human-reviewed pilot/dev Golden Dataset complete under review-2, with disclosed limitations. Separately authored held-out test dataset remains deferred; no held-out performance claims are permitted." This is a scope clarification. It does not remove or change the held-out test partition requirement (§10 and §21): that partition is still separately authored and sealed, with a separately reported Hinglish slice, and its size and stratification are still approved when it is planned. The 20 pilot/dev queries and their labels are never held-out evidence.
 
 M9 does not include:
 
