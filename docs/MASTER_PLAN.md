@@ -49,7 +49,7 @@ Other documents written before this revision still use the former numbers. These
 | M9 (optional machine-only development track) | Complete | `weak_dev_v1` (`weak_machine_dev_sealed`): 568/568 labels are machine generated (`weak-label-policy-1`). No delayed consistency measurement exists, and all V0–V3 metrics are provisional. Details in `docs/weak-label-development-m9.md`. |
 | M9 weak-label audit (`weak-audit-1`) | Deferred at 0/100 | Active human audit coverage is zero. Two abandoned human audit decisions remain archived and excluded. A later 100-entry rapid non-blind acceptance attempt (about 98 seconds, median gap 0.35 s) did not establish substantive review; it is archived privately and excluded. |
 | M10 provisional development analysis | Complete | Committed as `73c67c1`. Analysis of existing machine-only metrics; development evidence, not test evidence. Details in `docs/m10-provisional-evaluation.md`. |
-| M10 official human-reviewed report | Not complete; development-scoped draft for review | `docs/m10-human-pilot-dev-evaluation.md` compares V0–V3 on the 20 human-reviewed pilot/dev queries and reports fresh `/search/reranked` latency on a different 17-query set (V0/V1 latency not measured). No reranker approved for development scope only (2026-10-17); configuration unchanged. `rrf_k` and the embedding model are not re-decided. No held-out evidence, because the held-out test dataset is deferred. |
+| M10 human-reviewed report | Closed, development-scoped (pilot/dev), under the owner-approved M10 scope amendment (2026-10-17); not a claim that all original requirements were met | Approved report `docs/m10-human-pilot-dev-evaluation.md`: V0–V3 on the 20 human-reviewed pilot/dev queries and fresh `/search/reranked` latency on a different 17-query set. Named limitations and deferred items: (1) `rrf_k` = 100 and the embedding model remain provisional, not comparatively re-decided; (2) fresh latency excludes V0, V1 and `/search/filtered`; (3) the latency run has connected-standby contamination and unexplained between-run variation and is not a clean baseline; (4) quality uses recorded actual retrieval runs, not fresh runs; (5) held-out evidence deferred, no held-out or production claims. No reranker approved for development scope only; configuration unchanged. Does not by itself satisfy M16's "M10 complete" prerequisite. |
 | M11–M27 | Not started | M27 remains optional. |
 
 The status above was checked against git history at this revision. The M9 strict-track rows were checked on 2026-10-17 against the read-only verification of the golden chain, which is committed with this revision. The test suite was not re-run as part of this documentation change.
@@ -1094,6 +1094,16 @@ Compare V0–V3 from actual runs on the human-reviewed internal Golden Dataset. 
 
 M10 is complete without ESCI.
 
+Scope amendment (approved by the owner, 2026-10-17): M10 is closed as **development-scoped (pilot/dev)**. This narrows what M10 closure means; it is not a claim that every requirement above was fulfilled. The approved report is `docs/m10-human-pilot-dev-evaluation.md`. Named limitations and deferred items:
+
+1. `rrf_k` = 100 and the current embedding model remain provisional; neither was comparatively re-decided.
+2. Fresh latency coverage excludes V0, V1 and `/search/filtered`.
+3. The latency run includes connected-standby contamination and unexplained between-run variation; it is not a clean latency baseline.
+4. Quality scores use recorded actual retrieval runs, not fresh runs.
+5. Held-out evidence remains deferred; no held-out or production claims are permitted.
+
+The no-reranker decision is development-scoped only; the configuration is unchanged. This closure does not by itself satisfy the "M10 complete" prerequisite of M16; that is a separate owner decision when M16 is planned.
+
 ESCI is an optional external benchmark track (§10). It may run only after the core internal M10 report is complete and its license is verified. It runs:
 
 - through its own corpus adapter, as a separately versioned corpus;
@@ -1142,7 +1152,7 @@ Use explicit versioned criteria, human-reviewed examples, audit fields, and manu
 
 ### Milestone 16 — Grounded Buyer RAG Assistant
 
-Prerequisites: M10 complete. The V4 retriever is optional, used if M12 has shipped.
+Prerequisites: M10 complete. The V4 retriever is optional, used if M12 has shipped. (M10's development-scoped closure of 2026-10-17 does not by itself satisfy this prerequisite; the owner decides when M16 is planned.)
 
 Implement a bounded assistant that uses existing V3/V4 search as its retriever. It covers:
 

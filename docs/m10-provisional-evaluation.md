@@ -9,13 +9,17 @@
 >   filters on, and retrieval consensus and the V3 cross-encoder shaped label confidence.
 > - **This is development evidence only.** It is not Golden Dataset evidence and not held-out
 >   test evidence. The 20 queries are the development pilot.
-> - **M10 is not officially complete.** MASTER_PLAN M10 requires a comparison on the
+> - **This analysis does not complete M10.** MASTER_PLAN M10 requires a comparison on the
 >   human-reviewed Golden Dataset. Strict status when this analysis was committed (`73c67c1`):
 >   strict M9 was paused at 0/568. Current status (2026-10-17): the strict
 >   human-reviewed pilot/dev Golden Dataset is complete under `review-2`; the held-out test
->   dataset is deferred; official M10 is not complete. A separate development-scoped report on
->   the human-reviewed pilot/dev labels is a draft for review
->   (`docs/m10-human-pilot-dev-evaluation.md`). This analysis stays machine-label only, and the
+>   dataset is deferred. M10 is closed for development-scoped pilot/dev evaluation under the
+>   2026-10-17 owner-approved scope amendment, not as fulfillment of every original
+>   requirement. That closure rests on the separate human-label report
+>   (`docs/m10-human-pilot-dev-evaluation.md`), whose accepted coverage limitations and deferred
+>   items are listed in its
+>   [scope amendment section](m10-human-pilot-dev-evaluation.md#m10-scope-amendment-and-closure-owner-2026-10-17).
+>   This analysis stays machine-label only. It is not part of that closure's evidence, and the
 >   two are not combined.
 >
 > Every conclusion below is a **machine-label development conclusion**.
@@ -266,7 +270,11 @@ wherever it suffices. The priorities below are therefore ordered deterministic-f
 - **Abandoned decisions: 2, archived and excluded.** They are not in any label, metric or
   statistic.
 - **Provisional M10:** this document exists. It is a development analysis on machine labels only.
-- **Official M10: not complete.** When this document was written, no report on the
-  human-reviewed Golden Dataset existed and `docs/MASTER_PLAN.md` was unchanged. *Update
-  2026-10-17:* a development-scoped pilot/dev report is a draft for review
-  (`docs/m10-human-pilot-dev-evaluation.md`). Nothing in this document changes.
+- **Official M10: not complete when this document was written.** At that time no report on
+  the human-reviewed Golden Dataset existed and `docs/MASTER_PLAN.md` was unchanged. *Update
+  2026-10-17:* M10 is closed for development-scoped pilot/dev evaluation under the
+  2026-10-17 owner-approved scope amendment, not as fulfillment of every original
+  requirement. The closure rests on the separate human-label report
+  (`docs/m10-human-pilot-dev-evaluation.md`; see its
+  [accepted limitations and deferred items](m10-human-pilot-dev-evaluation.md#m10-scope-amendment-and-closure-owner-2026-10-17)).
+  Nothing in this document changes, and its machine-label findings remain separate.

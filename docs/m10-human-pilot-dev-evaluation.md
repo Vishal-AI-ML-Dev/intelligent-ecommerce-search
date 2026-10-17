@@ -1,6 +1,8 @@
 # M10 human-reviewed pilot/dev evaluation — V0–V3 on frozen human labels
 
-> **DRAFT FOR REVIEW. DEVELOPMENT-SCOPED. M10 IS NOT OFFICIALLY COMPLETE.**
+> **APPROVED BY THE OWNER (2026-10-17). DEVELOPMENT-SCOPED M10 CLOSURE UNDER AN EXPLICIT
+> SCOPE AMENDMENT; NOT A CLAIM THAT ALL ORIGINAL M10 REQUIREMENTS WERE MET.** See "M10 scope
+> amendment and closure" below for the five named limitations and deferred items.
 > - The 20 queries are the **pilot/dev** partition: development / rubric-calibration data on a
 >   **synthetic 240-product catalog**. There are **zero held-out test queries**; no held-out
 >   performance claim is made or permitted.
@@ -14,6 +16,31 @@
 >   that decision (see §10).
 > - The machine-label provisional analysis (`docs/m10-provisional-evaluation.md`) is separate
 >   historical evidence. It is not combined with, or compared against, these results.
+
+## M10 scope amendment and closure (owner, 2026-10-17)
+
+The owner approved this report and closed M10 as **development-scoped (pilot/dev)** through an
+explicit scope amendment. The amendment narrows what M10 closure means; it does not claim that
+every original requirement in `docs/MASTER_PLAN.md` ("Re-decide the provisional `rrf_k`,
+embedding model, and reranker pins", latency for V0–V3) was fulfilled.
+
+Named limitations and deferred items, approved as part of the closure:
+
+1. **`rrf_k` = 100 and the current embedding model remain provisional.** Neither was
+   comparatively re-decided; only one value of each was evaluated (§10).
+2. **Fresh latency coverage excludes V0, V1 and `/search/filtered`.** Only the three
+   `/search/reranked` arms were measured, on a different 17-query set (§9.1).
+3. **The latency run is not a clean latency baseline.** It includes connected-standby
+   contamination (four stalled requests) and unexplained between-run variation (§9.3–9.4).
+4. **Quality scores use recorded actual retrieval runs, not fresh runs** (§2).
+5. **Held-out evidence remains deferred.** No held-out or production claims are made (§1).
+
+The no-reranker decision stays **development-scoped**; the configuration is unchanged
+(`reranker_enabled` true, depth 20).
+
+**M16 prerequisite.** M16 requires "M10 complete". This development-scoped closure does **not**
+by itself satisfy that prerequisite. Whether it does is a separate owner decision, to be made
+when M16 is planned; it is not assumed here.
 
 ## Executive summary
 
@@ -637,13 +664,14 @@ What these results do **not** support:
 |---|---|
 | V0–V3 quality on the human-reviewed Golden Dataset | Done for pilot/dev only (this document). No held-out partition exists. |
 | Configuration and failure cases | Documented here (§2, §6). |
-| Latency | **Partly done** (§9): fresh measurements for the `/search/reranked` arms (disabled, depth 10, depth 20) on the 17-query M5 set, in an uncommitted local snapshot, with standby stalls and large between-run variation disclosed. **V0 and V1 fresh latency not measured**; `/search/filtered` not measured directly. Whether this coverage suffices is an owner decision. |
+| Latency | **Partly done** (§9): fresh measurements for the `/search/reranked` arms (disabled, depth 10, depth 20) on the 17-query M5 set, in an uncommitted local snapshot, with standby stalls and large between-run variation disclosed. **V0 and V1 fresh latency not measured**; `/search/filtered` not measured directly. Accepted at closure as named limitations 2 and 3. |
 | Measured recommendation | Development-scoped only (§10): keep filtering; no reranker, approved for development scope only (2026-10-17). Configuration unchanged. |
-| Re-decide `rrf_k` | **Not supported** by the current comparisons (one value evaluated). Needs a new, approved protocol with pooled human labels. |
-| Re-decide the embedding model | **Not supported** (one model evaluated). Same requirement. |
+| Re-decide `rrf_k` | **Not performed** (one value evaluated). `rrf_k` = 100 remains provisional (named limitation 1). A comparative re-decision would need a new, approved protocol with pooled human labels. |
+| Re-decide the embedding model | **Not performed** (one model evaluated). The current model remains provisional (named limitation 1). Same requirement. |
 | Re-decide the reranker pin (or no reranker) | No reranker approved for development scope only (2026-10-17; §10), from off / d10 / d20 with one model. Configuration unchanged; no alternative model evaluated; any configuration, production or official decision is outstanding. |
-| Official completion | Not claimed. Whether pilot/dev evidence can satisfy official M10 while the held-out test dataset is deferred is an owner decision. |
-| Source provenance | The evaluation code, golden chain and modified latency harness are uncommitted (§9.7, §12); committing them is outstanding. |
+| Closure | **Closed, development-scoped (pilot/dev), under the owner-approved scope amendment of 2026-10-17** with five named limitations and deferred items (see "M10 scope amendment and closure"). Not a claim that all original requirements were met. |
+| M16 prerequisite ("M10 complete") | **Not satisfied by this closure alone.** Separate owner decision when M16 is planned. |
+| Source provenance | The relevant code (review-2 tooling, the quality evaluator and the modified latency harness), the golden chain and the quality results are now committed locally in C1–C5, ending at `d55ba40955dea2ab839087755d40b45168d524f3` (not pushed). Both runs still used uncommitted sources at run time: the evaluation ran on a dirty working tree, and the latency run from an uncommitted local snapshot (§9.7, §12). Committing preserves the recorded bytes; it does not make either run a clean-tree run. The latency artifacts remain git-ignored under `data/processed/` and are not committed. |
 
 ## 12. Reproduction, outputs and source hashes
 
@@ -774,11 +802,15 @@ every output file matches its hash in the run record.
 ## Status
 
 - Human-reviewed pilot/dev quality evaluation: **outputs written and verified (reported by the
-  owner)**; this report is a **draft for review**.
+  owner)**; this report is **approved by the owner (2026-10-17)**.
 - Fresh latency: **measured for the `/search/reranked` arms** (local snapshot; owner-reported
   run and verify succeeded; artifacts hashed in §9.7). V0/V1: **not measured**.
 - Reranker: **no reranker approved for development scope only** (2026-10-17); configuration
   unchanged.
-- `rrf_k` / embedding-model re-decision: **not supported by current comparisons**.
+- `rrf_k` / embedding model: **not re-decided**; both remain provisional.
 - Held-out test evaluation: **not possible** (dataset deferred).
-- Official M10: **not complete**. M11: not started.
+- M10: **closed, development-scoped (pilot/dev), under the owner-approved scope amendment
+  (2026-10-17)**, with five named limitations and deferred items. Not a claim that all original
+  M10 requirements were met.
+- M16's "M10 complete" prerequisite: **not satisfied by this closure alone**; separate owner
+  decision. M11: not started.

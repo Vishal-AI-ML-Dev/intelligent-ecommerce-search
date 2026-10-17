@@ -19,7 +19,7 @@ M9 makes no claim that any search version is better. Milestone 10 compares V0–
 | Amendment | Review protocol `review-2`: blind second-human review of the cs-1 sample, inter-annotator agreement, joint consensus (replaces the 72-hour intra-annotator consistency round) | Approved 2026-10-15; run on real data: `second_review_sealed`, `labels_frozen` and `provenance_unsealed` exist and verify (below); committed together with this document |
 | Later | Primary seal, review-2 second review, consensus adjudication, labels freeze, provenance unsealing | Complete for the 20-query pilot/dev dataset (golden version 1); chain verified read-only on 2026-10-17 |
 | Deferred | Separately authored held-out test partition | Deferred by the scope designation of 2026-10-17; size and stratification not approved; nothing authored |
-| Later | Official M10 metrics | Not complete. A development-scoped pilot/dev report is a draft for review (`docs/m10-human-pilot-dev-evaluation.md`) |
+| Later | M10 metrics | M10 closed for development-scoped pilot/dev evaluation under the 2026-10-17 owner-approved scope amendment, not as fulfillment of every original requirement. Report: `docs/m10-human-pilot-dev-evaluation.md`; see its [accepted limitations and deferred items](m10-human-pilot-dev-evaluation.md#m10-scope-amendment-and-closure-owner-2026-10-17) |
 
 **M9 scope designation (approved by the owner, 2026-10-17):** "M9 human-reviewed pilot/dev
 Golden Dataset complete under review-2, with disclosed limitations. Separately authored

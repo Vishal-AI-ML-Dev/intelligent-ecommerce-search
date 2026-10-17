@@ -36,12 +36,22 @@ Development is organized milestone by milestone. See
     human-reviewed pilot/dev Golden Dataset (see the bullet above); no held-out test evidence
     exists.
   - See `docs/weak-label-development-m9.md`.
-- M10: **official M10 is not complete.**
-  - A development-scoped report on the human-reviewed pilot/dev labels is a **draft for review**,
-    in `docs/m10-human-pilot-dev-evaluation.md`. It covers V0–V3 quality on the 20 pilot/dev
-    queries, and fresh `/search/reranked` latency on a different 17-query set.
+- M10: **closed, development-scoped (pilot/dev), under an owner-approved scope amendment
+  (2026-10-17).** This is not a claim that all original M10 requirements were met.
+  - The approved report, `docs/m10-human-pilot-dev-evaluation.md`, covers V0–V3 quality on the
+    20 pilot/dev queries, and fresh `/search/reranked` latency on a different 17-query set.
+  - Named limitations and deferred items:
+    1. `rrf_k` = 100 and the current embedding model remain provisional; neither was
+       comparatively re-decided.
+    2. Fresh latency coverage excludes V0, V1 and `/search/filtered`.
+    3. The latency run includes connected-standby contamination and unexplained between-run
+       variation; it is not a clean latency baseline.
+    4. Quality scores use recorded actual retrieval runs, not fresh runs.
+    5. Held-out evidence remains deferred; no held-out or production claims.
   - No reranker is approved for development scope only (2026-10-17); the configuration is
     unchanged.
+  - This closure does not by itself satisfy M16's "M10 complete" prerequisite; that is a
+    separate owner decision.
   - The provisional development analysis of the machine-label V0–V3 results is complete, in
     `docs/m10-provisional-evaluation.md` (labels 100% machine-generated, 0% human audit).
 - M11–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
@@ -560,8 +570,9 @@ Not completed:
 - the separately authored, sealed held-out test partition (with its separately reported
   Hinglish slice). It is deferred, and its size and stratification are not approved;
 - any held-out evaluation evidence;
-- official M10. A development-scoped pilot/dev report is a draft for review
-  (`docs/m10-human-pilot-dev-evaluation.md`); it is not official M10 completion.
+- M10 against its original requirements. M10 is closed only as development-scoped (pilot/dev)
+  under the owner-approved scope amendment of 2026-10-17, with named limitations and deferred
+  items (see `docs/m10-human-pilot-dev-evaluation.md`).
 
 Disclosures:
 
