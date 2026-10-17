@@ -15,6 +15,10 @@ Wiring status (Session C2):
   primary-round and seal-time validators.
 - The consistency, adjudication, final-label and correction validators are still enforced only
   by their unit tests.
+- review-2 amendment: the second-review sealing runner (`evals.runners.seal_second_review`)
+  calls `validate_second_review_round`. The review-2 label-freeze runner
+  (`evals.runners.freeze_labels`) calls `validate_review_2_adjudication`,
+  `validate_final_judgements_review_2`, `validate_partitions` and `validate_labels_frozen_at`.
 """
 
 import hashlib
@@ -35,23 +39,27 @@ from evals.contracts.constants import (
     MIN_CONSISTENCY_DELAY,
     NEGATIVES_PER_QUERY,
     POOL_DEPTH,
+    REVIEW_PROTOCOL_2,
+    SECOND_REVIEWER_HANDLE,
     SINGLE_ANNOTATOR_HANDLE,
     Label,
 )
 from evals.contracts.extraction import derive_query_extraction
 from evals.contracts.manifest import (
-    STAGE_ORDER,
     Manifest,
     Role,
     Stage,
     decode_role,
+    stage_rank,
     validate_chain,
     validate_succession,
     verify_entry,
 )
 from evals.contracts.models import (
     FIELD_CATEGORIES,
+    AgreementReport,
     AuthoringAttestation,
+    ConsensusAdjudication,
     ConsistencySample,
     EligibilityRecord,
     FinalJudgement,
@@ -59,6 +67,7 @@ from evals.contracts.models import (
     GoldField,
     Hardness,
     InclusionReason,
+    JointResolutionItem,
     Judgement,
     LabelChange,
     LabelChangeKind,
@@ -76,8 +85,12 @@ from evals.contracts.models import (
 )
 from evals.contracts.review_sets import (
     build_consistency_sample,
+    build_joint_resolution_queue,
     consistency_disagreements,
     derive_final_judgements,
+    derive_final_judgements_review_2,
+    second_review_disagreements,
+    split_review_2_targeted,
 )
 
 Pair = tuple[str, str]
@@ -593,18 +606,40 @@ _FROZEN_RECORD_ROLES = (
     Role.ADJUDICATION_JUDGEMENTS,
     Role.LABEL_CHANGES,
 )
+_FROZEN_RECORD_ROLES_REVIEW_2 = (
+    Role.PRIMARY_JUDGEMENTS,
+    Role.SECOND_REVIEW_JUDGEMENTS,
+    Role.ADJUDICATION_JUDGEMENTS,
+    Role.CONSENSUS_ADJUDICATIONS,
+    Role.LABEL_CHANGES,
+)
+
+
+def _recorded_at(record: Judgement | LabelChange | ConsensusAdjudication) -> datetime:
+    if isinstance(record, LabelChange):
+        return record.changed_at
+    if isinstance(record, ConsensusAdjudication):
+        return record.decided_at
+    return record.annotated_at
 
 
 def validate_labels_frozen_at(manifest: Manifest, files: Mapping[Role, bytes]) -> datetime:
     """A `labels_frozen` (or later) manifest's freeze time is no earlier than its primary seal or
     any primary, consistency or adjudication judgement or label change it includes (read only
-    from bytes that match the manifest). Returns the verified freeze time."""
+    from bytes that match the manifest). Under review-2 the records are the primary,
+    second-review, adjudication and consensus records and label changes, and the freeze is also
+    no earlier than the second-review seal. Returns the verified freeze time."""
     frozen_at = manifest.labels_frozen_at
     if frozen_at is None:
         raise ContractError(f"stage {manifest.stage.value} has no labels_frozen_at")
-    for role in _FROZEN_RECORD_ROLES:
+    review_2 = manifest.review_protocol == REVIEW_PROTOCOL_2
+    if review_2:
+        (report,) = _verified_records(manifest, files, Role.AGREEMENT_REPORT)
+        if frozen_at < report.second_review_sealed_at:
+            raise ContractError("labels_frozen_at is earlier than the second-review seal")
+    for role in _FROZEN_RECORD_ROLES_REVIEW_2 if review_2 else _FROZEN_RECORD_ROLES:
         for record in _verified_records(manifest, files, role):
-            at = record.changed_at if isinstance(record, LabelChange) else record.annotated_at
+            at = _recorded_at(record)
             if frozen_at < at:
                 raise ContractError(
                     f"labels_frozen_at is earlier than a {role.value} record "
@@ -643,7 +678,7 @@ def validate_post_freeze_corrections(
     validate_chain(next_chain)
     validate_succession(previous_terminal, next_chain[0])
     current = next_chain[-1]
-    if STAGE_ORDER.index(current.stage) < STAGE_ORDER.index(Stage.LABELS_FROZEN):
+    if stage_rank(current.stage) < stage_rank(Stage.LABELS_FROZEN):
         raise ContractError("corrections are checked against a labels_frozen (or later) manifest")
     old_version, new_version = previous_terminal.golden_version, current.golden_version
     frozen_at = validate_labels_frozen_at(previous_terminal, previous_files)
@@ -720,3 +755,182 @@ def validate_post_freeze_corrections(
             "the new final judgements cannot be reproduced by applying the corrections to the "
             f"previous finals (metadata-only changes are not supported): {unreproduced[:5]!r}"
         )
+
+
+# ---- review-2: blind second review, joint consensus ------------------------------------------
+
+
+def validate_second_review_round(
+    primaries: Sequence[Judgement],
+    sample: ConsistencySample,
+    second_reviews: Sequence[Judgement],
+    eligibility: Sequence[EligibilityRecord],
+    primary_seal_sha256: str,
+    primary_sealed_at: datetime,
+    second_review_sealed_at: datetime,
+) -> None:
+    """review-2: the sample is exactly the cs-1 sample regenerated from the sealed primary round;
+    every sampled pair is judged exactly once by the second reviewer `ann-2` (never the primary
+    annotator) and nothing else is judged; each judgement is at or after the primary seal and at
+    or before the second-review seal, under the primary judgement's rubric, and obeys the
+    hard-constraint rule. No 72-hour delay applies: that delay guards only against
+    self-recall in the review-1 intra-annotator round."""
+    if sample.primary_seal_sha256 != primary_seal_sha256:
+        raise ContractError("the sample is bound to a different primary seal")
+    if sample.primary_sealed_at != primary_sealed_at:
+        raise ContractError("the sample records a different seal time")
+    validate_primary_seal_time(primaries, primary_sealed_at)
+    if build_consistency_sample(primaries, primary_seal_sha256, primary_sealed_at) != sample:
+        raise ContractError("the sample does not match its deterministic regeneration")
+    primary_handle = validate_single_annotator(primaries)
+    primary = _round_only(primaries, Round.PRIMARY)
+    reviewed = _round_only(second_reviews, Round.SECOND_REVIEW)
+    sampled = {(i.query_id, i.product_id) for i in sample.items}
+    foreign = sorted(set(reviewed) - sampled)
+    if foreign:
+        raise ContractError(f"second-review judgements outside the sample: {foreign[:5]!r}")
+    missing = sorted(sampled - set(reviewed))
+    if missing:
+        raise ContractError(
+            f"{len(missing)} sampled items are missing from the second review: {missing[:5]!r}"
+        )
+    handles = {j.annotator_handle for j in second_reviews}
+    if handles != {SECOND_REVIEWER_HANDLE} or primary_handle in handles:
+        raise ContractError(
+            f"expected only the second reviewer {SECOND_REVIEWER_HANDLE!r}, "
+            f"found {sorted(handles)!r}"
+        )
+    if second_review_sealed_at < primary_sealed_at:
+        raise ContractError("the second-review seal predates the primary seal")
+    for pair, j in sorted(reviewed.items()):
+        if j.rubric_version != primary[pair].rubric_version:
+            raise ContractError(f"{pair!r}: second review under a different rubric")
+        if j.annotated_at < primary_sealed_at:
+            raise ContractError(f"{pair!r}: second-review judgement before the primary seal")
+        if j.annotated_at > second_review_sealed_at:
+            raise ContractError(f"{pair!r}: second-review judgement after its seal")
+    validate_judgements_against_eligibility(second_reviews, eligibility)
+
+
+def validate_review_2_adjudication(
+    primaries: Sequence[Judgement],
+    second_reviews: Sequence[Judgement],
+    queue: Sequence[QueueItem],
+    joint_queue: Sequence[JointResolutionItem],
+    adjudications: Sequence[Judgement],
+    consensus: Sequence[ConsensusAdjudication],
+    label_changes: Sequence[LabelChange],
+    golden_version: int,
+    *,
+    primary_sealed_at: datetime,
+    report: AgreementReport,
+) -> None:
+    """review-2 decisions before the label freeze. Nothing unresolved passes:
+
+    * the joint-resolution queue is exactly its regeneration from the sealed rounds (every
+      disagreement and every second-reviewer needs-adjudication or catalog-issue flag, also
+      when the labels agree);
+    * every routed pair has exactly one joint record by both annotators, resolving exactly its
+      routed reasons, and nothing else has one; a missing record is an unresolved item and
+      blocks the freeze (a joint resolution is never inferred or generated);
+    * a joint record names the two labels it resolves and the primary rubric, is dated at or
+      after the second-review seal, and every changed label has exactly one matching CONSENSUS
+      LabelChange by one of its participants, dated no earlier than it;
+    * `ann-1`'s targeted queue is unchanged. A pair also routed for joint resolution is
+      settled by that joint record (a single-annotator decision is refused there). Of the
+      other items, every MANDATORY one (scope revision 2026-10-16: any reason other than a
+      borderline primary label or an ambiguous query, see `split_review_2_targeted`) is
+      resolved before the freeze by a single-annotator (`ann-1`) adjudication under the
+      review-1 rules. An OPTIONAL review candidate may be adjudicated the same way; if it is
+      not, its sealed primary judgement stays the final label.
+    """
+    regenerated = build_joint_resolution_queue(primaries, second_reviews)
+    if list(joint_queue) != regenerated:
+        raise ContractError("the joint-resolution queue does not match its regeneration")
+    disagreed = second_review_disagreements(primaries, second_reviews)
+    if len(disagreed) != report.disagreement_count:
+        raise ContractError("the disagreements do not match the agreement report")
+    routed = {(i.query_id, i.product_id): i.reasons for i in joint_queue}
+    primary = _round_only(primaries, Round.PRIMARY)
+    reviewed = _round_only(second_reviews, Round.SECOND_REVIEW)
+    decided: dict[Pair, ConsensusAdjudication] = {}
+    for record in consensus:
+        pair = (record.query_id, record.product_id)
+        if pair in decided:
+            raise ContractError(f"{pair!r}: duplicate joint record")
+        decided[pair] = record
+    unresolved = sorted(set(routed) - set(decided))
+    if unresolved:
+        raise ContractError(
+            f"{len(unresolved)} routed pair(s) have no joint record; unresolved disagreements "
+            f"and second-reviewer flags block the label freeze: {unresolved[:5]!r}"
+        )
+    extra = sorted(set(decided) - set(routed))
+    if extra:
+        raise ContractError(f"joint records for pairs that were not routed: {extra[:5]!r}")
+    participants = tuple(sorted({report.primary_annotator, report.second_annotator}))
+    for pair, record in sorted(decided.items()):
+        if record.reasons != routed[pair]:
+            raise ContractError(f"{pair!r}: a joint record must resolve exactly its routed reasons")
+        if record.participants != participants:
+            raise ContractError(f"{pair!r}: a consensus record must name both annotators")
+        if record.primary_label is not primary[pair].label:
+            raise ContractError(f"{pair!r}: primary_label differs from the sealed primary label")
+        if record.second_review_label is not reviewed[pair].label:
+            raise ContractError(f"{pair!r}: second_review_label differs from the sealed review")
+        if record.rubric_version != primary[pair].rubric_version:
+            raise ContractError(f"{pair!r}: consensus under a different rubric")
+        if record.decided_at < report.second_review_sealed_at:
+            raise ContractError(f"{pair!r}: consensus recorded before the second-review seal")
+
+    single = _round_only(adjudications, Round.ADJUDICATION)
+    overlap = sorted(set(single) & set(routed))
+    if overlap:
+        raise ContractError(
+            f"routed pairs are decided by joint consensus, not one annotator: {overlap[:5]!r}"
+        )
+    mandatory, _ = split_review_2_targeted(queue, joint_queue)
+    open_queue = sorted({(i.query_id, i.product_id) for i in mandatory} - set(single))
+    if open_queue:
+        raise ContractError(
+            f"{len(open_queue)} mandatory targeted-queue item(s) are unresolved; they block the "
+            f"label freeze: {open_queue[:5]!r}"
+        )
+    validate_adjudication_round(
+        primaries,
+        (),
+        queue,
+        adjudications,
+        [c for c in label_changes if c.kind is LabelChangeKind.ADJUDICATION],
+        golden_version,
+        primary_sealed_at=primary_sealed_at,
+    )
+
+    changes = [c for c in label_changes if c.kind is LabelChangeKind.CONSENSUS]
+    by_pair = Counter((c.query_id, c.product_id) for c in changes)
+    if any(n > 1 for n in by_pair.values()):
+        raise ContractError("at most one consensus label change per pair")
+    changed = {pair for pair, record in decided.items() if record.changes_label}
+    if set(by_pair) != changed:
+        raise ContractError("every consensus label change needs exactly one CONSENSUS LabelChange")
+    for c in changes:
+        pair = (c.query_id, c.product_id)
+        record = decided[pair]
+        if c.previous_label is not record.primary_label or c.new_label is not record.label:
+            raise ContractError(f"{pair!r}: LabelChange does not match primary → consensus")
+        if c.changed_by not in record.participants:
+            raise ContractError(f"{pair!r}: LabelChange by someone outside the consensus")
+        if c.changed_at < record.decided_at:
+            raise ContractError(f"{pair!r}: LabelChange recorded before its consensus")
+        if c.from_golden_version != golden_version:
+            raise ContractError(f"{pair!r}: LabelChange golden version differs")
+
+
+def validate_final_judgements_review_2(
+    primaries: Sequence[Judgement],
+    adjudications: Sequence[Judgement],
+    consensus: Sequence[ConsensusAdjudication],
+    finals: Sequence[FinalJudgement],
+) -> None:
+    if list(finals) != derive_final_judgements_review_2(primaries, adjudications, consensus):
+        raise ContractError("final judgements do not match their review-2 derivation")

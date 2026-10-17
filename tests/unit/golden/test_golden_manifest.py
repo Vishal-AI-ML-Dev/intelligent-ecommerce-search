@@ -4,6 +4,7 @@ import pytest
 from evals.contracts.canonical import ContractError, encode_json_object, encode_jsonl, sha256_hex
 from evals.contracts.constants import Label
 from evals.contracts.manifest import (
+    STAGE_ORDER,
     Manifest,
     ManifestEntry,
     ManifestVersions,
@@ -194,7 +195,7 @@ def _files(catalog) -> dict[Role, bytes]:
 
 
 def _manifest(stage: Stage, files, previous: Manifest | None, **overrides) -> Manifest:
-    index = list(Stage).index(stage)
+    index = STAGE_ORDER.index(stage)  # the review-1 lifecycle
     fields = dict(
         golden_version=1,
         stage=stage,
@@ -224,7 +225,7 @@ def files(catalog):
 @pytest.fixture
 def chain(files):
     manifests: list[Manifest] = []
-    for stage in Stage:
+    for stage in STAGE_ORDER:
         manifests.append(_manifest(stage, files, manifests[-1] if manifests else None))
     return manifests
 

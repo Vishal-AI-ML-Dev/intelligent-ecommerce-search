@@ -8,7 +8,15 @@ from pathlib import Path
 
 import pytest
 from evals.contracts.canonical import ContractError, decode_json_object, decode_jsonl, sha256_hex
-from evals.contracts.manifest import Role, Stage, decode_manifest, stage_roles
+from evals.contracts.manifest import (
+    Role,
+    Stage,
+    decode_manifest,
+    stage_rank,
+    stage_roles,
+    validate_chain,
+    verify_entry,
+)
 from evals.contracts.models import AuthoringAttestation, GoldConstraint
 from evals.runners import freeze_queries as fq
 
@@ -284,11 +292,47 @@ def test_preview_writes_nothing(capsys):
     assert _tree(REAL_DIR) == before
 
 
+# The first stage at which a file whose name matches the pattern may exist in the golden
+# directory (None: never). The private provenance enters only at `provenance_unsealed` (D12);
+# judgements and the sample only once the primary round is sealed; label files only from the
+# label freeze; no metric file ever lives here.
+LATER_STAGE_PATTERNS = {
+    "*provenance*": Stage.PROVENANCE_UNSEALED,
+    "*judgement*": Stage.PRIMARY_SEALED,
+    "*consistency*": Stage.PRIMARY_SEALED,
+    "*label*": Stage.LABELS_FROZEN,
+    "*metric*": None,
+}
+
+
 def test_the_golden_directory_holds_no_provenance_label_or_metric_file():
-    """The queries stage never creates later-stage artifacts. Since Session C2 the public
-    `pool_frozen` files exist, but the private provenance never enters the golden directory and
-    no judgement, consistency sample, label or metric file exists before human annotation."""
+    """No stage's artifacts exist before that stage is reached. The test is stage-aware: the
+    manifests on disk must form a valid chain named in stage order; every other file must be
+    exactly an entry of the latest manifest (verified by hash) or the authoring input, so no
+    unlisted file is allowed; and the private provenance, judgements, the sample, label files and
+    metric files may exist only from the stage that legitimately adds them."""
     assert Role.POOL not in stage_roles(Stage.QUERIES_FROZEN)
-    for pattern in ("*provenance*", "*judgement*", "*consistency*", "*label*", "*metric*"):
-        assert not list(REAL_DIR.rglob(pattern)), pattern
-    assert not (REAL_DIR / "manifests" / "3-primary_sealed.json").exists()
+    numbered = [p for p in (REAL_DIR / "manifests").iterdir() if p.name.split("-")[0].isdigit()]
+    manifest_files = sorted(numbered, key=lambda p: int(p.name.split("-")[0]))
+    chain = [decode_manifest(p.read_bytes()) for p in manifest_files]
+    validate_chain(chain)
+    assert [p.name for p in manifest_files] == [
+        f"{i}-{m.stage.value}.json" for i, m in enumerate(chain, start=1)
+    ]
+    terminal = chain[-1]
+    assert {e.role for e in terminal.entries} == stage_roles(
+        terminal.stage, terminal.review_protocol
+    )
+    for entry in terminal.entries:
+        verify_entry(entry, (REAL_DIR / entry.path).read_bytes())
+    listed = {e.path for e in terminal.entries}
+    manifests = {f"manifests/{p.name}" for p in manifest_files}
+    assert _tree(REAL_DIR) == listed | manifests | {"authoring/pilot_input.json"}
+    for pattern, first_stage in LATER_STAGE_PATTERNS.items():
+        found = {p.relative_to(REAL_DIR).as_posix() for p in REAL_DIR.rglob(pattern)}
+        if first_stage is None or stage_rank(terminal.stage) < stage_rank(first_stage):
+            assert not found, pattern
+        else:
+            assert found <= listed | manifests, pattern
+    if terminal.stage is not Stage.PROVENANCE_UNSEALED:
+        assert Role.PROVENANCE not in {e.role for e in terminal.entries}

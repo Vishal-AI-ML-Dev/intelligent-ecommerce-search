@@ -11,6 +11,7 @@ import pytest
 from evals.contracts.canonical import CanonicalFormError, ContractError, decode_jsonl, encode_jsonl
 from evals.contracts.constants import SINGLE_ANNOTATOR_HANDLE, Label, Relation
 from evals.contracts.manifest import (
+    STAGE_ORDER,
     Manifest,
     Role,
     Stage,
@@ -49,7 +50,7 @@ def _chain(
     files, golden_version=1, supersedes=None, upto=Stage.PROVENANCE_UNSEALED, frozen_at=None
 ):
     manifests: list[Manifest] = []
-    for stage in list(Stage)[: list(Stage).index(upto) + 1]:
+    for stage in STAGE_ORDER[: STAGE_ORDER.index(upto) + 1]:
         frozen = {}
         if frozen_at is not None and stage in (Stage.LABELS_FROZEN, Stage.PROVENANCE_UNSEALED):
             frozen = {"labels_frozen_at": frozen_at}
@@ -364,7 +365,7 @@ def test_labels_frozen_at_is_set_exactly_from_labels_frozen(catalog):
     files = _files(catalog)
     chain = _chain(files)
     for manifest in chain:
-        frozen = list(Stage).index(manifest.stage) >= list(Stage).index(Stage.LABELS_FROZEN)
+        frozen = STAGE_ORDER.index(manifest.stage) >= STAGE_ORDER.index(Stage.LABELS_FROZEN)
         assert (manifest.labels_frozen_at is not None) is frozen
     with pytest.raises(ValidationError, match="labels_frozen_at"):  # missing at labels_frozen
         _manifest(Stage.LABELS_FROZEN, files, chain[2], labels_frozen_at=None)

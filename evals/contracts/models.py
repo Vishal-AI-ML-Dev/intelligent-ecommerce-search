@@ -45,6 +45,9 @@ from ecommerce_search.filtering.policy import FilterOperator
 from ecommerce_search.query_understanding.models import Intent
 from ecommerce_search.search.query import QueryError, normalize_query
 from evals.contracts.constants import (
+    AGREEMENT_REPORT_VERSION,
+    AGREEMENT_SAMPLE_CAVEAT,
+    AGREEMENT_STATISTIC_NAME,
     ALLOWED_RELATIONS,
     ANNOTATOR_HANDLE_PATTERN,
     CONSISTENCY_ALLOCATION_METHOD,
@@ -55,6 +58,7 @@ from evals.contracts.constants import (
     LABEL_ORDER,
     POOL_DEPTH,
     QUERY_MAX_LENGTH,
+    REVIEW_PROTOCOL_2,
     RUBRIC_VERSION_PATTERN,
     Label,
     Relation,
@@ -843,11 +847,15 @@ class EligibilityRecord(_Record):
 
 
 class Round(StrEnum):
-    """Single-annotator workflow (D5 final). There is deliberately no second-reviewer round."""
+    """`review-1` (D5 final, single annotator): primary, consistency (the same annotator after
+    72 hours: intra-annotator) and adjudication. `review-2` (the approved amendment) replaces the
+    consistency round with `second_review`: an independent second human re-labels the same
+    sample blind (inter-annotator). The two are never mixed or reported as each other."""
 
     PRIMARY = "primary"
     CONSISTENCY = "consistency"
     ADJUDICATION = "adjudication"
+    SECOND_REVIEW = "second_review"
 
 
 class Confidence(StrEnum):
@@ -925,6 +933,8 @@ class Judgement(_Record):
 class LabelChangeKind(StrEnum):
     ADJUDICATION = "adjudication"
     POST_FREEZE_CORRECTION = "post_freeze_correction"
+    # review-2: a primary label changed by a joint consensus record of both annotators.
+    CONSENSUS = "consensus"
 
 
 class LabelChange(_Record):
@@ -948,6 +958,9 @@ class LabelChange(_Record):
         if self.kind is LabelChangeKind.ADJUDICATION:
             if self.to_golden_version != self.from_golden_version:
                 raise ValueError("an adjudication change stays within one golden version")
+        elif self.kind is LabelChangeKind.CONSENSUS:
+            if self.to_golden_version != self.from_golden_version:
+                raise ValueError("a consensus change stays within one golden version")
         elif self.to_golden_version != self.from_golden_version + 1:
             raise ValueError("a post-freeze correction creates the next golden version")
         return self
@@ -1042,13 +1055,14 @@ class QueueItem(_Record):
 
 
 class FinalJudgement(_Record):
-    """The frozen label of a pair: the adjudicated label when one exists, else the primary."""
+    """The frozen label of a pair: the adjudicated label when one exists, else the primary.
+    Under review-2 a second-review disagreement is decided by its joint consensus record."""
 
     query_id: QueryId
     product_id: ProductId
     label: Label
     relation: Relation
-    decided_in: Literal["primary", "adjudication"]
+    decided_in: Literal["primary", "adjudication", "consensus"]
     rubric_version: RubricVersion
 
     @model_validator(mode="after")
@@ -1058,3 +1072,157 @@ class FinalJudgement(_Record):
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.query_id, self.product_id)
+
+
+# ---- review-2: joint consensus and the inter-annotator agreement report ----------------------
+
+
+class JointReason(StrEnum):
+    """review-2: why a sampled pair needs a joint resolution by both human annotators."""
+
+    SECOND_REVIEW_DISAGREEMENT = "second_review_disagreement"
+    SECOND_REVIEW_NEEDS_ADJUDICATION = "second_review_needs_adjudication"
+    SECOND_REVIEW_CATALOG_ISSUE = "second_review_catalog_issue"
+
+
+def _sorted_unique_reasons(reasons: tuple[JointReason, ...]) -> None:
+    if not reasons or list(reasons) != sorted(set(reasons)):
+        raise ValueError("reasons must be non-empty, unique and sorted")
+
+
+class JointResolutionItem(_Record):
+    """review-2: one pair routed for joint human resolution when the second review is sealed:
+    a label disagreement, or a needs-adjudication or catalog-issue flag set by the second
+    reviewer (also when the labels agree). Generated from the sealed rounds; it carries no
+    label. Separate from `ann-1`'s targeted queue, which is unchanged."""
+
+    query_id: QueryId
+    product_id: ProductId
+    reasons: tuple[JointReason, ...]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        _sorted_unique_reasons(self.reasons)
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.query_id, self.product_id)
+
+
+class ConsensusAdjudication(_Record):
+    """review-2: the joint resolution by both human annotators of one routed pair (a label
+    disagreement and/or a second-reviewer flag). Both participants, the reasons it resolves and
+    the shared rationale are recorded; the label may stay unchanged. A record exists only for a
+    reached resolution: an unresolved item has no record and blocks the label freeze. Catalog
+    issues are noted here only; catalog data is never edited. Human-recorded, never generated
+    or proposed by a tool."""
+
+    query_id: QueryId
+    product_id: ProductId
+    reasons: tuple[JointReason, ...]
+    primary_label: Label
+    second_review_label: Label
+    label: Label
+    relation: Relation
+    rationale: FreeText
+    participants: tuple[AnnotatorHandle, AnnotatorHandle]
+    decided_at: UtcTimestamp
+    rubric_version: RubricVersion
+    changes_label: StrictBool
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        _check_relation(self.label, self.relation)
+        _sorted_unique_reasons(self.reasons)
+        disagree = self.primary_label is not self.second_review_label
+        if disagree != (JointReason.SECOND_REVIEW_DISAGREEMENT in self.reasons):
+            raise ValueError("the disagreement reason must match whether the two labels differ")
+        first, second = self.participants
+        if first == second or first > second:
+            raise ValueError("participants must be two distinct handles, sorted")
+        if self.changes_label != (self.label is not self.primary_label):
+            raise ValueError("changes_label must state whether the primary label changes")
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.query_id, self.product_id)
+
+
+DecimalText = Annotated[StrictStr, Field(pattern=r"^[0-9]+\.[0-9]{10}$|^-[0-9]+\.[0-9]{10}$")]
+ConfusionRow = tuple[Count, Count, Count]
+
+
+class AgreementStatistics(_Frozen):
+    """Observed agreement, chance agreement and unweighted Cohen's kappa as 10-decimal strings
+    rounded half-even. All three are null for an empty sample; kappa is null when chance
+    agreement is 1 (kappa is undefined there), never reported as 0 or 1."""
+
+    agreed_count: Count
+    observed_agreement: DecimalText | None
+    expected_agreement: DecimalText | None
+    cohen_kappa: DecimalText | None
+
+
+class StratumAgreement(_Frozen):
+    """Agreement inside one stratum of the sample: the pairs to which the primary annotator gave
+    `primary_label` (the cs-1 sample is stratified by exactly this label)."""
+
+    primary_label: Label
+    item_count: Count
+    agreed_count: Count
+    observed_agreement: DecimalText | None
+
+
+class AgreementReport(_Record):
+    """review-2 inter-annotator agreement (`iaa-1`) between the primary and the second-review
+    labels on the cs-1 sample. It is generated once, when the second review is sealed and
+    before any consensus adjudication, from the sealed bytes only. It is not intra-annotator
+    consistency and not a population estimate; relation-facet agreement is not reported."""
+
+    report_version: Literal["iaa-1"] = AGREEMENT_REPORT_VERSION
+    review_protocol: Literal["review-2"] = REVIEW_PROTOCOL_2
+    statistic: Literal["inter_annotator_agreement"] = AGREEMENT_STATISTIC_NAME
+    intra_annotator_consistency: Literal["not_measured"] = "not_measured"
+    sample_version: Literal["cs-1"] = CONSISTENCY_SAMPLE_VERSION
+    sample_caveat: StrictStr = AGREEMENT_SAMPLE_CAVEAT
+    primary_annotator: AnnotatorHandle
+    second_annotator: AnnotatorHandle
+    primary_seal_sha256: Sha256
+    second_review_sha256: Sha256
+    second_review_sealed_at: UtcTimestamp
+    label_order: tuple[Label, Label, Label] = LABEL_ORDER  # type: ignore[assignment]
+    item_count: Count
+    # Rows: the primary label; columns: the second-review label; both in `label_order`.
+    confusion: tuple[ConfusionRow, ConfusionRow, ConfusionRow]
+    three_label: AgreementStatistics
+    strict_binary: AgreementStatistics
+    lenient_binary: AgreementStatistics
+    strata: tuple[StratumAgreement, StratumAgreement, StratumAgreement]
+    disagreement_count: Count
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.sample_caveat != AGREEMENT_SAMPLE_CAVEAT:
+            raise ValueError("sample_caveat is the fixed label-stratified sampling caveat")
+        if self.primary_annotator == self.second_annotator:
+            raise ValueError("inter-annotator agreement needs two different annotators")
+        if self.label_order != LABEL_ORDER:
+            raise ValueError("label_order is fixed")
+        if sum(sum(row) for row in self.confusion) != self.item_count:
+            raise ValueError("the confusion matrix must add up to item_count")
+        agreed = sum(self.confusion[i][i] for i in range(3))
+        if self.three_label.agreed_count != agreed:
+            raise ValueError("three_label.agreed_count must be the confusion diagonal")
+        if self.disagreement_count != self.item_count - agreed:
+            raise ValueError("disagreement_count must be item_count minus the agreed count")
+        if tuple(s.primary_label for s in self.strata) != LABEL_ORDER:
+            raise ValueError("strata are listed in label_order")
+        for index, stratum in enumerate(self.strata):
+            if stratum.item_count != sum(self.confusion[index]):
+                raise ValueError("a stratum's item_count must be its confusion row")
+            if stratum.agreed_count != self.confusion[index][index]:
+                raise ValueError("a stratum's agreed_count must be its diagonal cell")
+        return self
+
+    def sort_key(self) -> tuple[str, ...]:
+        return (self.primary_seal_sha256, self.second_review_sha256)

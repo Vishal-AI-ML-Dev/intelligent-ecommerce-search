@@ -14,7 +14,14 @@
   sha256("consistency-1|<primary seal>|query|product") and carry no previous label.
 * `build_adjudication_queue`: the separate targeted-review set. It never changes N, T or the
   consistency denominator.
-* `consistency_disagreements` and `derive_final_judgements`.
+* `consistency_disagreements` and `derive_final_judgements` (review-1).
+* `second_review_disagreements`, `build_joint_resolution_queue` and
+  `derive_final_judgements_review_2` (review-2: the same cs-1 sample is re-labelled by a second,
+  independent human; disagreements and second-reviewer flags are resolved by joint records).
+* `split_review_2_targeted` (review-2 scope revision, approved 2026-10-16): the targeted-queue
+  items that are not routed for joint resolution, split into the mandatory items (any reason
+  other than a borderline primary label or an ambiguous query) and the optional review
+  candidates (selected only for those two reasons).
 """
 
 import hashlib
@@ -32,10 +39,13 @@ from evals.contracts.constants import (
 from evals.contracts.models import (
     AllocationCell,
     Confidence,
+    ConsensusAdjudication,
     ConsistencySample,
     EligibilityRecord,
     FinalJudgement,
     IntentFamily,
+    JointReason,
+    JointResolutionItem,
     Judgement,
     OverallStatus,
     QueryRecord,
@@ -191,6 +201,138 @@ def derive_final_judgements(
                 relation=source.relation,
                 decided_in="adjudication" if pair in decided else "primary",
                 rubric_version=source.rubric_version,
+            )
+        )
+    return finals
+
+
+# ---- review-2 -------------------------------------------------------------------------------
+
+
+def second_review_disagreements(
+    primaries: Sequence[Judgement], second_reviews: Sequence[Judgement]
+) -> frozenset[Pair]:
+    """review-2: the sampled pairs whose second-review label differs from the primary label.
+    Each one needs a joint consensus record before the labels can be frozen."""
+    primary = _by_pair(primaries, Round.PRIMARY)
+    reviewed = _by_pair(second_reviews, Round.SECOND_REVIEW)
+    missing = sorted(set(reviewed) - set(primary))
+    if missing:
+        raise ContractError(f"second-review judgements without a primary judgement: {missing!r}")
+    return frozenset(pair for pair, j in reviewed.items() if j.label is not primary[pair].label)
+
+
+def build_joint_resolution_queue(
+    primaries: Sequence[Judgement], second_reviews: Sequence[Judgement]
+) -> list[JointResolutionItem]:
+    """review-2: every sampled pair that both humans must resolve jointly before the freeze:
+    a label disagreement, or a needs-adjudication or catalog-issue flag set by the second
+    reviewer, also when the labels agree. Both flags are preserved as separate reasons."""
+    primary = _by_pair(primaries, Round.PRIMARY)
+    reviewed = _by_pair(second_reviews, Round.SECOND_REVIEW)
+    missing = sorted(set(reviewed) - set(primary))
+    if missing:
+        raise ContractError(f"second-review judgements without a primary judgement: {missing!r}")
+    queue = []
+    for pair, j in sorted(reviewed.items()):
+        reasons: set[JointReason] = set()
+        if j.label is not primary[pair].label:
+            reasons.add(JointReason.SECOND_REVIEW_DISAGREEMENT)
+        if j.needs_adjudication:
+            reasons.add(JointReason.SECOND_REVIEW_NEEDS_ADJUDICATION)
+        if j.catalog_issue:
+            reasons.add(JointReason.SECOND_REVIEW_CATALOG_ISSUE)
+        if reasons:
+            queue.append(
+                JointResolutionItem(
+                    query_id=pair[0], product_id=pair[1], reasons=tuple(sorted(reasons))
+                )
+            )
+    return queue
+
+
+# review-2 scope revision (approved 2026-10-16). The first review-2 text required every
+# targeted-queue item to be resolved before the freeze; the revision keeps that requirement
+# only for items carrying a reason below that is not automatic selection. An item is optional
+# only when every one of its reasons is in REVIEW_2_OPTIONAL_REASONS, so any other (or future)
+# reason keeps it mandatory. Joint-resolution pairs are always resolved jointly.
+REVIEW_2_OPTIONAL_REASONS: frozenset[ReviewReason] = frozenset(
+    {ReviewReason.BORDERLINE, ReviewReason.AMBIGUOUS_QUERY}
+)
+REVIEW_2_MANDATORY_REASONS: frozenset[ReviewReason] = frozenset(
+    {
+        ReviewReason.NEEDS_ADJUDICATION,  # ann-1's explicit flag
+        ReviewReason.CATALOG_ISSUE,  # ann-1's explicit flag
+        ReviewReason.LOW_CONFIDENCE,  # ann-1's own confidence (MASTER_PLAN 6.3)
+        ReviewReason.HARD_CONSTRAINT_UNKNOWN,  # missing hard-constraint evidence
+    }
+)
+
+
+def is_review_2_mandatory(item: QueueItem) -> bool:
+    return not set(item.review_reasons) <= REVIEW_2_OPTIONAL_REASONS
+
+
+def split_review_2_targeted(
+    queue: Sequence[QueueItem], joint_queue: Sequence[JointResolutionItem]
+) -> tuple[list[QueueItem], list[QueueItem]]:
+    """review-2: the targeted-queue items not routed for joint resolution, as (mandatory,
+    optional), both in queue order. A routed pair is in neither: its joint record settles it."""
+    routed = {(i.query_id, i.product_id) for i in joint_queue}
+    mandatory: list[QueueItem] = []
+    optional: list[QueueItem] = []
+    for item in queue:
+        if (item.query_id, item.product_id) in routed:
+            continue
+        (mandatory if is_review_2_mandatory(item) else optional).append(item)
+    return mandatory, optional
+
+
+def derive_final_judgements_review_2(
+    primaries: Sequence[Judgement],
+    adjudications: Sequence[Judgement],
+    consensus: Sequence[ConsensusAdjudication],
+) -> list[FinalJudgement]:
+    """review-2 final labels: the joint resolution's label for a routed pair (disagreement or
+    second-reviewer flag), else the single-annotator adjudication of a targeted-queue item, else
+    the primary label (`decided_in: primary`; this includes an optional review candidate that
+    was not adjudicated, which is never reported as resolved or re-reviewed)."""
+    primary = _by_pair(primaries, Round.PRIMARY)
+    decided = _by_pair(adjudications, Round.ADJUDICATION)
+    agreed: dict[Pair, ConsensusAdjudication] = {}
+    for record in consensus:
+        pair = (record.query_id, record.product_id)
+        if pair in agreed:
+            raise ContractError(f"duplicate consensus record for {pair!r}")
+        agreed[pair] = record
+    unknown = sorted((set(decided) | set(agreed)) - set(primary))
+    if unknown:
+        raise ContractError(f"decisions without a primary judgement: {unknown!r}")
+    both = sorted(set(decided) & set(agreed))
+    if both:
+        raise ContractError(f"pairs decided both by one annotator and by consensus: {both!r}")
+    finals = []
+    for pair in sorted(primary):
+        if pair in agreed:
+            record = agreed[pair]
+            label, relation, decided_in, rubric = (
+                record.label,
+                record.relation,
+                "consensus",
+                record.rubric_version,
+            )
+        else:
+            source = decided.get(pair, primary[pair])
+            label, relation, rubric = source.label, source.relation, source.rubric_version
+            decided_in = "adjudication" if pair in decided else "primary"
+        finals.append(
+            FinalJudgement(
+                query_id=pair[0],
+                product_id=pair[1],
+                label=label,
+                relation=relation,
+                decided_in=decided_in,  # type: ignore[arg-type]
+                rubric_version=rubric,
             )
         )
     return finals

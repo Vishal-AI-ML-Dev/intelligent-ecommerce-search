@@ -51,6 +51,41 @@ DISCLOSURE_SINGLE_ANNOTATOR = (
     "no independent inter-annotator agreement is claimed."
 )
 
+# ---- review protocols -----------------------------------------------------------------------
+# `review-1` is the original single-annotator protocol above (D5): primary round, a 72-hour
+# delayed intra-annotator consistency round on the cs-1 sample, single-annotator adjudication.
+# It is implicit: a manifest without `review_protocol` follows it, so legacy bytes are unchanged.
+# `review-2` is the approved M9 amendment (2026-10-15). After the unchanged primary seal, a
+# second, independent human annotator re-labels the same cs-1 sample blind; inter-annotator
+# agreement is reported on that sample, intra-annotator consistency is NOT measured, and every
+# disagreement is resolved by a joint consensus record of both humans. It never rewrites
+# review-1 records or decisions.
+REVIEW_PROTOCOL_2 = "review-2"
+SECOND_REVIEWER_HANDLE = "ann-2"
+AGREEMENT_REPORT_VERSION = "iaa-1"
+AGREEMENT_STATISTIC_NAME = "inter_annotator_agreement"
+REVIEWER_BUNDLE_VERSION = "rb-1"
+AGREEMENT_SAMPLE_CAVEAT = (
+    "Agreement is measured only on the cs-1 sample, which is stratified by the primary "
+    "annotator's labels (round-robin over labels), so it over-represents rarer labels. The "
+    "figures describe that sample and its strata only; they are not population estimates."
+)
+DISCLOSURE_REVIEW_2 = (
+    "Every primary label was assigned by one human annotator (ann-1). A second, independent "
+    "human annotator (ann-2) re-labelled the cs-1 sample blind to ann-1's labels; "
+    "inter-annotator agreement is reported on that label-stratified sample only and is not "
+    "proof of label accuracy. Delayed intra-annotator consistency was not measured. "
+    "Second-review disagreements and pairs ann-2 flagged for adjudication or a catalog issue "
+    "were resolved jointly by both annotators; a pair in both queues was resolved by one joint "
+    "record that also settles its targeted-queue item. Items only in ann-1's targeted queue "
+    "that carried ann-1's needs-adjudication or catalog-issue flag, low confidence or an "
+    "unknown hard-constraint attribute were resolved by ann-1. Items selected only because the "
+    "primary label was borderline or the query was ambiguous were optional review candidates: "
+    "any that ann-1 did not adjudicate keep their sealed primary label and were not re-reviewed. "
+    "Every required item was resolved before the labels were frozen. "
+    "Blindness was procedural (a separate reviewer bundle), not cryptographic isolation."
+)
+
 # Pseudonymous annotator handles only (D11); never a name or an email address.
 ANNOTATOR_HANDLE_PATTERN = r"^ann-[1-9][0-9]{0,3}$"
 # The one approved human annotator of every round and every label change (D5 final).

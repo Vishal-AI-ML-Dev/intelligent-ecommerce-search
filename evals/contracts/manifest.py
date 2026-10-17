@@ -16,10 +16,17 @@ Lifecycle (strictly ordered; each stage is a new manifest file and earlier ones 
 edited): `queries_frozen` (queries, gold constraints, product intents, the generated qu-1
 extraction record and the recorded authoring attestation) → `pool_frozen` (the public pool, its
 eligibility records and the aggregate pool report) → `primary_sealed` → `labels_frozen` →
-`provenance_unsealed`. From `pool_frozen` the private provenance (one `PoolProvenance` object
-file) is represented only by its checksum (`provenance_binding`); it becomes an entry at
-`provenance_unsealed`, where its hash must equal that binding (D12). Every entry of a stage is
-carried unchanged into the next stage.
+`provenance_unsealed`. That is the `review-1` order. Under the `review-2` amendment (an explicit
+`review_protocol` field, set from `second_review_sealed` onwards and omitted before, so every
+earlier manifest keeps its exact bytes) the order is `queries_frozen` → `pool_frozen` →
+`primary_sealed` → `second_review_sealed` (the blind second-review judgements, the
+inter-annotator agreement report and the joint-resolution queue) → `labels_frozen` →
+`provenance_unsealed`; its `labels_frozen` carries joint consensus records instead of
+consistency judgements. Role sets
+and transitions are branched explicitly by protocol. From `pool_frozen` the private provenance
+(one `PoolProvenance` object file) is represented only by its checksum (`provenance_binding`);
+it becomes an entry at `provenance_unsealed`, where its hash must equal that binding (D12).
+Every entry of a stage is carried unchanged into the next stage.
 `labels_frozen_at` (UTC, hashed like every other field) is the explicit freeze time: null before
 `labels_frozen`, set from it onwards and never changed; it is no earlier than the primary seal
 here, and no earlier than any included record (`validation.validate_labels_frozen_at`).
@@ -32,9 +39,18 @@ against a regeneration when one is supplied.
 import json
 from collections.abc import Sequence
 from enum import StrEnum
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field, StrictInt, StrictStr, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    StrictInt,
+    StrictStr,
+    model_serializer,
+    model_validator,
+)
 
 from evals.contracts.canonical import (
     CanonicalFormError,
@@ -45,13 +61,16 @@ from evals.contracts.canonical import (
     encode_jsonl,
     sha256_hex,
 )
-from evals.contracts.constants import GOLDEN_ID
+from evals.contracts.constants import GOLDEN_ID, REVIEW_PROTOCOL_2
 from evals.contracts.models import (
+    AgreementReport,
     AuthoringAttestation,
+    ConsensusAdjudication,
     ConsistencySample,
     EligibilityRecord,
     FinalJudgement,
     GoldConstraint,
+    JointResolutionItem,
     Judgement,
     LabelChange,
     PartitionAssignment,
@@ -76,11 +95,45 @@ class Stage(StrEnum):
     QUERIES_FROZEN = "queries_frozen"
     POOL_FROZEN = "pool_frozen"
     PRIMARY_SEALED = "primary_sealed"
+    SECOND_REVIEW_SEALED = "second_review_sealed"  # review-2 only
     LABELS_FROZEN = "labels_frozen"
     PROVENANCE_UNSEALED = "provenance_unsealed"
 
 
-STAGE_ORDER: tuple[Stage, ...] = tuple(Stage)
+# The review-1 lifecycle (unchanged; a manifest without `review_protocol`).
+STAGE_ORDER: tuple[Stage, ...] = (
+    Stage.QUERIES_FROZEN,
+    Stage.POOL_FROZEN,
+    Stage.PRIMARY_SEALED,
+    Stage.LABELS_FROZEN,
+    Stage.PROVENANCE_UNSEALED,
+)
+# The review-2 lifecycle: the second review is sealed between the primary seal and the freeze.
+REVIEW_2_STAGE_ORDER: tuple[Stage, ...] = (
+    Stage.QUERIES_FROZEN,
+    Stage.POOL_FROZEN,
+    Stage.PRIMARY_SEALED,
+    Stage.SECOND_REVIEW_SEALED,
+    Stage.LABELS_FROZEN,
+    Stage.PROVENANCE_UNSEALED,
+)
+_STAGE_ORDERS: dict[str | None, tuple[Stage, ...]] = {
+    None: STAGE_ORDER,
+    REVIEW_PROTOCOL_2: REVIEW_2_STAGE_ORDER,
+}
+
+
+def stage_order(review_protocol: str | None = None) -> tuple[Stage, ...]:
+    try:
+        return _STAGE_ORDERS[review_protocol]
+    except KeyError:
+        raise ContractError(f"unknown review protocol {review_protocol!r}") from None
+
+
+def stage_rank(stage: Stage) -> int:
+    """A protocol-independent rank (both lifecycles are sub-sequences of this order), used only
+    for "at or after stage X" checks."""
+    return REVIEW_2_STAGE_ORDER.index(stage)
 
 
 class Role(StrEnum):
@@ -101,6 +154,11 @@ class Role(StrEnum):
     PARTITIONS = "partitions"
     FINAL_JUDGEMENTS = "final_judgements"
     PROVENANCE = "provenance"
+    # review-2 only
+    SECOND_REVIEW_JUDGEMENTS = "second_review_judgements"
+    AGREEMENT_REPORT = "agreement_report"
+    CONSENSUS_ADJUDICATIONS = "consensus_adjudications"
+    JOINT_RESOLUTION_QUEUE = "joint_resolution_queue"
 
 
 class EntryKind(StrEnum):
@@ -126,6 +184,10 @@ ROLE_KIND: dict[Role, EntryKind] = {
     Role.PARTITIONS: EntryKind.RECORDED,
     Role.FINAL_JUDGEMENTS: EntryKind.GENERATED,
     Role.PROVENANCE: EntryKind.GENERATED,
+    Role.SECOND_REVIEW_JUDGEMENTS: EntryKind.RECORDED,
+    Role.AGREEMENT_REPORT: EntryKind.GENERATED,
+    Role.CONSENSUS_ADJUDICATIONS: EntryKind.RECORDED,
+    Role.JOINT_RESOLUTION_QUEUE: EntryKind.GENERATED,
 }
 
 # Record model per role.
@@ -147,15 +209,26 @@ ROLE_MODEL: dict[Role, type[BaseModel]] = {
     Role.PARTITIONS: PartitionAssignment,
     Role.FINAL_JUDGEMENTS: FinalJudgement,
     Role.PROVENANCE: PoolProvenance,
+    Role.SECOND_REVIEW_JUDGEMENTS: Judgement,
+    Role.AGREEMENT_REPORT: AgreementReport,
+    Role.CONSENSUS_ADJUDICATIONS: ConsensusAdjudication,
+    Role.JOINT_RESOLUTION_QUEUE: JointResolutionItem,
 }
 # Single-object files; every other role is JSONL.
 OBJECT_ROLES = frozenset(
-    {Role.CONSISTENCY_SAMPLE, Role.AUTHORING_ATTESTATION, Role.POOL_REPORT, Role.PROVENANCE}
+    {
+        Role.CONSISTENCY_SAMPLE,
+        Role.AUTHORING_ATTESTATION,
+        Role.POOL_REPORT,
+        Role.PROVENANCE,
+        Role.AGREEMENT_REPORT,
+    }
 )
 ROLE_ROUND: dict[Role, Round] = {
     Role.PRIMARY_JUDGEMENTS: Round.PRIMARY,
     Role.CONSISTENCY_JUDGEMENTS: Round.CONSISTENCY,
     Role.ADJUDICATION_JUDGEMENTS: Round.ADJUDICATION,
+    Role.SECOND_REVIEW_JUDGEMENTS: Round.SECOND_REVIEW,
 }
 
 _ADDED_AT: dict[Stage, frozenset[Role]] = {
@@ -183,12 +256,38 @@ _ADDED_AT: dict[Stage, frozenset[Role]] = {
     ),
     Stage.PROVENANCE_UNSEALED: frozenset({Role.PROVENANCE}),
 }
+# review-2: identical up to `primary_sealed` (so the primary seal is unchanged); the consistency
+# sample sealed there is the second-review sample; no consistency judgements exist.
+_ADDED_AT_REVIEW_2: dict[Stage, frozenset[Role]] = {
+    **{stage: _ADDED_AT[stage] for stage in STAGE_ORDER[:3]},
+    Stage.SECOND_REVIEW_SEALED: frozenset(
+        {Role.SECOND_REVIEW_JUDGEMENTS, Role.AGREEMENT_REPORT, Role.JOINT_RESOLUTION_QUEUE}
+    ),
+    Stage.LABELS_FROZEN: frozenset(
+        {
+            Role.ADJUDICATION_JUDGEMENTS,
+            Role.CONSENSUS_ADJUDICATIONS,
+            Role.LABEL_CHANGES,
+            Role.PARTITIONS,
+            Role.FINAL_JUDGEMENTS,
+        }
+    ),
+    Stage.PROVENANCE_UNSEALED: _ADDED_AT[Stage.PROVENANCE_UNSEALED],
+}
+_ADDED_AT_BY_PROTOCOL: dict[str | None, dict[Stage, frozenset[Role]]] = {
+    None: _ADDED_AT,
+    REVIEW_PROTOCOL_2: _ADDED_AT_REVIEW_2,
+}
 
 
-def stage_roles(stage: Stage) -> frozenset[Role]:
-    """The exact set of roles a manifest at `stage` must list (cumulative)."""
-    index = STAGE_ORDER.index(stage)
-    return frozenset().union(*(_ADDED_AT[s] for s in STAGE_ORDER[: index + 1]))
+def stage_roles(stage: Stage, review_protocol: str | None = None) -> frozenset[Role]:
+    """The exact set of roles a manifest at `stage` must list (cumulative) under the review
+    protocol (`None` is review-1)."""
+    order = stage_order(review_protocol)
+    if stage not in order:
+        raise ContractError(f"stage {stage.value} is not part of review protocol {review_protocol}")
+    added = _ADDED_AT_BY_PROTOCOL[review_protocol]
+    return frozenset().union(*(added[s] for s in order[: order.index(stage) + 1]))
 
 
 class ManifestEntry(_Frozen):
@@ -243,7 +342,14 @@ class Manifest(_Record):
     labels_frozen_at: UtcTimestamp | None = None
     previous_manifest_sha256: Sha256 | None = None
     supersedes_manifest_sha256: Sha256 | None = None
+    review_protocol: Literal["review-2"] | None = None
     manifest_sha256: Sha256
+
+    @model_serializer(mode="wrap")
+    def _omit_review_1_protocol(
+        self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        return _without_implicit_protocol(handler(self))
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -253,15 +359,21 @@ class Manifest(_Record):
         roles = [e.role for e in self.entries]
         if len(set(roles)) != len(roles):
             raise ValueError("each role appears at most once")
-        if set(roles) != stage_roles(self.stage):
-            expected = sorted(r.value for r in stage_roles(self.stage))
+        if self.stage not in stage_order(self.review_protocol):
+            raise ValueError(f"stage {self.stage.value} requires review_protocol review-2")
+        if self.review_protocol is not None and stage_rank(self.stage) < stage_rank(
+            Stage.SECOND_REVIEW_SEALED
+        ):
+            raise ValueError("review_protocol is set from second_review_sealed onwards only")
+        if set(roles) != stage_roles(self.stage, self.review_protocol):
+            expected = sorted(r.value for r in stage_roles(self.stage, self.review_protocol))
             raise ValueError(f"stage {self.stage.value} requires exactly the roles {expected}")
-        index = STAGE_ORDER.index(self.stage)
-        if (self.provenance_binding is None) != (index < STAGE_ORDER.index(Stage.POOL_FROZEN)):
+        index = stage_rank(self.stage)
+        if (self.provenance_binding is None) != (index < stage_rank(Stage.POOL_FROZEN)):
             raise ValueError("provenance_binding is set from pool_frozen onwards, and only then")
-        if (self.primary_sealed_at is None) != (index < STAGE_ORDER.index(Stage.PRIMARY_SEALED)):
+        if (self.primary_sealed_at is None) != (index < stage_rank(Stage.PRIMARY_SEALED)):
             raise ValueError("primary_sealed_at is set from primary_sealed onwards, and only then")
-        if (self.labels_frozen_at is None) != (index < STAGE_ORDER.index(Stage.LABELS_FROZEN)):
+        if (self.labels_frozen_at is None) != (index < stage_rank(Stage.LABELS_FROZEN)):
             raise ValueError("labels_frozen_at is set from labels_frozen onwards, and only then")
         if (
             self.labels_frozen_at is not None
@@ -322,6 +434,21 @@ class _ManifestBody(_Record):
     labels_frozen_at: UtcTimestamp | None = None
     previous_manifest_sha256: StrictStr | None = None
     supersedes_manifest_sha256: StrictStr | None = None
+    review_protocol: StrictStr | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_review_1_protocol(
+        self, handler: SerializerFunctionWrapHandler, info: SerializationInfo
+    ) -> dict[str, Any]:
+        return _without_implicit_protocol(handler(self))
+
+
+def _without_implicit_protocol(body: dict[str, Any]) -> dict[str, Any]:
+    """review-1 is implicit: a null `review_protocol` is never serialized, so every manifest
+    written before the review-2 amendment keeps its exact bytes and `manifest_sha256`."""
+    if body.get("review_protocol") is None:
+        body.pop("review_protocol", None)
+    return body
 
 
 def encode_manifest(manifest: Manifest) -> bytes:
@@ -399,7 +526,23 @@ _IDENTITY_FIELDS = (
 
 
 def validate_transition(previous: Manifest, current: Manifest) -> None:
-    if STAGE_ORDER.index(current.stage) != STAGE_ORDER.index(previous.stage) + 1:
+    """One legal step of the current manifest's protocol. The protocol can change only from
+    review-1 (implicit) to review-2, and only on the step into `second_review_sealed`."""
+    if previous.review_protocol != current.review_protocol and not (
+        previous.review_protocol is None
+        and current.review_protocol == REVIEW_PROTOCOL_2
+        and current.stage is Stage.SECOND_REVIEW_SEALED
+    ):
+        raise ContractError(
+            "review_protocol can change only from review-1 to review-2, "
+            "on the step into second_review_sealed"
+        )
+    order = stage_order(current.review_protocol)
+    if (
+        previous.stage not in order
+        or current.stage not in order
+        or order.index(current.stage) != order.index(previous.stage) + 1
+    ):
         raise ContractError(
             f"illegal stage transition {previous.stage.value} → {current.stage.value}"
         )

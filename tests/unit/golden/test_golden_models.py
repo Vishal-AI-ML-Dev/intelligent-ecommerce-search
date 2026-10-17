@@ -77,8 +77,11 @@ def test_relation_facet_partitions_the_relations():
     assert Relation.COMPLEMENT in ALLOWED_RELATIONS[Label.NOT_RELEVANT]  # D3
 
 
-def test_there_is_no_second_reviewer_round():
-    assert {r.value for r in Round} == {"primary", "consistency", "adjudication"}
+def test_review_1_rounds_are_unchanged_and_review_2_adds_only_the_second_review():
+    # review-1 (D5) had no second-reviewer round; the approved review-2 amendment adds exactly
+    # one, kept distinct from the intra-annotator consistency round.
+    assert {r.value for r in Round} == {"primary", "consistency", "adjudication", "second_review"}
+    assert Round.SECOND_REVIEW is not Round.CONSISTENCY
 
 
 # ---- queries and partitions --------------------------------------------------------------------

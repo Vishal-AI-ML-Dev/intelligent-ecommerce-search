@@ -153,13 +153,18 @@ def test_adjudication_cannot_predate_the_seal_or_its_consistency_repeat():
 
 
 def test_a_corrected_version_supersedes_the_previous_terminal_manifest(catalog):
-    from evals.contracts.manifest import Stage, validate_succession, validate_transition
+    from evals.contracts.manifest import (
+        STAGE_ORDER,
+        Stage,
+        validate_succession,
+        validate_transition,
+    )
     from pydantic import ValidationError
     from test_golden_manifest import _files, _manifest
 
     files = _files(catalog)
     v1: list = []
-    for stage in Stage:
+    for stage in STAGE_ORDER:
         v1.append(_manifest(stage, files, v1[-1] if v1 else None))
     terminal = v1[-1]
     assert terminal.supersedes_manifest_sha256 is None
