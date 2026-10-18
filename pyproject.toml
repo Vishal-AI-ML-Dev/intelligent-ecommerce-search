@@ -14,6 +14,8 @@ dependencies = [
     "sentence-transformers>=6.1.0",
     "sqlalchemy>=2.0",
     "torch>=2.14.1",
+    # Milestone 11: optional Jev provider (ADR-005). Exact pin; imported only when JEV_ENABLED.
+    "typesafe-sdk==0.7.5",
     "uvicorn>=0.30",
 ]
 
