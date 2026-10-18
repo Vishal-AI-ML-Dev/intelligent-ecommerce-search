@@ -1,7 +1,8 @@
 import pytest
-from pydantic import ValidationError
+from pydantic import AliasChoices, Field, SecretStr, ValidationError
 
 from ecommerce_search.config import Settings
+from ecommerce_search.config.settings import _secret_input_names
 
 ENV_KEYS = [
     "APP_ENV",
@@ -382,3 +383,286 @@ def test_reranker_settings_do_not_reach_the_pure_reranking_modules():
 
     for module in (spec, provider):
         assert "Settings" not in vars(module) and "get_settings" not in vars(module)
+
+
+# Milestone 11: optional Jev provider (ADR-005). Configuration errors fail validation, even while
+# Jev is disabled; runtime call failures fall back (tests/unit/search/test_jev_provider.py).
+FAKE_KEY = "ts-test-key-not-real-7f3a9c"
+
+
+def test_jev_is_disabled_by_default_and_needs_no_key(make_settings):
+    s = make_settings()
+    assert (s.jev_enabled, s.typesafe_api_key, s.jev_config()) == (False, None, None)
+    assert (s.jev_model, s.jev_base_url) == ("jev-1.13.0", "https://api.typesafe.ai")
+    assert (s.jev_attempt_timeout_seconds, s.jev_max_retries, s.jev_retry_budget_seconds) == (
+        1.25,
+        1,
+        3.0,
+    )
+    assert (s.jev_deadline_seconds, s.jev_max_in_flight) == (3.0, 8)
+
+
+def test_enabled_jev_builds_its_config(make_settings):
+    config = make_settings(jev_enabled=True, typesafe_api_key=f"  {FAKE_KEY} ").jev_config()
+    assert config is not None
+    assert config.api_key.get_secret_value() == FAKE_KEY
+    assert (config.model, config.base_url, config.max_retries) == (
+        "jev-1.13.0",
+        "https://api.typesafe.ai",
+        1,
+    )
+
+
+def test_a_key_without_enablement_still_builds_no_config(make_settings):
+    assert make_settings(typesafe_api_key=FAKE_KEY).jev_config() is None
+
+
+@pytest.mark.parametrize("empty", ["", "   "])
+def test_an_empty_key_is_unset(make_settings, empty):
+    assert make_settings(typesafe_api_key=empty).typesafe_api_key is None
+    with pytest.raises(ValidationError):
+        make_settings(jev_enabled=True, typesafe_api_key=empty)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"jev_enabled": True},
+        {"jev_enabled": "yes"},
+        {"jev_enabled": 1},
+        {"typesafe_api_key": "has space"},
+        {"typesafe_api_key": "nön-ascii"},
+        {"jev_model": "jev-latest"},
+        {"jev_model": "jev-preview"},
+        {"jev_model": "jev"},
+        {"jev_model": "JEV-1.13.0"},
+        {"jev_model": "jev-1.13"},
+        {"jev_base_url": "http://api.typesafe.ai"},
+        {"jev_base_url": "https://user:pw@api.typesafe.ai"},
+        {"jev_base_url": "https://api.typesafe.ai?x=1"},
+        {"jev_base_url": "https://"},
+        {"jev_attempt_timeout_seconds": 0},
+        {"jev_attempt_timeout_seconds": 11},
+        {"jev_attempt_timeout_seconds": "nan"},
+        {"jev_attempt_timeout_seconds": True},
+        {"jev_retry_budget_seconds": "inf"},
+        {"jev_retry_budget_seconds": 31},
+        {"jev_max_retries": 3},
+        {"jev_max_retries": -1},
+        {"jev_max_retries": "1.0"},
+        {"jev_max_retries": True},
+        # Retries must stay reachable: retries * (attempt timeout + 0.25 s backoff) < budget.
+        {"jev_max_retries": 2},
+        {"jev_attempt_timeout_seconds": 2.75},
+        {"jev_retry_budget_seconds": 1.5},
+        # FR-DEC-3 deadline and in-flight bound.
+        {"jev_deadline_seconds": 0},
+        {"jev_deadline_seconds": 31},
+        {"jev_deadline_seconds": "nan"},
+        {"jev_deadline_seconds": True},
+        {"jev_max_in_flight": 0},
+        {"jev_max_in_flight": 65},
+        {"jev_max_in_flight": True},
+        {"jev_max_in_flight": "1.5"},
+        # The attempt timeout and retry budget must fit inside the deadline.
+        {"jev_deadline_seconds": 2.5},
+        {"jev_deadline_seconds": 1.0, "jev_retry_budget_seconds": 1.0, "jev_max_retries": 0},
+    ],
+)
+def test_invalid_jev_settings_fail_even_while_disabled(make_settings, overrides):
+    with pytest.raises(ValidationError):
+        make_settings(**overrides)
+
+
+def test_valid_jev_overrides(make_settings):
+    s = make_settings(
+        jev_model="jev-1.14.0",
+        jev_base_url="https://api.typesafe.ai/",
+        jev_max_retries=0,
+        jev_attempt_timeout_seconds=0.5,
+        jev_retry_budget_seconds=0.5,
+    )
+    assert (s.jev_model, s.jev_base_url, s.jev_max_retries) == (
+        "jev-1.14.0",
+        "https://api.typesafe.ai",
+        0,
+    )
+
+
+def test_jev_settings_read_from_environment(monkeypatch):
+    monkeypatch.setenv("POSTGRES_PASSWORD", "pw")
+    monkeypatch.setenv("JEV_ENABLED", "TRUE")
+    monkeypatch.setenv("TYPESAFE_API_KEY", FAKE_KEY)
+    monkeypatch.setenv("JEV_MODEL", "jev-1.13.0")
+    monkeypatch.setenv("JEV_ATTEMPT_TIMEOUT_SECONDS", "1.0")
+    monkeypatch.setenv("JEV_MAX_RETRIES", "1")
+    monkeypatch.setenv("JEV_RETRY_BUDGET_SECONDS", "2.5")
+    monkeypatch.setenv("JEV_DEADLINE_SECONDS", "2.75")
+    monkeypatch.setenv("JEV_MAX_IN_FLIGHT", "4")
+    s = Settings(_env_file=None)
+    config = s.jev_config()
+    assert config is not None and config.api_key.get_secret_value() == FAKE_KEY
+    assert (config.attempt_timeout_seconds, config.retry_budget_seconds) == (1.0, 2.5)
+    assert (config.deadline_seconds, config.max_in_flight) == (2.75, 4)
+
+
+def test_the_key_never_appears_in_reprs_or_validation_errors(make_settings):
+    s = make_settings(jev_enabled=True, typesafe_api_key=FAKE_KEY)
+    assert FAKE_KEY not in repr(s) and FAKE_KEY not in repr(s.jev_config())
+    # A model-level error from an unrelated field would otherwise echo every input value.
+    for overrides in (
+        {"typesafe_api_key": FAKE_KEY, "search_default_top_k": 60},
+        {"typesafe_api_key": f"{FAKE_KEY} x"},
+        {"typesafe_api_key": FAKE_KEY, "jev_max_retries": 2},
+    ):
+        with pytest.raises(ValidationError) as caught:
+            make_settings(**overrides)
+        assert FAKE_KEY not in str(caught.value) and FAKE_KEY not in repr(caught.value)
+
+
+# Structured-error disclosure (fake secrets only). Pydantic records raw inputs in `errors()` and
+# `json()` even with hide_input_in_errors=True, and a model-level error records the whole input
+# dict; `_SecretInputSource` wraps secret values as SecretStr in every source before validation.
+FAKE_PW = "pw-test-not-real-4b2e"
+SOURCES = ["init", "env", "dotenv", "secrets_dir"]
+
+
+def _assert_no_fake_secret(error: ValidationError) -> None:
+    text = " ".join(
+        [
+            str(error),
+            repr(error),
+            repr(error.errors()),
+            error.json(),
+            repr(error.errors(include_input=False)),
+        ]
+    )
+    assert FAKE_KEY not in text and FAKE_PW not in text
+
+
+def _settings_from(source, tmp_path, monkeypatch, *, key=FAKE_KEY, cls=Settings, **init):
+    """FAKE_PW and `key` arrive through exactly one source; `init` overrides always come in as
+    constructor arguments."""
+    kwargs: dict = {"_env_file": None}
+    if source == "init":
+        kwargs.update(postgres_password=FAKE_PW, typesafe_api_key=key)
+    elif source == "env":
+        monkeypatch.setenv("POSTGRES_PASSWORD", FAKE_PW)
+        monkeypatch.setenv("TYPESAFE_API_KEY", key)
+    elif source == "dotenv":
+        dotenv = tmp_path / "fake.env"
+        dotenv.write_text(
+            f"POSTGRES_PASSWORD={FAKE_PW}\nTYPESAFE_API_KEY={key}\n", encoding="utf-8"
+        )
+        kwargs["_env_file"] = dotenv
+    else:
+        secrets = tmp_path / "secrets"
+        secrets.mkdir()
+        (secrets / "postgres_password").write_text(FAKE_PW, encoding="utf-8")
+        (secrets / "typesafe_api_key").write_text(key, encoding="utf-8")
+        kwargs["_secrets_dir"] = secrets
+    return cls(**kwargs, **init)
+
+
+def test_secret_fields_are_derived_from_secretstr_annotations():
+    assert _secret_input_names(Settings.model_fields) == {"postgres_password", "typesafe_api_key"}
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_secret_values_still_arrive_unchanged_from_every_source(source, tmp_path, monkeypatch):
+    s = _settings_from(source, tmp_path, monkeypatch, jev_enabled=True)
+    assert s.postgres_password.get_secret_value() == FAKE_PW
+    assert s.database_url().password == FAKE_PW
+    assert s.jev_config().api_key.get_secret_value() == FAKE_KEY
+    assert FAKE_KEY not in repr(s) and FAKE_PW not in repr(s)
+
+
+@pytest.mark.parametrize("source", SOURCES)
+@pytest.mark.parametrize(
+    "init",
+    [{"search_default_top_k": 60}, {"jev_max_retries": 2}, {"search_rerank_depth": 51}],
+    ids=["model-level-top-k", "model-level-jev-budget", "model-level-rerank-depth"],
+)
+def test_model_level_errors_never_carry_fake_secrets(source, init, tmp_path, monkeypatch):
+    with pytest.raises(ValidationError) as caught:
+        _settings_from(source, tmp_path, monkeypatch, **init)
+    _assert_no_fake_secret(caught.value)
+
+
+@pytest.mark.parametrize("source", SOURCES)
+def test_key_format_errors_never_carry_the_fake_key(source, tmp_path, monkeypatch):
+    with pytest.raises(ValidationError) as caught:
+        _settings_from(source, tmp_path, monkeypatch, key=f"{FAKE_KEY}\tx")
+    assert [e["loc"] for e in caught.value.errors()] == [("typesafe_api_key",)]
+    _assert_no_fake_secret(caught.value)
+
+
+def test_existing_secret_validation_is_preserved(make_settings, monkeypatch):
+    with pytest.raises(ValidationError) as caught:
+        Settings(_env_file=None, postgres_password="", typesafe_api_key=FAKE_KEY)
+    assert [e["type"] for e in caught.value.errors()] == ["too_short"]
+    _assert_no_fake_secret(caught.value)
+    with pytest.raises(ValidationError) as caught:
+        Settings(_env_file=None, typesafe_api_key=FAKE_KEY)
+    assert [e["type"] for e in caught.value.errors()] == ["missing"]
+    _assert_no_fake_secret(caught.value)
+    with pytest.raises(ValidationError) as caught:
+        make_settings(postgres_password=FAKE_PW, jev_enabled=True)
+    _assert_no_fake_secret(caught.value)
+    assert make_settings(typesafe_api_key="   ").typesafe_api_key is None
+
+
+def test_secret_source_precedence_is_unchanged(tmp_path, monkeypatch):
+    # Default order: constructor > environment > dotenv > secrets directory.
+    monkeypatch.setenv("POSTGRES_PASSWORD", "pw-env-fake")
+    dotenv = tmp_path / "fake.env"
+    dotenv.write_text(
+        "POSTGRES_PASSWORD=pw-dotenv-fake\nTYPESAFE_API_KEY=key-dotenv-fake\n", encoding="utf-8"
+    )
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    (secrets / "postgres_password").write_text("pw-secrets-fake", encoding="utf-8")
+    (secrets / "typesafe_api_key").write_text("key-secrets-fake", encoding="utf-8")
+
+    def build(**init):
+        s = Settings(_env_file=dotenv, _secrets_dir=secrets, **init)
+        return s.postgres_password.get_secret_value(), s.typesafe_api_key.get_secret_value()
+
+    assert build(typesafe_api_key="key-init-fake") == ("pw-env-fake", "key-init-fake")
+    assert build() == ("pw-env-fake", "key-dotenv-fake")
+    monkeypatch.delenv("POSTGRES_PASSWORD")
+    dotenv.write_text("POSTGRES_PASSWORD=pw-dotenv-fake\n", encoding="utf-8")
+    assert build() == ("pw-dotenv-fake", "key-secrets-fake")
+
+
+class _AliasedSettings(Settings):
+    typesafe_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("typesafe_api_key", "TS_TEST_ALIAS_KEY")
+    )
+
+
+def test_aliased_secret_inputs_are_masked_too(monkeypatch):
+    assert "ts_test_alias_key" in _secret_input_names(_AliasedSettings.model_fields)
+    s = _AliasedSettings(_env_file=None, postgres_password=FAKE_PW, TS_TEST_ALIAS_KEY=FAKE_KEY)
+    assert s.typesafe_api_key.get_secret_value() == FAKE_KEY
+    for build in (
+        lambda: _AliasedSettings(
+            _env_file=None,
+            postgres_password=FAKE_PW,
+            TS_TEST_ALIAS_KEY=FAKE_KEY,
+            search_default_top_k=60,
+        ),
+        lambda: _AliasedSettings(
+            _env_file=None, postgres_password=FAKE_PW, search_default_top_k=60
+        ),
+    ):
+        monkeypatch.setenv("TS_TEST_ALIAS_KEY", FAKE_KEY)
+        with pytest.raises(ValidationError) as caught:
+            build()
+        _assert_no_fake_secret(caught.value)
+    assert (
+        _AliasedSettings(
+            _env_file=None, postgres_password=FAKE_PW
+        ).typesafe_api_key.get_secret_value()
+        == FAKE_KEY
+    )

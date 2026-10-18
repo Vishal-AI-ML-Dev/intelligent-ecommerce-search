@@ -1,11 +1,15 @@
+import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, get_args
+from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, AliasPath, Field, SecretStr, field_validator, model_validator
+from pydantic.fields import FieldInfo
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 from sqlalchemy.engine import URL
 
+from ecommerce_search.decision.jev_provider import JEV_BACKOFF_MAX_SECONDS, JevConfig
 from ecommerce_search.embeddings.spec import (
     ALL_MINILM_L6_V2,
     EMBEDDING_MODELS,
@@ -19,6 +23,65 @@ from ecommerce_search.reranking.spec import (
     registered_reranker,
 )
 
+# A versioned Jev model id; the moving aliases (`jev-latest`, `jev-preview`, `jev`) are rejected.
+_JEV_PINNED_MODEL = re.compile(r"jev-\d+\.\d+\.\d+")
+
+
+def _secret_input_names(fields: dict[str, FieldInfo]) -> frozenset[str]:
+    """Lower-cased names and aliases of every field typed `SecretStr` (or `SecretStr | None`)."""
+    names: set[str] = set()
+    for name, field in fields.items():
+        if field.annotation is not SecretStr and SecretStr not in get_args(field.annotation):
+            continue
+        names.add(name)
+        aliases: list[object] = [field.alias, field.validation_alias]
+        if isinstance(field.validation_alias, AliasChoices):
+            aliases.extend(field.validation_alias.choices)
+        for alias in aliases:
+            if isinstance(alias, AliasPath):
+                alias = alias.path[0]
+            if isinstance(alias, str):
+                names.add(alias)
+    return frozenset(name.lower() for name in names)
+
+
+class _SecretInputSource(PydanticBaseSettingsSource):
+    """Wraps one settings source so secret values enter validation as `SecretStr`, never `str`.
+
+    Pydantic records the raw input in structured errors (`errors()`, `json()`), and a model-level
+    error records the whole input dict, even with `hide_input_in_errors`. Masking at the source
+    keeps raw secrets out of that input; values, source order and precedence are unchanged.
+    """
+
+    def __init__(
+        self,
+        settings_cls: type[BaseSettings],
+        inner: PydanticBaseSettingsSource,
+        names: frozenset[str],
+    ) -> None:
+        super().__init__(settings_cls)
+        self._inner = inner
+        self._names = names
+
+    def _set_current_state(self, state: dict[str, Any]) -> None:
+        super()._set_current_state(state)
+        self._inner._set_current_state(state)
+
+    def _set_settings_sources_data(self, states: dict[str, dict[str, Any]]) -> None:
+        super()._set_settings_sources_data(states)
+        self._inner._set_settings_sources_data(states)
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        return self._inner.get_field_value(field, field_name)
+
+    def __call__(self) -> dict[str, Any]:
+        return {
+            key: SecretStr(value)
+            if key.lower() in self._names and isinstance(value, str)
+            else value
+            for key, value in self._inner().items()
+        }
+
 
 class Settings(BaseSettings):
     """Typed application configuration read from environment variables."""
@@ -27,7 +90,27 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # Validation error *messages* name the field but never echo input values. This does not
+        # cover structured errors (`errors()`, `json()`); `_SecretInputSource` keeps raw secrets
+        # out of those.
+        hide_input_in_errors=True,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # The default sources in the default order, each with secret values wrapped.
+        names = _secret_input_names(settings_cls.model_fields)
+        return tuple(
+            _SecretInputSource(settings_cls, source, names)
+            for source in (init_settings, env_settings, dotenv_settings, file_secret_settings)
+        )
 
     app_env: Literal["local", "test", "production"] = "local"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -80,7 +163,31 @@ class Settings(BaseSettings):
     # Validated even when reranking is disabled: every accepted configuration is valid as a whole.
     search_rerank_depth: int = Field(default=20, ge=1, le=1000)
 
-    @field_validator("reranker_batch_size", "search_rerank_depth", mode="before")
+    # Optional Jev decision provider (Milestone 11, ADR-005). Off by default, no key needed while
+    # off, and not wired into any endpoint. Configuration errors fail validation even while
+    # disabled (as for the reranker); runtime call failures fall back to the deterministic result.
+    jev_enabled: bool = False
+    # The official TypeSafe variable name. Empty means unset; never logged or echoed in errors.
+    typesafe_api_key: SecretStr | None = None
+    jev_model: str = "jev-1.13.0"
+    jev_base_url: str = "https://api.typesafe.ai"
+    # Provisional, not benchmarked. The attempt timeout is httpx2's per-operation timeout and the
+    # budget is the SDK retry budget; neither bounds the caller's wait. The deadline does (FR-DEC-3:
+    # a bounded wait plus scheduling tolerance, not a hard real-time guarantee).
+    jev_attempt_timeout_seconds: float = Field(default=1.25, gt=0, le=10, allow_inf_nan=False)
+    jev_max_retries: int = Field(default=1, ge=0, le=2)
+    jev_retry_budget_seconds: float = Field(default=3.0, gt=0, le=30, allow_inf_nan=False)
+    jev_deadline_seconds: float = Field(default=3.0, gt=0, le=30, allow_inf_nan=False)
+    # Calls in flight at once (including cancelled calls still unwinding); extra calls fall back.
+    jev_max_in_flight: int = Field(default=8, ge=1, le=64)
+
+    @field_validator(
+        "reranker_batch_size",
+        "search_rerank_depth",
+        "jev_max_retries",
+        "jev_max_in_flight",
+        mode="before",
+    )
     @classmethod
     def _strict_integer(cls, value: object) -> object:
         # No bool (True == 1) and no float/decimal coercion; environment strings of digits only.
@@ -90,7 +197,69 @@ class Settings(BaseSettings):
             raise ValueError("must be an integer")
         return value
 
-    @field_validator("reranker_enabled", mode="before")
+    @field_validator(
+        "jev_attempt_timeout_seconds",
+        "jev_retry_budget_seconds",
+        "jev_deadline_seconds",
+        mode="before",
+    )
+    @classmethod
+    def _strict_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, int | float | str):
+            raise ValueError("must be a number")
+        return value
+
+    @field_validator("typesafe_api_key", mode="before")
+    @classmethod
+    def _empty_key_is_unset(cls, value: object) -> object:
+        # Inspect without unwrapping, so a non-empty key stays a SecretStr in every error input.
+        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if isinstance(raw, str) and not raw.strip():
+            return None
+        return value
+
+    @field_validator("typesafe_api_key")
+    @classmethod
+    def _key_format(cls, value: SecretStr | None) -> SecretStr | None:
+        # The SDK's own key rule (printable ASCII, no internal whitespace), without importing it.
+        if value is not None:
+            key = value.get_secret_value().strip()
+            if not key.isascii() or not key.isprintable() or " " in key:
+                raise ValueError("typesafe_api_key has an invalid format")
+            return SecretStr(key)
+        return value
+
+    @field_validator("jev_model", "jev_base_url", mode="before")
+    @classmethod
+    def _exact_jev_string(cls, value: object) -> object:
+        if not isinstance(value, str):
+            raise ValueError("must be a string")
+        return value
+
+    @field_validator("jev_model")
+    @classmethod
+    def _jev_model_is_pinned(cls, value: str) -> str:
+        if not _JEV_PINNED_MODEL.fullmatch(value):
+            raise ValueError("jev_model must be a versioned id such as jev-1.13.0, not an alias")
+        return value
+
+    @field_validator("jev_base_url")
+    @classmethod
+    def _jev_base_url_is_plain_https(cls, value: str) -> str:
+        parts = urlsplit(value)
+        if (
+            parts.scheme != "https"
+            or not parts.hostname
+            or parts.username is not None
+            or parts.password is not None
+            or parts.query
+            or parts.fragment
+            or value != value.strip()
+        ):
+            raise ValueError("jev_base_url must be a plain https URL")
+        return value.rstrip("/")
+
+    @field_validator("reranker_enabled", "jev_enabled", mode="before")
     @classmethod
     def _strict_boolean(cls, value: object) -> object:
         # Only a real bool or the words true/false (any case); no 1/0, yes/no, on/off.
@@ -145,6 +314,40 @@ class Settings(BaseSettings):
         if self.search_rerank_depth > self.search_candidate_k:
             raise ValueError("search_rerank_depth must not exceed search_candidate_k")
         return self
+
+    @model_validator(mode="after")
+    def _jev_is_configured_consistently(self) -> "Settings":
+        if self.jev_enabled and self.typesafe_api_key is None:
+            raise ValueError("typesafe_api_key is required when jev_enabled is true")
+        # Every configured retry must stay reachable after a timed-out attempt plus its backoff;
+        # otherwise the budget would silently cancel retries that the configuration asks for.
+        needed = self.jev_max_retries * (self.jev_attempt_timeout_seconds + JEV_BACKOFF_MAX_SECONDS)
+        if needed >= self.jev_retry_budget_seconds:
+            raise ValueError(
+                "jev_retry_budget_seconds must exceed "
+                "jev_max_retries * (jev_attempt_timeout_seconds + backoff max)"
+            )
+        # The deadline bounds the whole call: the attempt timeout and retry budget must fit in it.
+        if self.jev_attempt_timeout_seconds > self.jev_deadline_seconds:
+            raise ValueError("jev_attempt_timeout_seconds must not exceed jev_deadline_seconds")
+        if self.jev_retry_budget_seconds > self.jev_deadline_seconds:
+            raise ValueError("jev_retry_budget_seconds must not exceed jev_deadline_seconds")
+        return self
+
+    def jev_config(self) -> JevConfig | None:
+        """The Jev provider configuration, or None while Jev is disabled."""
+        if not self.jev_enabled or self.typesafe_api_key is None:
+            return None
+        return JevConfig(
+            api_key=self.typesafe_api_key,
+            model=self.jev_model,
+            base_url=self.jev_base_url,
+            attempt_timeout_seconds=self.jev_attempt_timeout_seconds,
+            max_retries=self.jev_max_retries,
+            retry_budget_seconds=self.jev_retry_budget_seconds,
+            deadline_seconds=self.jev_deadline_seconds,
+            max_in_flight=self.jev_max_in_flight,
+        )
 
     def reranker_spec(self) -> RerankerModelSpec:
         return registered_reranker(self.reranker_model_id, self.reranker_model_revision)

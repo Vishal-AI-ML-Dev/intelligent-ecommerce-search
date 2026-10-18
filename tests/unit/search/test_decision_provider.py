@@ -53,9 +53,17 @@ def test_deterministic_provider_returns_the_parse_unchanged() -> None:
     assert (result.provider, result.provider_version) == ("deterministic", PARSER_VERSION)
 
 
-def test_decision_result_has_no_confidence_or_fallback_fields() -> None:
-    assert set(DecisionResult.model_fields) == {"provider", "provider_version", "understanding"}
+def test_decision_result_has_no_top_level_confidence_and_jev_needs_its_outcome() -> None:
+    # Milestone 11 adds only the optional `jev` outcome (test_jev_provider.py); there is still no
+    # confidence or gate field on the result itself.
+    assert set(DecisionResult.model_fields) == {
+        "provider",
+        "provider_version",
+        "understanding",
+        "jev",
+    }
     understanding = parse_normalized_query(QUERY)
+    assert DecisionResult(understanding=understanding).jev is None
     with pytest.raises(ValidationError):
         DecisionResult(understanding=understanding, confidence=0.9)
     with pytest.raises(ValidationError):
@@ -141,7 +149,8 @@ import sys
 import ecommerce_search.decision
 import ecommerce_search.query_understanding
 banned = ("sqlalchemy", "psycopg", "fastapi", "starlette", "httpx", "sentence_transformers",
-          "transformers", "torch", "numpy", "alembic", "pgvector", "uvicorn")
+          "transformers", "torch", "numpy", "alembic", "pgvector", "uvicorn",
+          "typesafe_sdk", "httpx2", "tenacity")
 internal = ("ecommerce_search.api", "ecommerce_search.config", "ecommerce_search.db",
             "ecommerce_search.embeddings", "ecommerce_search.search", "ecommerce_search.models")
 loaded = sorted(

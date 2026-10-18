@@ -188,3 +188,10 @@ def test_existing_forwarded_settings_and_model_mount_are_unchanged():
     assert api.count("      - ./models:/models:ro") == 1
     assert api.count("EMBEDDING_MODELS_DIR: /models") == 1
     assert "EMBEDDING_MODEL_ID" not in COMPOSE and "EMBEDDING_BATCH_SIZE" not in COMPOSE
+
+
+def test_jev_settings_are_not_forwarded_to_any_service():
+    # Milestone 11: the Jev provider is optional, off by default and unused by any endpoint.
+    assert "JEV_" not in COMPOSE and "TYPESAFE_" not in COMPOSE
+    assert re.search(r"^JEV_ENABLED=false$", ENV_EXAMPLE, re.MULTILINE)
+    assert re.search(r"^TYPESAFE_API_KEY=$", ENV_EXAMPLE, re.MULTILINE)

@@ -12,6 +12,8 @@ _ISOLATED_PREFIXES = (
     "EMBEDDING_",
     "SEARCH_",
     "RERANKER_",
+    "JEV_",
+    "TYPESAFE_",
 )
 
 
