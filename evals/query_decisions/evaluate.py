@@ -54,6 +54,7 @@ from evals.query_decisions.contracts import (
     DecisionQuery,
     GoldKind,
     IntentGold,
+    LabelSeal,
     QueryDecisionError,
 )
 from evals.query_decisions.labeling import load_sealed
@@ -144,6 +145,9 @@ def evaluate(work_dir: Path, run_id: str) -> dict[str, Any]:
         "labels_sha256": seal.labels_sha256,
         "annotator_handle": seal.annotator_handle,
         "queries": len(queries),
+        "query_sources": {source.value: count for source, count in seal.counts().items()},
+        "ai_author_tools": sorted({q.author_tool for q in queries if q.author_tool}),
+        "evidence_notes": _evidence_notes(seal),
         "author_is_annotator": sum(q.author_handle == seal.annotator_handle for q in queries),
         "deterministic": {
             "computed": "at evaluation time, from the sealed query text",
@@ -169,6 +173,18 @@ def evaluate(work_dir: Path, run_id: str) -> dict[str, Any]:
     }
 
 
+def _evidence_notes(seal: LabelSeal) -> list[str]:
+    notes = ["development diagnostic only; never held-out evidence"]
+    if seal.ai_authored_queries:
+        notes.append(
+            f"{seal.ai_authored_queries} of {seal.query_count} queries are AI-authored "
+            "(development-only; labels are human annotations; not held-out evidence)"
+        )
+    if seal.synthetic:
+        notes.append("contains synthetic test fixtures: software-test data, not evidence")
+    return notes
+
+
 def _synthetic_reason(header: RunHeader, synthetic_queries: bool) -> str | None:
     reasons = []
     if header.mode is RunMode.DRY_RUN:
@@ -189,6 +205,7 @@ def _row(
     attempted = query.query_id in state.dispatched
     row: dict[str, Any] = {
         "query_id": query.query_id,
+        "source": query.source.value,
         "stratum": query.stratum,
         "language_style": query.language_style.value,
     }

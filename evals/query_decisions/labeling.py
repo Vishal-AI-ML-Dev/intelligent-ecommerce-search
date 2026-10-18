@@ -1,4 +1,4 @@
-"""Blind labelling and sealing of the M12 diagnostic batch (`qd-1`).
+"""Blind labelling and sealing of the M12 diagnostic batch (`qd-2`).
 
 Work directory layout (default under the git-ignored `data/processed/m12_diagnostic/`):
 
@@ -48,6 +48,7 @@ from evals.query_decisions.contracts import (
     QuerySource,
     load_queries,
     queries_sha256,
+    source_counts,
 )
 from evals.runners.golden_io import safe_child, write_exclusive
 
@@ -250,6 +251,7 @@ def seal_labels(
     labels = read_labels(work_dir, queries)
     if {label.query_id for label in labels} != {query.query_id for query in queries}:
         raise QueryDecisionError("every query needs a label before sealing")
+    counts = source_counts(queries)
     seal = LabelSeal(
         schema_version=SCHEMA_VERSION,
         dataset_id=DATASET_ID,
@@ -257,8 +259,11 @@ def seal_labels(
         queries_sha256=queries_sha256(queries),
         labels_sha256=sha256_hex(encode_jsonl(labels)),
         query_count=len(queries),
+        human_authored_queries=counts[QuerySource.HUMAN_AUTHORED],
+        ai_authored_queries=counts[QuerySource.AI_AUTHORED],
+        synthetic_fixture_queries=counts[QuerySource.SYNTHETIC_TEST_FIXTURE],
         annotator_handle=labels[0].annotator_handle,
-        synthetic=any(query.source is not QuerySource.HUMAN_AUTHORED for query in queries),
+        synthetic=counts[QuerySource.SYNTHETIC_TEST_FIXTURE] > 0,
         sealed_at=now(),
         evidence_scope="development_diagnostic_not_held_out",
     )
@@ -280,4 +285,6 @@ def load_sealed(
         raise QueryDecisionError("queries.jsonl changed after sealing")
     if sha256_hex(encode_jsonl(labels)) != seal.labels_sha256:
         raise QueryDecisionError("labels.jsonl changed after sealing")
+    if seal.counts() != source_counts(queries):
+        raise QueryDecisionError("the seal's source counts do not match the sealed queries")
     return seal, queries, labels

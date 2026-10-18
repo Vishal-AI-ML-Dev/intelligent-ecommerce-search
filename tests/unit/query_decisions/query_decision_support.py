@@ -18,6 +18,7 @@ from evals.query_decisions.contracts import (
     CategoryGold,
     DecisionLabel,
     IntentGold,
+    LabelSeal,
     load_queries,
     queries_sha256,
 )
@@ -88,10 +89,32 @@ def fixture_query_line(query_id: str, text: str) -> str:
             "text": text,
             "source": "synthetic_test_fixture",
             "author_handle": None,
+            "author_tool": None,
             "language_style": "english",
             "stratum": "fixture",
         }
     )
+
+
+def make_seal(*, human: int = 0, ai: int = 0, fixtures: int = 0, **overrides) -> LabelSeal:
+    """A `LabelSeal` built in memory with the given source counts (no query file behind it)."""
+    values = {
+        "schema_version": SCHEMA_VERSION,
+        "dataset_id": DATASET_ID,
+        "question_set_version": "jq-1",
+        "queries_sha256": "a" * 64,
+        "labels_sha256": "b" * 64,
+        "query_count": human + ai + fixtures,
+        "human_authored_queries": human,
+        "ai_authored_queries": ai,
+        "synthetic_fixture_queries": fixtures,
+        "annotator_handle": FIXTURE_HANDLE,
+        "synthetic": fixtures > 0,
+        "sealed_at": T0,
+        "evidence_scope": "development_diagnostic_not_held_out",
+    }
+    values.update(overrides)
+    return LabelSeal(**values)
 
 
 def write_fixture_queries(work_dir: Path, rows=FIXTURE_ROWS) -> None:

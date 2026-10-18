@@ -1,4 +1,4 @@
-"""Query-decision label schema `qd-1` (Milestone 12 diagnostic batch `m12-diag-dev`).
+"""Query-decision label schema `qd-2` (Milestone 12 diagnostic batch `m12-diag-dev`).
 
 One human-authored query gets one human decision label per question of Jev question set `jq-1`:
 product `category` and `semantic_intent`. These labels are separate from the M9 relevance labels
@@ -14,15 +14,26 @@ Gold label kinds (the label set is `jq-1`'s, including its explicit `none` optio
 * `unclear`: the annotator cannot label the query. Unclear queries are excluded from scoring and
   only counted.
 
-`source` marks every query: `human_authored` for real diagnostic queries, or
-`synthetic_test_fixture` for software tests only. A synthetic query is never sent to Jev in live
-mode and every report over it is marked synthetic.
+`source` marks who wrote every query, separately from who labels it:
+
+* `human_authored`: written by a person; `author_handle` (`ann-<n>`) is required.
+* `ai_authored`: written by an AI tool; `author_tool` (for example `notion-ai`) is required and no
+  underlying model is recorded. AI-authored queries are development data only; a live run over
+  them needs an explicit, recorded operator approval (`RunHeader.ai_authored_approved`), which
+  records a decision and does not by itself authorize paid calls.
+* `synthetic_test_fixture`: software tests only. A batch containing one is never sent to Jev in
+  live mode, even with that approval, and every report over it is marked synthetic.
+
+Labels are always human annotations (`DecisionLabel.annotator_handle`), whatever the source.
+`qd-2` (this version) added `ai_authored`, `author_tool` and the seal's source counts; files of
+any other `schema_version` are refused.
 
 This is development data. It is never held-out evidence.
 """
 
 import hashlib
 import json
+import re
 from enum import StrEnum
 from typing import Annotated, ClassVar, Literal, Self
 
@@ -42,7 +53,7 @@ from ecommerce_search.search.query import QueryError, normalize_query
 from evals.contracts.canonical import ContractError, encode_jsonl
 from evals.contracts.models import AnnotatorHandle, FreeText, Sha256, UtcTimestamp
 
-SCHEMA_VERSION = "qd-1"
+SCHEMA_VERSION = "qd-2"
 DATASET_ID = "m12-diag-dev"
 QUESTION_SET_VERSION = "jq-1"
 NONE_LABEL = "none"
@@ -54,14 +65,17 @@ INTENT_LABELS: tuple[str, ...] = (*(i.value for i in Intent), NONE_LABEL)
 
 DecisionQueryId = Annotated[StrictStr, Field(pattern=r"^dq-[0-9]{3}$")]
 Slug = Annotated[StrictStr, Field(pattern=r"^[a-z][a-z0-9_]{0,31}$")]
+ToolName = Annotated[StrictStr, Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
+_ANNOTATOR_HANDLE_RE = re.compile(r"^ann-[0-9]+$")
 
 
 class QueryDecisionError(ContractError):
-    """A query-decision file or record violates the `qd-1` contract."""
+    """A query-decision file or record violates the `qd-2` contract."""
 
 
 class QuerySource(StrEnum):
     HUMAN_AUTHORED = "human_authored"
+    AI_AUTHORED = "ai_authored"
     SYNTHETIC_TEST_FIXTURE = "synthetic_test_fixture"
 
 
@@ -85,12 +99,13 @@ class DecisionQuery(_Frozen):
     """One diagnostic query. `text` must already be normalized exactly as the search API would
     normalize it, so the parser and Jev see the same text the annotator saw."""
 
-    schema_version: Literal["qd-1"]
+    schema_version: Literal["qd-2"]
     dataset_id: Literal["m12-diag-dev"]
     query_id: DecisionQueryId
     text: StrictStr
     source: QuerySource
     author_handle: AnnotatorHandle | None
+    author_tool: ToolName | None
     language_style: LanguageStyle
     stratum: Slug
 
@@ -103,8 +118,13 @@ class DecisionQuery(_Frozen):
         if normalized != self.text:
             raise ValueError("query text must already be normalized (single spaces, trimmed)")
         human = self.source is QuerySource.HUMAN_AUTHORED
+        ai = self.source is QuerySource.AI_AUTHORED
         if human != (self.author_handle is not None):
-            raise ValueError("human-authored queries need an author handle; synthetic ones none")
+            raise ValueError("only human-authored queries have (and need) an author_handle")
+        if ai != (self.author_tool is not None):
+            raise ValueError("only ai-authored queries have (and need) an author_tool")
+        if self.author_tool is not None and _ANNOTATOR_HANDLE_RE.match(self.author_tool):
+            raise ValueError("author_tool must name a tool, not an annotator handle")
         return self
 
     def sort_key(self) -> tuple[str, ...]:
@@ -158,7 +178,7 @@ class DecisionLabel(_Frozen):
     """One annotator's blind label for one query. `labelling_view` records what the annotator
     was shown: the query text only, never parser or Jev output."""
 
-    schema_version: Literal["qd-1"]
+    schema_version: Literal["qd-2"]
     dataset_id: Literal["m12-diag-dev"]
     query_id: DecisionQueryId
     queries_sha256: Sha256
@@ -176,16 +196,35 @@ class DecisionLabel(_Frozen):
 class LabelSeal(_Frozen):
     """Binds the exact queries and labels before any Jev call. Written once, never replaced."""
 
-    schema_version: Literal["qd-1"]
+    schema_version: Literal["qd-2"]
     dataset_id: Literal["m12-diag-dev"]
     question_set_version: Literal["jq-1"]
     queries_sha256: Sha256
     labels_sha256: Sha256
     query_count: Annotated[int, Field(ge=1)]
+    human_authored_queries: Annotated[int, Field(ge=0)]
+    ai_authored_queries: Annotated[int, Field(ge=0)]
+    synthetic_fixture_queries: Annotated[int, Field(ge=0)]
     annotator_handle: AnnotatorHandle
-    synthetic: StrictBool
+    synthetic: StrictBool  # true exactly when a synthetic test fixture is sealed
     sealed_at: UtcTimestamp
     evidence_scope: Literal["development_diagnostic_not_held_out"]
+
+    @model_validator(mode="after")
+    def _counts_agree(self) -> Self:
+        counts = self.counts()
+        if sum(counts.values()) != self.query_count:
+            raise ValueError("source counts must add up to query_count")
+        if self.synthetic != (self.synthetic_fixture_queries > 0):
+            raise ValueError("synthetic must be true exactly when a synthetic fixture is sealed")
+        return self
+
+    def counts(self) -> dict[QuerySource, int]:
+        return {
+            QuerySource.HUMAN_AUTHORED: self.human_authored_queries,
+            QuerySource.AI_AUTHORED: self.ai_authored_queries,
+            QuerySource.SYNTHETIC_TEST_FIXTURE: self.synthetic_fixture_queries,
+        }
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.queries_sha256,)
@@ -206,7 +245,15 @@ def load_queries(data: bytes) -> tuple[DecisionQuery, ...]:
         if not line.strip():
             raise QueryDecisionError(f"line {number}: blank lines are not allowed")
         try:
-            json.loads(line, object_pairs_hook=_no_duplicate_keys)
+            raw = json.loads(line, object_pairs_hook=_no_duplicate_keys)
+        except ValueError as exc:
+            raise QueryDecisionError(f"line {number}: invalid JSON: {exc}") from None
+        if not isinstance(raw, dict) or raw.get("schema_version") != SCHEMA_VERSION:
+            raise QueryDecisionError(
+                f"line {number}: unsupported schema_version; "
+                f"this tooling reads {SCHEMA_VERSION} only"
+            )
+        try:
             queries.append(DecisionQuery.model_validate_json(line, strict=True))
         except (ValueError, ValidationError) as exc:
             raise QueryDecisionError(f"line {number}: invalid query: {exc}") from None
@@ -216,6 +263,11 @@ def load_queries(data: bytes) -> tuple[DecisionQuery, ...]:
     if len(set(ids)) != len(ids):
         raise QueryDecisionError("query ids must be unique")
     return tuple(sorted(queries, key=lambda query: query.query_id))
+
+
+def source_counts(queries: tuple[DecisionQuery, ...]) -> dict[QuerySource, int]:
+    """How many sealed queries each source contributed (every source listed, zeros included)."""
+    return {source: sum(q.source is source for q in queries) for source in QuerySource}
 
 
 def queries_sha256(queries: tuple[DecisionQuery, ...]) -> str:

@@ -9,6 +9,9 @@ Commands (the work directory defaults to the git-ignored `data/processed/m12_dia
 * `run --run-id ID --max-attempts N --live --price-input-usd-per-million P
   --price-output-usd-per-million P --price-checked-on YYYY-MM-DD --max-estimated-usd X`:
   paid live calls. Needs explicit owner approval before it is ever run.
+* `run ... --live --approve-ai-authored`: records the operator's decision to send AI-authored
+  queries in a live run (required when the batch has any). It does not authorize paid calls.
+  Batches with synthetic test fixtures are refused live even with it.
 * `run ... --resume-approved`: continue a run blocked by a stop or an unknown outcome.
 * `evaluate --run-id ID [--out FILE]`: offline diagnostic report (JSON).
 """
@@ -30,6 +33,7 @@ from evals.query_decisions.runner import (
     RunMode,
     dry_run_provider,
     live_provider_factory,
+    live_refusal,
     run_diagnostic,
 )
 
@@ -49,6 +53,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--price-output-usd-per-million", type=Decimal)
     run.add_argument("--price-checked-on", type=date.fromisoformat)
     run.add_argument("--max-estimated-usd", type=Decimal)
+    run.add_argument("--approve-ai-authored", action="store_true")
     run.add_argument("--resume-approved", action="store_true")
     evaluate = commands.add_parser("evaluate")
     evaluate.add_argument("--run-id", required=True)
@@ -97,10 +102,13 @@ def _run(args: argparse.Namespace) -> int:
             args.price_checked_on,
             args.max_estimated_usd,
         )
-        if None in live_arguments:
-            raise QueryDecisionError("live mode needs both prices, their check date and a tripwire")
-        if seal.synthetic:
-            raise QueryDecisionError("synthetic test fixtures are never sent to Jev")
+        refusal = live_refusal(
+            seal,
+            prices_complete=None not in live_arguments,
+            ai_authored_approved=args.approve_ai_authored,
+        )
+        if refusal is not None:
+            raise QueryDecisionError(refusal)
         from ecommerce_search.config import Settings
 
         factory, model, secret = live_provider_factory(Settings())
@@ -117,6 +125,7 @@ def _run(args: argparse.Namespace) -> int:
         price_usd_per_million_output=args.price_output_usd_per_million,
         price_checked_on=args.price_checked_on,
         max_estimated_usd=args.max_estimated_usd,
+        ai_authored_approved=args.approve_ai_authored,
     )
     summary = run_diagnostic(
         args.work_dir, header, factory, secret=secret, resume_approved=args.resume_approved

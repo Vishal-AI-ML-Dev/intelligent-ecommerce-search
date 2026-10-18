@@ -157,9 +157,19 @@ def test_spend_tripwire_uses_returned_tokens_and_supplied_prices(sealed_dir):
     assert summary.estimated_usd == Decimal("0.2")
 
 
-def test_live_mode_refuses_synthetic_fixtures_and_missing_prices(sealed_dir):
-    with pytest.raises(QueryDecisionError, match="synthetic"):
+def test_live_mode_refuses_missing_prices_and_synthetic_fixtures(sealed_dir):
+    with pytest.raises(QueryDecisionError, match="prices"):
         run(sealed_dir, [], header(sealed_dir, mode=RunMode.LIVE), secret=SECRET)
+    priced = header(
+        sealed_dir,
+        mode=RunMode.LIVE,
+        price_usd_per_million_input=Decimal("0.042"),
+        price_usd_per_million_output=Decimal("0"),
+        price_checked_on=T0.date(),
+        max_estimated_usd=Decimal("0.05"),
+    )
+    with pytest.raises(QueryDecisionError, match="synthetic"):
+        run(sealed_dir, [], priced, secret=SECRET)
     assert not (sealed_dir / RUNS_DIR).exists()
 
 

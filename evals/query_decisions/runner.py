@@ -44,7 +44,15 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr, TypeAdapter, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictStr,
+    TypeAdapter,
+    ValidationError,
+)
 
 from ecommerce_search.decision.provider import DecisionResult, JevOutcome
 from ecommerce_search.query_understanding import parse_normalized_query
@@ -55,6 +63,7 @@ from evals.query_decisions.contracts import (
     QUESTION_SET_VERSION,
     DecisionQuery,
     DecisionQueryId,
+    LabelSeal,
     QueryDecisionError,
 )
 from evals.query_decisions.labeling import load_sealed
@@ -103,7 +112,7 @@ class _Frozen(BaseModel):
 
 
 class RunHeader(_Frozen):
-    schema_version: Literal["qd-run-1"] = "qd-run-1"
+    schema_version: Literal["qd-run-2"] = "qd-run-2"
     run_id: Annotated[StrictStr, Field(pattern=RUN_ID_PATTERN)]
     mode: RunMode
     queries_sha256: Sha256
@@ -117,6 +126,9 @@ class RunHeader(_Frozen):
     price_usd_per_million_output: Decimal | None = None
     price_checked_on: date | None = None
     max_estimated_usd: Decimal | None = None
+    # The operator's recorded decision to send AI-authored queries in this live run. It does not
+    # by itself authorize paid calls.
+    ai_authored_approved: StrictBool = False
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.run_id,)
@@ -269,6 +281,24 @@ def _stop_for(outcome: JevOutcome, state: JournalState, consecutive: int) -> Sto
     return None
 
 
+def live_refusal(
+    seal: LabelSeal, *, prices_complete: bool, ai_authored_approved: bool
+) -> str | None:
+    """Why a live run over this sealed batch must not start, or None. Pure; checked by the CLI
+    before `Settings` (and the key) is read, and again by `run_diagnostic`. In order: missing
+    prices, date or tripwire; any synthetic fixture (always refused, approval or not); AI-authored
+    queries without the recorded approval; an approval recorded for a batch without any."""
+    if not prices_complete:
+        return "live mode needs both prices, their check date and a tripwire"
+    if seal.synthetic:
+        return "synthetic test fixtures are never sent to Jev"
+    if seal.ai_authored_queries and not ai_authored_approved:
+        return "the batch has AI-authored queries; live mode needs --approve-ai-authored"
+    if ai_authored_approved and not seal.ai_authored_queries:
+        return "--approve-ai-authored was given but the batch has no AI-authored queries"
+    return None
+
+
 def run_diagnostic(
     work_dir: Path,
     header: RunHeader,
@@ -286,16 +316,23 @@ def run_diagnostic(
     if header.mode is RunMode.LIVE:
         if header.model != APPROVED_LIVE_MODEL:
             raise QueryDecisionError(f"live runs must use the approved model {APPROVED_LIVE_MODEL}")
-        if seal.synthetic:
-            raise QueryDecisionError("synthetic test fixtures are never sent to Jev")
         prices = (
             header.price_usd_per_million_input,
             header.price_usd_per_million_output,
             header.price_checked_on,
             header.max_estimated_usd,
         )
-        if None in prices or not secret:
-            raise QueryDecisionError("live mode needs prices, their check date, a tripwire, a key")
+        refusal = live_refusal(
+            seal,
+            prices_complete=None not in prices,
+            ai_authored_approved=header.ai_authored_approved,
+        )
+        if refusal is not None:
+            raise QueryDecisionError(refusal)
+        if not secret:
+            raise QueryDecisionError("live mode needs the API key")
+    elif header.ai_authored_approved:
+        raise QueryDecisionError("the AI-authored approval applies to live runs only")
     if header.max_attempts > len(queries):
         raise QueryDecisionError("max_attempts may not exceed the number of queries (no resends)")
 
