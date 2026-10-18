@@ -90,6 +90,29 @@ Implemented in `src/ecommerce_search/decision/provider.py`:
 The Jev provider (Milestone 11, ADR-005), its fallback semantics and the confidence gate remain
 deferred.
 
+### Implementation status (Milestone 11)
+
+- `DecisionResult` gains one optional field, `jev: JevOutcome | None`. `provider` is
+  `"deterministic" | "jev"` and `provider_version` is `qu-1` or `jq-1` (the Jev question set);
+  a validator keeps the three consistent. `understanding` is always the deterministic parse.
+- `JevOutcome` carries model, answering model, latency, request id, token counts and
+  `fallback_reason`, plus category and semantic-intent proposals. Each proposal stores the raw
+  provider probabilities and the provider's own confidence as separate fields, exactly as
+  returned. There is still **no gate-confidence field**: it is added only when Milestone 12
+  derives it from calibration.
+- Fallback: every runtime failure of a Jev call returns the deterministic parse with a fixed
+  `fallback_reason` and no proposals; configuration errors fail instead of falling back
+  (`docs/jev-provider-m11.md` §4).
+- Disabled is not a fallback. The decision above lists "disabled" among failures that produce the
+  deterministic result with a recorded fallback reason; Milestone 11 meets that through the
+  existing deterministic-provider contract instead: `build_decision_provider(None)` returns
+  `DeterministicDecisionProvider`, whose result is `provider="deterministic"`, `jev=None`. No Jev
+  call is attempted, so there is nothing to fall back from and no reason field; `jev=None` is the
+  record. The application still constructs `DeterministicDecisionProvider` directly; no endpoint
+  behaviour changed.
+- Status: mocked implementation only; live connectivity is unverified; dependencies are accepted
+  and planned local regression checks passed (`docs/jev-provider-m11.md`).
+
 ## Alternatives considered
 
 - **Calling a model directly inside the parser or search code:** couples core

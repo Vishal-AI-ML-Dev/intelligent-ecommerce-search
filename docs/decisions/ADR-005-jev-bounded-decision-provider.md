@@ -2,9 +2,15 @@
 
 ## Status
 
-Accepted (architectural boundary only).
+Accepted (architectural boundary).
 
-Provider implementation: not started; API behaviour unverified.
+Milestone 11 is **not complete**: the mocked implementation is ready for review, off by default
+and not wired into any endpoint, but the "credentials" prerequisite is unmet (waitlist account
+access only; no API key has been created), live connectivity is unverified (paid access; no live
+call approved or made); dependencies are reviewed and accepted (2026-10-18) and planned local
+regression checks passed (not live verification). The API contract is
+documented from official sources only; no behaviour has been observed live. See
+"Implementation status (Milestone 11)" below and `docs/jev-provider-m11.md`.
 
 ## Date
 
@@ -93,6 +99,49 @@ Jev must not be used to:
 - Seller and query text sent to Jev is treated as untrusted data.
 - Routine CI never requires live Jev access.
 
+## Implementation status (Milestone 11)
+
+Documented contract (official TypeSafe documentation, read 2026-10-17; not observed live;
+sources in `docs/jev-provider-m11.md` §7): Jev is TypeSafe's model, called through
+`POST https://api.typesafe.ai/v1/systemone` with a Bearer key; typed **Choice** questions return
+`choice`, `probabilities` (summing to 1) and a TypeSafe-computed `confidence`; versioned model ids
+(`jev-1.13.0`) can be pinned; pricing is $0.042 per million input tokens (output free); rate
+limits are per organisation and not published.
+
+Mocked implementation in `src/ecommerce_search/decision/jev_provider.py` with
+`typesafe-sdk==0.7.5`:
+
+- Bounded decisions: query category and semantic intent only, over the existing `Category` and
+  `Intent` label sets plus an explicit `none` option. The deterministic parse is returned
+  unchanged; Jev is never asked for numeric constraints.
+- Validated outputs: the whole response is rejected (`invalid_response`) unless every label,
+  probability and confidence is in range and complete. Equal top probabilities are kept as
+  `top_labels` and propose no label.
+- Raw provider probabilities and the provider's `confidence` are stored exactly as returned, as
+  separate fields. No gate confidence exists until Milestone 12.
+- Configuration errors fail (settings validation, `JevConfigurationError`); runtime failures fall
+  back to the deterministic result with a fixed reason. The model must be a versioned id.
+- The SDK `RetryPolicy` is the only retry layer. Its budget is **not** a wall-clock deadline
+  (in-flight attempts are not interrupted; the attempt timeout is per httpx2 operation). Bounds
+  are documented in `docs/jev-provider-m11.md` §5. FR-DEC-3's "late outputs fall back" is met
+  with mocks by a per-call deadline (§5.1). One managed event loop and async client per provider,
+  a bounded caller wait plus scheduling tolerance (not hard real time), cancellation that stops
+  client-side retries (it cannot guarantee that server processing or billing stops), late results
+  discarded, bounded in-flight calls (slots taken before a call is queued) with fail-fast
+  `saturated`, and an idempotent, time-bounded `close()`. The loop thread owns cleanup and
+  finishes it once finite obstructions end; code that never returns is reclaimed only at process
+  exit. All verified with mocks only.
+- Disabled mode is not a fallback: it is the deterministic provider (`provider="deterministic"`,
+  `jev=None`), so no fallback reason is recorded.
+- Off by default; `typesafe_sdk` is imported only when an enabled provider is built; no endpoint
+  uses it; Compose forwards no Jev setting.
+
+Still open: live connectivity; real latency, tokens, answer quality and Hinglish behaviour (need
+approved live calls); full-suite, integration and real-model regression runs; the error-body
+schema, organisation rate limits, data-retention terms; and everything assigned to Milestone 12.
+The structured Settings-error disclosure risk (shown with fake inputs only) is fixed by masking
+secret inputs at every settings source (`docs/jev-provider-m11.md` §6).
+
 ## Alternatives considered
 
 - **Jev in the core path as a required dependency:** violates offline
@@ -126,11 +175,10 @@ Jev must not be used to:
 
 ## Open questions
 
-Deferred to Milestone 11 (API verification):
-
-- Official API contract, authentication and error behavior.
-- Available models and version pinning.
-- Pricing and cost reporting.
+Milestone 11 (API verification), documented from official sources but not observed live: API contract,
+authentication, error statuses, models and version pinning, published pricing (see
+"Implementation status (Milestone 11)"). Still unknown: the error-body schema, organisation rate
+limits, data-retention terms, and any behaviour that only a live call can show.
 
 Deferred to Milestone 12 (evaluation):
 
@@ -138,6 +186,8 @@ Deferred to Milestone 12 (evaluation):
 
 ## References
 
-No provider-specific reference has been verified. API verification is
-deferred to Milestone 11. `docs/MASTER_PLAN.md` is the only source for the
-role and boundaries recorded here.
+- `docs/MASTER_PLAN.md`: role and boundaries.
+- Official TypeSafe documentation, read 2026-10-17: https://docs.typesafe.ai/api,
+  https://docs.typesafe.ai/primitives/choice, https://docs.typesafe.ai/confidence,
+  https://docs.typesafe.ai/models and the Python SDK reference under
+  https://docs.typesafe.ai/sdk/python. Full table in `docs/jev-provider-m11.md` §7.
