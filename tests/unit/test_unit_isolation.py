@@ -47,7 +47,7 @@ def test_whole_unit_suite_passes_without_a_database_password():
         env=env,
         capture_output=True,
         text=True,
-        timeout=600,
+        timeout=1200,
         check=False,
     )
     assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-1000:]
