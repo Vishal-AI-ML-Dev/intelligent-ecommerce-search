@@ -1,0 +1,237 @@
+"""Offline diagnostic evaluator for the M12 batch: deterministic `qu-1` vs Jev `jq-1` decisions.
+
+Inputs are the sealed queries and labels and one run's journal. The deterministic decision is
+recomputed at evaluation time from the sealed query text (`parse_normalized_query`,
+network-free); it is not recorded during the run. The report records the parser and lexicon
+version labels, which are declared constants, not proof that the parser source is unchanged.
+No call is made.
+Counts only: no rates with intervals, no thresholds, no calibration, no retrieval. The report is
+development diagnostic evidence, never held-out evidence; a dry run is marked synthetic.
+
+Predictions:
+
+* deterministic: the parsed `category` / `semantic_intent`, or abstain (`None`, including a
+  conflict). The parser never outputs `none`.
+* Jev: the unique top label (which may be `none`, an explicit decision), or abstain, split into
+  `tie` (no unique top label), `fallback` (a recorded fallback reason), `unknown` (dispatched,
+  no recorded outcome) and `not_attempted`.
+
+Scoring of one decided prediction against the gold label (`score`):
+
+| gold | prediction | outcome |
+|---|---|---|
+| unclear | any | `excluded_unclear` |
+| any other | abstain | `abstain` |
+| label L (not none) | L / none / other | `correct` / `predicted_none` / `wrong` |
+| none | none / a label | `correct_none` / `wrong_commit` |
+| ambiguous {A, B, ...} | none / in set / outside | `predicted_none` / `commit_in_candidates` / |
+| | | `commit_outside_candidates` |
+| multi {A, B, ...} | none / in set / outside | `predicted_none` / `in_set` / `out_of_set` |
+
+For gold `none`, a deterministic abstention means no constraint is applied, which is the right
+search outcome; it is still counted as `abstain`, not as a decision.
+
+Reported per question: gold kinds; deterministic and Jev outcome counts; Jev abstention reasons;
+D/J disagreements (both decided, different labels) with the outcome pair; and Jev's outcome on
+the queries where the deterministic parser abstains (`fills`: `correct` and `in_set` are correct
+fills; `wrong`, `wrong_commit`, `commit_*` and `out_of_set` are incorrect fills).
+Deterministic-first gating could only change those abstaining queries; it cannot correct a wrong
+deterministic decision.
+"""
+
+from collections import Counter
+from pathlib import Path
+from typing import Any
+
+from ecommerce_search.decision.provider import CategoryProposal, IntentProposal, JevOutcome
+from ecommerce_search.query_understanding import parse_normalized_query
+from ecommerce_search.query_understanding.models import QueryUnderstanding
+from evals.contracts.canonical import decode_json_object
+from evals.query_decisions.contracts import (
+    NONE_LABEL,
+    CategoryGold,
+    DecisionLabel,
+    DecisionQuery,
+    GoldKind,
+    IntentGold,
+    QueryDecisionError,
+)
+from evals.query_decisions.labeling import load_sealed
+from evals.query_decisions.runner import (
+    JOURNAL_FILE,
+    RUN_FILE,
+    RUNS_DIR,
+    RunHeader,
+    RunMode,
+    read_journal,
+)
+from evals.runners.golden_io import safe_child
+
+QUESTIONS = ("category", "semantic_intent")
+CORRECT_FILLS = frozenset({"correct", "in_set"})
+INCORRECT_FILLS = frozenset(
+    {"wrong", "wrong_commit", "commit_in_candidates", "commit_outside_candidates", "out_of_set"}
+)
+ABSTAIN = "abstain"
+
+
+def score(gold: CategoryGold | IntentGold, prediction: str | None) -> str:
+    """Outcome of one prediction (a label, `none`, or `None` for abstain); see the module table."""
+    if gold.kind is GoldKind.UNCLEAR:
+        return "excluded_unclear"
+    if prediction is None:
+        return ABSTAIN
+    if gold.kind is GoldKind.LABEL:
+        if gold.label == NONE_LABEL:
+            return "correct_none" if prediction == NONE_LABEL else "wrong_commit"
+        if prediction == gold.label:
+            return "correct"
+        return "predicted_none" if prediction == NONE_LABEL else "wrong"
+    if prediction == NONE_LABEL:
+        return "predicted_none"
+    inside = prediction in gold.candidates
+    if gold.kind is GoldKind.AMBIGUOUS:
+        return "commit_in_candidates" if inside else "commit_outside_candidates"
+    return "in_set" if inside else "out_of_set"
+
+
+def gold_kind(gold: CategoryGold | IntentGold) -> str:
+    if gold.kind is GoldKind.LABEL:
+        return "none" if gold.label == NONE_LABEL else "label"
+    return gold.kind.value
+
+
+def jev_prediction(
+    outcome: JevOutcome | None, attempted: bool, question: str
+) -> tuple[str | None, str | None]:
+    """(prediction, abstention reason). The prediction is the unique top label, `none` included."""
+    if outcome is None:
+        return None, "unknown" if attempted else "not_attempted"
+    if outcome.fallback_reason is not None:
+        return None, "fallback"
+    proposal: CategoryProposal | IntentProposal | None = getattr(outcome, question)
+    if proposal is None or len(proposal.top_labels) != 1:
+        return None, "tie"
+    return proposal.top_labels[0], None
+
+
+def evaluate(work_dir: Path, run_id: str) -> dict[str, Any]:
+    seal, queries, labels = load_sealed(work_dir)
+    run_file = safe_child(work_dir, f"{RUNS_DIR}/{run_id}/{RUN_FILE}")
+    if not run_file.is_file():
+        raise QueryDecisionError("no such run in the work directory")
+    header = decode_json_object(run_file.read_bytes(), RunHeader)
+    if (header.queries_sha256, header.labels_sha256) != (seal.queries_sha256, seal.labels_sha256):
+        raise ValueError("the run does not belong to the sealed batch")
+    _events, state = read_journal(safe_child(work_dir, f"{RUNS_DIR}/{run_id}/{JOURNAL_FILE}"))
+    by_id: dict[str, DecisionLabel] = {label.query_id: label for label in labels}
+
+    parses = {query.query_id: parse_normalized_query(query.text) for query in queries}
+    rows = [_row(q, parses[q.query_id], by_id[q.query_id], state) for q in queries]
+    outcomes = list(state.results.values())
+    synthetic = header.mode is RunMode.DRY_RUN or seal.synthetic
+    return {
+        "report_version": "qd-diagnostic-1",
+        "dataset_id": seal.dataset_id,
+        "evidence_scope": "development diagnostic; not held-out evidence",
+        "synthetic": synthetic,
+        "synthetic_reason": _synthetic_reason(header, seal.synthetic),
+        "run_id": run_id,
+        "mode": header.mode.value,
+        "model": header.model,
+        "question_set_version": header.question_set_version,
+        "queries_sha256": seal.queries_sha256,
+        "labels_sha256": seal.labels_sha256,
+        "annotator_handle": seal.annotator_handle,
+        "queries": len(queries),
+        "author_is_annotator": sum(q.author_handle == seal.annotator_handle for q in queries),
+        "deterministic": {
+            "computed": "at evaluation time, from the sealed query text",
+            "parser_versions": sorted({p.parser_version for p in parses.values()}),
+            "lexicon_versions": sorted({p.lexicon_version for p in parses.values()}),
+            "note": "declared version labels only; not proof that the parser source is "
+            "identical to any earlier evaluation",
+        },
+        "run": {
+            "attempts": state.attempts,
+            "max_attempts": header.max_attempts,
+            "results": len(state.results),
+            "unknown_outcome": len(state.unresolved),
+            "not_attempted": len(queries) - len(state.dispatched),
+            "valid_results": sum(o.fallback_reason is None for o in outcomes),
+            "fallbacks": _counts(o.fallback_reason for o in outcomes if o.fallback_reason),
+            "input_tokens": sum(o.input_tokens or 0 for o in outcomes),
+            "output_tokens": sum(o.output_tokens or 0 for o in outcomes),
+            "complete": state.complete,
+        },
+        "questions": {q: _question_summary(rows, q) for q in QUESTIONS},
+        "per_query": rows,
+    }
+
+
+def _synthetic_reason(header: RunHeader, synthetic_queries: bool) -> str | None:
+    reasons = []
+    if header.mode is RunMode.DRY_RUN:
+        reasons.append("dry run: fixed synthetic responses, not Jev output")
+    if synthetic_queries:
+        reasons.append("synthetic test-fixture queries")
+    return "; ".join(reasons) or None
+
+
+def _row(
+    query: DecisionQuery, parsed: QueryUnderstanding, label: DecisionLabel, state: Any
+) -> dict[str, Any]:
+    deterministic = {
+        "category": None if parsed.category is None else parsed.category.value,
+        "semantic_intent": None if parsed.semantic_intent is None else parsed.semantic_intent.value,
+    }
+    outcome = state.results.get(query.query_id)
+    attempted = query.query_id in state.dispatched
+    row: dict[str, Any] = {
+        "query_id": query.query_id,
+        "stratum": query.stratum,
+        "language_style": query.language_style.value,
+    }
+    for question in QUESTIONS:
+        gold: CategoryGold | IntentGold = getattr(label, question)
+        j_prediction, j_abstain = jev_prediction(outcome, attempted, question)
+        d_prediction = deterministic[question]
+        row[question] = {
+            "gold_kind": gold_kind(gold),
+            "deterministic": d_prediction,
+            "deterministic_outcome": score(gold, d_prediction),
+            "jev": j_prediction,
+            "jev_abstain_reason": j_abstain,
+            "jev_outcome": score(gold, j_prediction),
+        }
+    return row
+
+
+def _question_summary(rows: list[dict[str, Any]], question: str) -> dict[str, Any]:
+    cells = [(row["query_id"], row[question]) for row in rows]
+    decided = [(qid, c) for qid, c in cells if c["deterministic"] and c["jev"]]
+    disagreements = [(qid, c) for qid, c in decided if c["deterministic"] != c["jev"]]
+    fills = [c for _, c in cells if c["deterministic"] is None]
+    fill_outcomes = Counter(c["jev_outcome"] for c in fills)
+    return {
+        "gold_kinds": _counts(c["gold_kind"] for _, c in cells),
+        "deterministic_outcomes": _counts(c["deterministic_outcome"] for _, c in cells),
+        "jev_outcomes": _counts(c["jev_outcome"] for _, c in cells),
+        "jev_abstain_reasons": _counts(
+            c["jev_abstain_reason"] for _, c in cells if c["jev_abstain_reason"]
+        ),
+        "both_decided": len(decided),
+        "disagreements": len(disagreements),
+        "disagreement_outcomes": _counts(
+            f"{c['deterministic_outcome']}|{c['jev_outcome']}" for _, c in disagreements
+        ),
+        "disagreement_query_ids": [qid for qid, _ in disagreements],
+        "deterministic_abstains": len(fills),
+        "jev_on_deterministic_abstains": dict(sorted(fill_outcomes.items())),
+        "correct_fills": sum(fill_outcomes[o] for o in CORRECT_FILLS),
+        "incorrect_fills": sum(fill_outcomes[o] for o in INCORRECT_FILLS),
+    }
+
+
+def _counts(values: Any) -> dict[str, int]:
+    return dict(sorted(Counter(values).items()))

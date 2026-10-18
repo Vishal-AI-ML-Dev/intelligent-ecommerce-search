@@ -1,0 +1,124 @@
+"""Command line for the M12 query-decision diagnostic (`python -m evals.query_decisions`).
+
+Commands (the work directory defaults to the git-ignored `data/processed/m12_diagnostic/`):
+
+* `label --annotator ann-1`: blind labelling, query text only (see `labeling`).
+* `seal`: seal the queries and labels once every query is labelled.
+* `run --run-id ID --max-attempts N`: dry run (default). Drives the real provider against an
+  in-memory synthetic transport; no network, no key, not Jev output.
+* `run --run-id ID --max-attempts N --live --price-input-usd-per-million P
+  --price-output-usd-per-million P --price-checked-on YYYY-MM-DD --max-estimated-usd X`:
+  paid live calls. Needs explicit owner approval before it is ever run.
+* `run ... --resume-approved`: continue a run blocked by a stop or an unknown outcome.
+* `evaluate --run-id ID [--out FILE]`: offline diagnostic report (JSON).
+"""
+
+import argparse
+import json
+import sys
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+
+from ecommerce_search.decision.jev_provider import JevConfigurationError
+from evals.contracts.canonical import ContractError
+from evals.query_decisions.contracts import QueryDecisionError
+from evals.query_decisions.labeling import WORK_ROOT, label_session, load_sealed, seal_labels
+from evals.query_decisions.runner import (
+    DRY_RUN_MODEL,
+    RunHeader,
+    RunMode,
+    dry_run_provider,
+    live_provider_factory,
+    run_diagnostic,
+)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="python -m evals.query_decisions")
+    parser.add_argument("--work-dir", type=Path, default=WORK_ROOT)
+    commands = parser.add_subparsers(dest="command", required=True)
+    label = commands.add_parser("label")
+    label.add_argument("--annotator", required=True)
+    commands.add_parser("seal")
+    run = commands.add_parser("run")
+    run.add_argument("--run-id", required=True)
+    run.add_argument("--max-attempts", type=int, required=True)
+    run.add_argument("--live", action="store_true")
+    run.add_argument("--price-input-usd-per-million", type=Decimal)
+    run.add_argument("--price-output-usd-per-million", type=Decimal)
+    run.add_argument("--price-checked-on", type=date.fromisoformat)
+    run.add_argument("--max-estimated-usd", type=Decimal)
+    run.add_argument("--resume-approved", action="store_true")
+    evaluate = commands.add_parser("evaluate")
+    evaluate.add_argument("--run-id", required=True)
+    evaluate.add_argument("--out", type=Path)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    try:
+        if args.command == "label":
+            saved = label_session(args.work_dir, args.annotator, ask=input, say=print)
+            print(f"saved {saved} label(s)")
+        elif args.command == "seal":
+            seal = seal_labels(args.work_dir)
+            print(f"sealed {seal.query_count} queries; labels {seal.labels_sha256}")
+        elif args.command == "run":
+            return _run(args)
+        else:
+            from evals.query_decisions.evaluate import evaluate
+
+            report = json.dumps(evaluate(args.work_dir, args.run_id), indent=2, sort_keys=True)
+            if args.out is None:
+                print(report)
+            else:
+                with open(args.out, "x", encoding="utf-8", newline="\n") as handle:
+                    handle.write(report + "\n")
+                print(f"report written to {args.out}")
+    except (ContractError, QueryDecisionError, ValueError, FileExistsError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    except JevConfigurationError:  # fixed text only; never the input or a chained exception
+        print("error: jev configuration invalid", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _run(args: argparse.Namespace) -> int:
+    seal, _queries, _labels = load_sealed(args.work_dir)
+    secret = None
+    if args.live:
+        # Refuse before Settings reads .env and the key. run_diagnostic checks again.
+        live_arguments = (
+            args.price_input_usd_per_million,
+            args.price_output_usd_per_million,
+            args.price_checked_on,
+            args.max_estimated_usd,
+        )
+        if None in live_arguments:
+            raise QueryDecisionError("live mode needs both prices, their check date and a tripwire")
+        if seal.synthetic:
+            raise QueryDecisionError("synthetic test fixtures are never sent to Jev")
+        from ecommerce_search.config import Settings
+
+        factory, model, secret = live_provider_factory(Settings())
+    else:
+        factory, model = dry_run_provider, DRY_RUN_MODEL
+    header = RunHeader(
+        run_id=args.run_id,
+        mode=RunMode.LIVE if args.live else RunMode.DRY_RUN,
+        queries_sha256=seal.queries_sha256,
+        labels_sha256=seal.labels_sha256,
+        model=model,
+        max_attempts=args.max_attempts,
+        price_usd_per_million_input=args.price_input_usd_per_million,
+        price_usd_per_million_output=args.price_output_usd_per_million,
+        price_checked_on=args.price_checked_on,
+        max_estimated_usd=args.max_estimated_usd,
+    )
+    summary = run_diagnostic(
+        args.work_dir, header, factory, secret=secret, resume_approved=args.resume_approved
+    )
+    return 0 if summary.stopped is None else 3
