@@ -904,30 +904,36 @@ No endpoint places orders, issues refunds, moves money, or bans sellers, and non
 
 ## 24. Intended repository structure
 
-Create directories only when their milestone begins. The current layout (through M8, plus M9 work in progress) is:
+Create directories only when their milestone begins. The current layout (through M11; M12 and
+later milestones have not started) is:
 
 ```text
 intelligent-ecommerce-search/
   docs/
     MASTER_PLAN.md, spec.md, architecture.md, data-quality.md,
-    per-milestone search docs, decisions/ (ADR-001..ADR-007)
+    per-milestone docs (search M3-M8, golden-dataset-m9.md, weak-label-development-m9.md,
+    rubric-1 reviewer copies, m10-*-evaluation.md, jev-provider-m11.md),
+    decisions/ (ADR-001..ADR-007)
   src/ecommerce_search/
     api/ catalog/ config/ db/ decision/ embeddings/ filtering/
     ingestion/ models/ query_understanding/ reranking/ search/
+    (decision/: the deterministic provider and the optional, off-by-default Jev provider, M11)
   migrations/
   tests/
-    unit/ (incl. unit/golden for the M9 contracts) integration/
+    unit/ (catalog/, golden/, search/, weak_labels/) integration/
   evals/
-    contracts/        (M9)
-    runners/          (M9; queries-only freeze runner)
-    goldens/          (M9; internal-search/v1: pilot authoring input and the verified
-                      queries_frozen artifacts and manifest; no candidate pool,
-                      provenance, labels or metrics)
+    contracts/ annotation/ metrics/ runners/   (M9-M10 tooling)
+    goldens/          (M9; internal-search/v1: the sealed review-2 pilot/dev golden chain and
+                      its manifests; no held-out test partition)
+    weak_labels/ weaksets/                     (M9 machine-only development track)
+    results/          (M10; internal-search/v1/human-pilot-dev)
   data/
-    seed/ labels/ processed/
+    seed/ labels/ processed/ (processed/ contents are git-ignored)
   scripts/
   pyproject.toml, uv.lock, Dockerfile, docker-compose.yml, .env.example, README.md
 ```
+
+Local model snapshots live in the git-ignored `models/` directory.
 
 Future packages, each created only in its milestone:
 
@@ -941,7 +947,7 @@ src/ecommerce_search/
   review/              (M14/M21)
   observability/       (M24)
 evals/
-  goldens/ metrics/ runners/ annotation/ reports/   (M9-M10)
+  reports/          (planned for M9-M10, never created; M10 reports are in docs/ and evals/results/)
   decisions/                                        (M12, M14)
   assistant/                                        (M17)
   returns/                                          (M19-M22)

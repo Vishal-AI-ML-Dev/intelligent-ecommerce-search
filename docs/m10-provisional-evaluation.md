@@ -215,9 +215,12 @@ anecdotes, not estimates.
 
 ## 7. M11 priorities (machine-label development conclusions)
 
-MASTER_PLAN M11 is the Jev Decision Provider. Its prerequisites are not met: there is no
-human-reviewed Golden Dataset and no credentials. CLAUDE.md asks for deterministic logic
-wherever it suffices. The priorities below are therefore ordered deterministic-first:
+MASTER_PLAN M11 is the Jev Decision Provider. *Historical, as of this analysis's original commit
+(`73c67c1`, 2026-10-05):* its prerequisites were not met: there was no human-reviewed Golden
+Dataset and no credentials. *Current status:* see the M9 and M11 entries in `README.md` ("Current
+status"), `docs/golden-dataset-m9.md` and `docs/jev-provider-m11.md`. CLAUDE.md asks for
+deterministic logic wherever it suffices. The priorities below were therefore ordered
+deterministic-first:
 
 1. **Resume strict M9 human annotation.** It gates the official M10 report, the V2-vs-V3
    decision and M11's own prerequisite. It is the only way to confirm any finding here.
