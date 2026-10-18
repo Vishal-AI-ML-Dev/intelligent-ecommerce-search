@@ -54,8 +54,19 @@ Development is organized milestone by milestone. See
     separate owner decision.
   - The provisional development analysis of the machine-label V0–V3 results is complete, in
     `docs/m10-provisional-evaluation.md` (labels 100% machine-generated, 0% human audit).
-- M11–M27: not implemented. This includes Buyer RAG, Return Intelligence, human review
-  (HITL), the dual frontend and marketplace integration. M27 is optional.
+- M11 (Jev decision provider): **complete for provider implementation and verification scope;
+  live success-path smoke-verified, not production-validated** (owner decision, 2026-10-18).
+  - An optional `JevDecisionProvider` proposes category and semantic intent only. It is off by
+    default and used by no endpoint.
+  - Verification: the documented API contract, an SDK review, mocked failure-path tests and one
+    successful live smoke request.
+  - Not verified, and not waived for production: live failure, retry, rate-limit and
+    cancellation behaviour; server-side cancellation and billing behaviour; quality improvement,
+    calibration and latency distributions.
+  - See `docs/jev-provider-m11.md`.
+- M12–M27: not started. This includes the Jev V4 experiment (M12), Buyer RAG, Return
+  Intelligence, human review (HITL), the dual frontend and marketplace integration. M27 is
+  optional.
 
 Milestone 1 (Foundation): typed settings, FastAPI app with `GET /health`,
 PostgreSQL 16 + pgvector via Docker Compose, SQLAlchemy 2 (sync) with psycopg 3,

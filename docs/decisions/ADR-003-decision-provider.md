@@ -110,8 +110,10 @@ deferred.
   call is attempted, so there is nothing to fall back from and no reason field; `jev=None` is the
   record. The application still constructs `DeterministicDecisionProvider` directly; no endpoint
   behaviour changed.
-- Status: mocked implementation only; live connectivity is unverified; dependencies are accepted
-  and planned local regression checks passed (`docs/jev-provider-m11.md`).
+- Status (Milestone 11 complete for provider implementation and verification scope; not
+  production-validated): implemented and tested with mocks; live connectivity is smoke-verified
+  with one request (2026-10-18); dependencies are accepted and planned local regression checks
+  passed (`docs/jev-provider-m11.md`).
 
 ## Alternatives considered
 

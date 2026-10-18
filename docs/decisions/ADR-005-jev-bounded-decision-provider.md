@@ -4,12 +4,14 @@
 
 Accepted (architectural boundary).
 
-Milestone 11 is **not complete**: the mocked implementation is ready for review, off by default
-and not wired into any endpoint, but the "credentials" prerequisite is unmet (waitlist account
-access only; no API key has been created), live connectivity is unverified (paid access; no live
-call approved or made); dependencies are reviewed and accepted (2026-10-18) and planned local
-regression checks passed (not live verification). The API contract is
-documented from official sources only; no behaviour has been observed live. See
+Milestone 11 is **complete for provider implementation and verification scope; live success-path
+smoke-verified, not production-validated** (owner decision, 2026-10-18). The implementation is off
+by default and not wired into any endpoint. Credentials now exist: paid access, with the key only
+in the developer's git-ignored `.env` (until 2026-10-18 there was only waitlist access and no
+key). Live
+connectivity is smoke-verified with one request on 2026-10-18. Dependencies are reviewed and
+accepted (2026-10-18), and planned local regression checks passed. Apart from that one successful
+response, the API contract is documented from official sources only. See
 "Implementation status (Milestone 11)" below and `docs/jev-provider-m11.md`.
 
 ## Date
@@ -101,7 +103,8 @@ Jev must not be used to:
 
 ## Implementation status (Milestone 11)
 
-Documented contract (official TypeSafe documentation, read 2026-10-17; not observed live;
+Documented contract (official TypeSafe documentation, read 2026-10-17; only the success path was
+observed live, in one smoke request on 2026-10-18;
 sources in `docs/jev-provider-m11.md` §7): Jev is TypeSafe's model, called through
 `POST https://api.typesafe.ai/v1/systemone` with a Bearer key; typed **Choice** questions return
 `choice`, `probabilities` (summing to 1) and a TypeSafe-computed `confidence`; versioned model ids
@@ -136,9 +139,16 @@ Mocked implementation in `src/ecommerce_search/decision/jev_provider.py` with
 - Off by default; `typesafe_sdk` is imported only when an enabled provider is built; no endpoint
   uses it; Compose forwards no Jev setting.
 
-Still open: live connectivity; real latency, tokens, answer quality and Hinglish behaviour (need
-approved live calls); full-suite, integration and real-model regression runs; the error-body
-schema, organisation rate limits, data-retention terms; and everything assigned to Milestone 12.
+Live smoke check (2026-10-18, one request; `docs/jev-provider-m11.md` §7.1): HTTP 200, returned
+model `jev-1.13.0`, validated response, category `laptop`, intent `gaming`, 627.3 ms, 641 input /
+142 output tokens, no cost field.
+
+Still open:
+- answer quality, latency and token distributions, and Hinglish behaviour beyond that one request
+  (need approved live calls);
+- live failure, retry and cancellation behaviour;
+- the error-body schema, organisation rate limits, and data-retention and billing terms;
+- everything assigned to Milestone 12.
 The structured Settings-error disclosure risk (shown with fake inputs only) is fixed by masking
 secret inputs at every settings source (`docs/jev-provider-m11.md` §6).
 
@@ -175,7 +185,8 @@ secret inputs at every settings source (`docs/jev-provider-m11.md` §6).
 
 ## Open questions
 
-Milestone 11 (API verification), documented from official sources but not observed live: API contract,
+Milestone 11 (API verification), documented from official sources, with only the success path
+observed live (one smoke request, 2026-10-18): API contract,
 authentication, error statuses, models and version pinning, published pricing (see
 "Implementation status (Milestone 11)"). Still unknown: the error-body schema, organisation rate
 limits, data-retention terms, and any behaviour that only a live call can show.

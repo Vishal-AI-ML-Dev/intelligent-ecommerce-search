@@ -421,15 +421,17 @@ generated reports. The fields each experiment record carries are listed in
 - Milestone 11 implements the optional Jev provider, Milestone 12 evaluates
   it, and it is enabled in the default/V4 configuration only if Milestone 12
   shows a measured benefit and acceptable safety, latency and cost.
-- **Milestone 11 status (not complete):** a mocked `JevDecisionProvider`
-  (`decision/jev_provider.py`, `typesafe-sdk==0.7.5`) is ready for review, off by default and used
-  by no endpoint; live connectivity is unverified, dependencies are accepted (2026-10-18), and
+- **Milestone 11 status: complete for provider implementation and verification scope; live
+  success-path smoke-verified, not production-validated** (owner decision, 2026-10-18). The
+  `JevDecisionProvider` (`decision/jev_provider.py`, `typesafe-sdk==0.7.5`) is off by default and
+  used by no endpoint; live connectivity is smoke-verified (one request, 2026-10-18),
+  dependencies are accepted (2026-10-18), and
   planned local regression checks passed. It proposes category and semantic intent only, stores
   raw probabilities and TypeSafe's confidence separately, and has no gate confidence yet. A
   per-call deadline bounds the
   caller's wait (plus scheduling tolerance, not hard real time; tested with mocks), using one
-  managed event loop and async client per provider. Details and the documented (not
-  live-observed) API contract:
+  managed event loop and async client per provider. Details, the documented API contract and
+  the live smoke result:
   `docs/jev-provider-m11.md`.
 - Failure handling: timeout, transport error, schema-invalid output and
   out-of-set label lead to the deterministic result, and the fallback reason is

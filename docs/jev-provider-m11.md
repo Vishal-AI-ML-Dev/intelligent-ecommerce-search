@@ -2,14 +2,25 @@
 
 ## Status
 
-**M11 is not complete.**
+**M11: complete for provider implementation and verification scope; live success-path
+smoke-verified, not production-validated** (owner decision, 2026-10-18).
+
+The owner accepted the documented API contract, the SDK review, the mocked failure-path tests and
+one successful live smoke request (section 7.1) as sufficient verification for this scope. This
+neither verifies these unknowns nor waives them for production use:
+
+- live failure, retry, rate-limit and cancellation behaviour: **unobserved**;
+- server-side cancellation and billing behaviour: **unknown**;
+- quality improvement, calibration and latency distributions: **unproven**.
+
+Jev remains off by default and is used by no endpoint. Milestone 12 has not started.
 
 | Item | Status |
 |---|---|
-| Mocked implementation (provider, validation, fallback, settings, telemetry) | Ready for review. Mocked tests pass (Jev file: 93 tests). |
-| API contract | **Documented only**, from official TypeSafe docs (section 7). No behaviour has been **observed live**. |
-| Credentials | **None.** TypeSafe account access was granted from the waitlist, but no API key has been created (dashboard: "No API keys yet") and paid access has not been purchased. The M11 prerequisite "credentials" is **unmet**. |
-| Live connectivity | **Unverified.** Jev requires paid access. No live call, billing activation, credit purchase or automatic top-up has been made or configured; any live call needs separate explicit approval. |
+| Implementation (provider, validation, fallback, settings, telemetry) | Complete for the M11 scope. Mocked tests pass (Jev file: 93 tests). |
+| API contract | **Documented** from official TypeSafe docs (section 7). Only the success path has been **observed live**, in one smoke request (section 7.1); error statuses, error bodies, retries and cancellation have not. |
+| Credentials | **Available.** Paid access has been purchased, and an API key exists only in the developer's git-ignored local `.env` (never committed, printed or logged). *History:* until 2026-10-18 there was only waitlist access and no key. |
+| Live connectivity | **Smoke-verified with one request (2026-10-18)**, section 7.1. This is not evidence of answer quality, latency distribution, calibration or live failure behaviour. Any further live call needs separate explicit approval. |
 | Local regression validation | **Passed** (planned local checks; 4 OS-related unit skips). This is not live Jev verification and does not prove the absence of defects. **Final full unit suite (2026-10-18, after the timeout change): passed.** 3,743 collected; 3,739 passed; 0 failed; 0 errors; 4 skipped, all because this OS account cannot create symbolic links. All 93 Jev tests passed. The isolation wrapper (`tests/unit/test_unit_isolation.py`) passed with its 1,200 s child limit. All 233 recorded source, config, test and doc hashes were unchanged during the run. *Earlier run, kept as history:* the first full run that day had 3,738 passed, **1 failed**, 4 skipped. The failure was the then-600 s child limit; run directly with the same clean environment, that child suite passed (693.57 s), and the limit was raised to 1,200 s with approval. Offline real-model tests: 14 passed. Ruff: clean. **Database integration tests (2026-10-18): passed.** 721 passed; 0 failed, errors or skips; exit code 0. This includes 4 database + real-model tests using cached models offline. They ran against a dedicated `ecommerce_search_itest` database (never the development database); it and every scratch database were cleaned up, and the database container was returned to its prior stopped state. All 233 recorded file hashes were unchanged during the run. |
 | FR-DEC-3 deadline | **Implemented with mocks** (section 5.1): a bounded caller wait plus scheduling tolerance, not hard real time. Cancellation stops client-side retries but cannot guarantee that server processing or billing stops. |
 | Concurrency and cleanup | **Implemented with mocks** (section 5.1). Calls take a slot before they are queued, so queued plus running calls never exceed `JEV_MAX_IN_FLIGHT`, even while the loop is blocked. Every slot is released exactly once. `close()` waits up to the configured close-wait cap (currently 5 s), plus scheduling tolerance; the loop thread finishes cleanup after finite blocking or cancellation-resistant work. **Limits:** code that never returns keeps the thread, loop and client until process exit; if closing the client fails, the failure is logged (by error type only) and the loop still closes, but that client is left for garbage collection. |
@@ -223,15 +234,15 @@ and do not use the provider.
 - `JEV_`/`TYPESAFE_` variables are not forwarded to any Compose service, and unit tests strip
   them from the environment.
 
-Local key setup, only if a key is ever created with separate approval (none exists; the `.env`
-file was never opened by Claude): add the line `TYPESAFE_API_KEY=<key>` to the git-ignored
-`.env` in an editor, without overwriting the file.
+Local key setup: the key belongs only in the git-ignored `.env`, as the line
+`TYPESAFE_API_KEY=<key>`, added in an editor without overwriting the file. A key now exists there;
+Claude never opened `.env` or displayed the key.
 Nothing calls Jev unless `JEV_ENABLED=true` and code builds the provider; no endpoint does.
 
-## 7. Documented API contract (official docs, read 2026-10-17; not observed live)
+## 7. Documented API contract (official docs, read 2026-10-17)
 
-Everything in this section comes from documentation and the SDK source. None of it has been
-confirmed by a real response.
+Everything in this section comes from documentation and the SDK source. Section 7.1 records the
+one live response observed; nothing else here has been confirmed by a real response.
 
 | Fact | Source |
 |---|---|
@@ -247,6 +258,37 @@ Distribution check (PyPI JSON API, 2026-10-17): `typesafe-sdk` 0.7.5, MIT, `requ
 `pydantic-core>=2.41.1`, `tenacity>=9.0.0`, `truststore>=0.10.0`, `typing-extensions>=4.13.0`;
 wheel sha256 `967a8b61494d536abb55ee3f3a2b10e81685cb6baad6ccdcab588bdc6c9b86d2`, which matches
 `uv.lock`.
+
+### 7.1 Live smoke check (2026-10-18, one request)
+
+One approved request was sent through a one-off local script. The provider was built in that
+process only; `JEV_ENABLED` stayed false in `.env`, and no endpoint was involved. Settings: query
+`gaming laptop 16gb ram`, pinned `jev-1.13.0`, official base URL, retries 0, one call in flight,
+deadline 3.0 s, and the existing category and semantic-intent questions in one request.
+
+- **Observed:**
+  - HTTP 200 on the first attempt (no retry);
+  - returned model `jev-1.13.0`, matching the pin;
+  - response validation passed, and the deterministic parse was unchanged;
+  - category `laptop`, semantic intent `gaming` (each the unique top label);
+  - provider latency 627.3 ms (wall time 631.4 ms);
+  - usage 641 input and 142 output tokens; **no cost field was returned**;
+  - category confidence 1.0, equal to the documented formula. Intent confidence **0.99**, versus
+    **0.98875** from the documented formula
+    (`(p_max - 1/n) / (1 - 1/n)` over the returned probabilities). **The cause of the difference
+    is unknown.**
+- **Cleanup:** the provider was closed afterwards, and repository code and endpoints are
+  unchanged.
+- **Redaction:** the key, headers and raw HTTP bodies were not printed or logged (checked in
+  process before any output).
+- **Not established by this check:**
+  - answer quality;
+  - latency or token distributions;
+  - calibration of probabilities or confidence;
+  - live failure, retry, timeout and cancellation behaviour, including whether the server stops
+    processing or billing a cancelled request;
+  - error-body schema and rate limits;
+  - TypeSafe's privacy and billing terms.
 
 ## 8. Dependency graph (from `uv.lock`; `uv tree --frozen --offline --package typesafe-sdk`)
 
@@ -310,8 +352,11 @@ Based on a read-only review on 2026-10-18:
 
 - Numeric rate limits for this organisation; error-body schema; data retention and training
   terms (DPA/Privacy Policy not reviewed); deprecation policy for pinned versions.
-- Real tokens per request, real latency, real answer quality, Hinglish and short-query behaviour,
-  first-option bias on these label sets: all need live calls (not authorised) and Milestone 12.
+- Answer quality, latency and token distributions, Hinglish and short-query behaviour, and
+  first-option bias on these label sets: only one live sample exists (section 7.1). More needs
+  approved live calls and Milestone 12.
+- Live failure, retry, timeout and cancellation behaviour, and how failed or cancelled requests
+  are billed: not observed live.
 - Calibration of probabilities or `confidence`, thresholds, gating, V4: Milestone 12.
 - FR-DEC-3 deadline: implemented and tested with mocks only (section 5.1). Real-network timing,
   and whether the server stops processing or billing cancelled requests, are unknown.

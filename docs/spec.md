@@ -333,11 +333,14 @@ measured against human-reviewed evaluation data.
   only provider, so an invalid or failed result returns the fixed 503 instead of results without
   a parse. FR-DEC-3 fallback semantics, FR-DEC-4 and FR-DEC-5 (probability and gate-confidence
   fields) remain for Milestones 11 and 12; M6 adds no placeholder for them.
-- FR-DEC status (Milestone 11, **not complete**): a mocked implementation of the optional Jev
-  provider (FR-DEC-4) is ready for review, off by default and used by no endpoint
-  (`docs/jev-provider-m11.md`). Live connectivity is unverified (no key, no paid access);
-  dependencies are reviewed and accepted (2026-10-18). Planned local regression checks passed (full
-  unit suite: 3,739 passed, 0 failed, 4 OS-related skips; database integration tests: 721
+- FR-DEC status (Milestone 11, **complete for provider implementation and verification scope;
+  live success-path smoke-verified, not production-validated**; owner decision 2026-10-18): the
+  optional Jev provider (FR-DEC-4) is implemented, off by default and used by no endpoint
+  (`docs/jev-provider-m11.md`). Live connectivity is smoke-verified with one request
+  (2026-10-18); quality, latency distribution, calibration and live failure behaviour are
+  unverified. Dependencies are reviewed and accepted (2026-10-18). Planned local regression
+  checks passed (full unit suite: 3,739 passed, 0 failed, 4 OS-related skips; database
+  integration tests: 721
   passed). FR-DEC-3: failed
   and invalid Jev outputs fall back to the deterministic result
   with a fixed reason (configuration errors fail instead). **Late outputs** are handled by a
@@ -710,13 +713,13 @@ human review, and evaluation is human-reviewed.
    leftover `8gb` is paired as RAM by the R6 convention.
 7. **Currency:** examples imply INR (`₹`, `rs`, `k`). Queries are assumed to be
    in the catalog currency. Multi-currency support is out of scope.
-8. **Jev API behavior, model versions and output semantics:** unverified.
+8. **Jev API behavior, model versions and output semantics:** only partly verified.
    API verification is deferred to Milestone 11. Probability meaning and
    calibration are evaluated in Milestone 12 (ADR-005).
    **Milestone 11:** API contract, authentication, error statuses, versioned models
    (`jev-1.13.0` pinned) and published pricing are **documented** from official sources read on
-   2026-10-17 (`docs/jev-provider-m11.md` §7); none of it has been observed live (paid access; no
-   live call approved or made). Still open: probability and
+   2026-10-17 (`docs/jev-provider-m11.md` §7). Only the success path has been observed live, in
+   one smoke request on 2026-10-18 (§7.1). Still open: probability and
    confidence calibration (Milestone 12), real latency/tokens/quality, error-body schema,
    organisation rate limits and data-retention terms.
 9. **Storage taxonomy:** NVMe is an interface/protocol, and NVMe products are
