@@ -1,0 +1,213 @@
+{
+  "_example": {
+    "endpoint": "POST /search/filtered",
+    "request": {
+      "query": "laptop 8gb 256 ssd",
+      "top_k": 5
+    },
+    "http_status": 200,
+    "captured": "2026-10-19, local stack, synthetic 240-product catalog",
+    "note": "One request, recorded once. latency_ms values are from that single request and are not a benchmark. results trimmed to id, title, brand, category, price and scores."
+  },
+  "query": "laptop 8gb 256 ssd",
+  "search_version": "v2_filtered",
+  "document_version": "1",
+  "tsquery": "'laptop' & '8gb' & '256' & 'ssd'",
+  "embedding_model_id": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "embedding_dimension": 384,
+  "embedding_text_version": "1",
+  "distance_metric": "cosine",
+  "fusion": {
+    "method": "rrf",
+    "rrf_k": 100,
+    "rrf_k_status": "provisional",
+    "lexical_k": 50,
+    "dense_k": 50,
+    "candidate_k": 50
+  },
+  "dense_status": "used",
+  "lexical_hit_count": 0,
+  "dense_hit_count": 15,
+  "overlap_count": 0,
+  "fused_count": 15,
+  "candidate_count": 15,
+  "top_k": 5,
+  "result_count": 5,
+  "filter_policy": {
+    "version": "fp-1"
+  },
+  "applied_filters": [
+    {
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop"
+    },
+    {
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": "8"
+    },
+    {
+      "field": "storage_gb",
+      "operator": "eq",
+      "value": "256"
+    },
+    {
+      "field": "storage_type",
+      "operator": "eq",
+      "value": "SSD"
+    }
+  ],
+  "ignored_constraints": [],
+  "query_understanding": {
+    "usage": "filter_source",
+    "provider": "deterministic",
+    "provider_version": "qu-1",
+    "understanding": {
+      "raw_query": "laptop 8gb 256 ssd",
+      "category": "laptop",
+      "brand": null,
+      "ram_gb": 8,
+      "storage_gb": 256,
+      "storage_type": "SSD",
+      "min_price": null,
+      "max_price": null,
+      "semantic_intent": null,
+      "retrieval_strategy": null,
+      "attributes": {
+        "storage_interface": null,
+        "price_preference": null
+      },
+      "parser_version": "qu-1",
+      "lexicon_version": "1",
+      "matched_terms": [
+        {
+          "rule": "category_term",
+          "field": "category",
+          "value": "laptop",
+          "span": {
+            "start": 0,
+            "end": 6,
+            "text": "laptop"
+          }
+        },
+        {
+          "rule": "ram_capacity_paired",
+          "field": "ram_gb",
+          "value": "8",
+          "span": {
+            "start": 7,
+            "end": 10,
+            "text": "8gb"
+          }
+        },
+        {
+          "rule": "storage_capacity_implicit_gb",
+          "field": "storage_gb",
+          "value": "256",
+          "span": {
+            "start": 11,
+            "end": 18,
+            "text": "256 ssd"
+          }
+        },
+        {
+          "rule": "storage_type_term",
+          "field": "storage_type",
+          "value": "SSD",
+          "span": {
+            "start": 15,
+            "end": 18,
+            "text": "ssd"
+          }
+        }
+      ],
+      "ambiguities": [],
+      "conflicts": [],
+      "unresolved": []
+    }
+  },
+  "latency_ms": {
+    "lexical_ms": 4.678,
+    "model_load_ms": null,
+    "query_embedding_ms": 17.715,
+    "vector_ms": 5.699,
+    "rrf_ms": 0.121,
+    "query_understanding_ms": 0.613,
+    "filter_translation_ms": 0.263,
+    "total_ms": 34.908
+  },
+  "results": [
+    {
+      "rank": 1,
+      "rrf_score": 0.009900990099009901,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 1,
+      "dense_score": 0.5954793691635132,
+      "product_id": "SYN-LAP-0049",
+      "title": "MSI Cobalt 14.0-inch Laptop - Intel Core i3, 8GB RAM, 256GB SSD Model LP149",
+      "brand": "MSI",
+      "category": "laptop",
+      "price": "39999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 2,
+      "rrf_score": 0.00980392156862745,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 2,
+      "dense_score": 0.5931706671017021,
+      "product_id": "SYN-LAP-0037",
+      "title": "Dell Solace 14.0-inch Laptop - AMD Ryzen 5, 8GB RAM, 256GB SSD Model LP137",
+      "brand": "Dell",
+      "category": "laptop",
+      "price": "47999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 3,
+      "rrf_score": 0.009708737864077669,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 3,
+      "dense_score": 0.5776650561293937,
+      "product_id": "SYN-LAP-0034",
+      "title": "Apple Borealis 15.6-inch Laptop - Apple M-series, 8GB RAM, 256GB SSD Model LP134",
+      "brand": "Apple",
+      "category": "laptop",
+      "price": "44999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 4,
+      "rrf_score": 0.009615384615384616,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 4,
+      "dense_score": 0.5616975091876094,
+      "product_id": "SYN-LAP-0025",
+      "title": "Asus Zenith 14.0-inch Laptop - Intel Core i3, 8GB RAM, 256GB SSD Model LP125",
+      "brand": "Asus",
+      "category": "laptop",
+      "price": "33999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 5,
+      "rrf_score": 0.009523809523809525,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 5,
+      "dense_score": 0.5512800216674805,
+      "product_id": "SYN-LAP-0021",
+      "title": "MSI Falcon 14.0-inch Laptop - AMD Ryzen 5, 8GB RAM, 256GB SSD Model LP121",
+      "brand": "MSI",
+      "category": "laptop",
+      "price": "46999.00",
+      "currency": "INR"
+    }
+  ]
+}

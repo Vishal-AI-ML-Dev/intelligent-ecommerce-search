@@ -1,0 +1,167 @@
+{
+  "_example": {
+    "endpoint": "POST /search/hybrid",
+    "request": {
+      "query": "apple phone",
+      "top_k": 5
+    },
+    "http_status": 200,
+    "captured": "2026-10-19, local stack, synthetic 240-product catalog",
+    "note": "One request, recorded once. latency_ms values are from that single request and are not a benchmark. results trimmed to id, title, brand, category, price and scores."
+  },
+  "query": "apple phone",
+  "search_version": "v1_hybrid",
+  "document_version": "1",
+  "tsquery": "'apple' & 'phone'",
+  "embedding_model_id": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "embedding_dimension": 384,
+  "embedding_text_version": "1",
+  "distance_metric": "cosine",
+  "fusion": {
+    "method": "rrf",
+    "rrf_k": 100,
+    "rrf_k_status": "provisional",
+    "lexical_k": 50,
+    "dense_k": 50,
+    "candidate_k": 50
+  },
+  "dense_status": "used",
+  "lexical_hit_count": 10,
+  "dense_hit_count": 50,
+  "overlap_count": 10,
+  "fused_count": 50,
+  "candidate_count": 50,
+  "top_k": 5,
+  "result_count": 5,
+  "applied_filters": [],
+  "query_understanding": {
+    "usage": "informational",
+    "provider": "deterministic",
+    "provider_version": "qu-1",
+    "understanding": {
+      "raw_query": "apple phone",
+      "category": "phone",
+      "brand": "Apple",
+      "ram_gb": null,
+      "storage_gb": null,
+      "storage_type": null,
+      "min_price": null,
+      "max_price": null,
+      "semantic_intent": null,
+      "retrieval_strategy": null,
+      "attributes": {
+        "storage_interface": null,
+        "price_preference": null
+      },
+      "parser_version": "qu-1",
+      "lexicon_version": "1",
+      "matched_terms": [
+        {
+          "rule": "brand_term",
+          "field": "brand",
+          "value": "Apple",
+          "span": {
+            "start": 0,
+            "end": 5,
+            "text": "apple"
+          }
+        },
+        {
+          "rule": "category_term",
+          "field": "category",
+          "value": "phone",
+          "span": {
+            "start": 6,
+            "end": 11,
+            "text": "phone"
+          }
+        }
+      ],
+      "ambiguities": [],
+      "conflicts": [],
+      "unresolved": []
+    }
+  },
+  "latency_ms": {
+    "lexical_ms": 3.291,
+    "model_load_ms": null,
+    "query_embedding_ms": 19.993,
+    "vector_ms": 3.667,
+    "rrf_ms": 0.443,
+    "query_understanding_ms": 0.473,
+    "total_ms": 33.279
+  },
+  "results": [
+    {
+      "rank": 1,
+      "rrf_score": 0.019801980198019802,
+      "lexical_rank": 1,
+      "lexical_score": 0.7489217,
+      "dense_rank": 1,
+      "dense_score": 0.535708514707774,
+      "product_id": "SYN-PHN-0002",
+      "title": "Apple Aster (4GB RAM, 128GB Storage) Model PH102",
+      "brand": "Apple",
+      "category": "phone",
+      "price": "21999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 2,
+      "rrf_score": 0.019419306184012067,
+      "lexical_rank": 2,
+      "lexical_score": 0.7489217,
+      "dense_rank": 4,
+      "dense_score": 0.5205749869346619,
+      "product_id": "SYN-PHN-0008",
+      "title": "Apple Borealis (8GB RAM, 256GB Storage) Model PH108",
+      "brand": "Apple",
+      "category": "phone",
+      "price": "44999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 3,
+      "rrf_score": 0.019419306184012067,
+      "lexical_rank": 4,
+      "lexical_score": 0.7489217,
+      "dense_rank": 2,
+      "dense_score": 0.5242235660552979,
+      "product_id": "SYN-PHN-0020",
+      "title": "Apple Aster (4GB RAM, 64GB Storage) Model PH120",
+      "brand": "Apple",
+      "category": "phone",
+      "price": "15999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 4,
+      "rrf_score": 0.018967997123336928,
+      "lexical_rank": 8,
+      "lexical_score": 0.7489217,
+      "dense_rank": 3,
+      "dense_score": 0.5224834680557251,
+      "product_id": "SYN-PHN-0044",
+      "title": "Apple Borealis (6GB RAM, 128GB Storage) Model PH144",
+      "brand": "Apple",
+      "category": "phone",
+      "price": "25999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 5,
+      "rrf_score": 0.018869603916332887,
+      "lexical_rank": 5,
+      "lexical_score": 0.7489217,
+      "dense_rank": 7,
+      "dense_score": 0.5053363436059578,
+      "product_id": "SYN-PHN-0026",
+      "title": "Apple Borealis (8GB RAM, 128GB Storage) Model PH126",
+      "brand": "Apple",
+      "category": "phone",
+      "price": "34999.00",
+      "currency": "INR"
+    }
+  ]
+}

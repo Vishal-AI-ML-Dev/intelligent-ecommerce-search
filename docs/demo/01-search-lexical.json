@@ -1,0 +1,75 @@
+{
+  "_example": {
+    "endpoint": "POST /search",
+    "request": {
+      "query": "hp laptop",
+      "top_k": 5
+    },
+    "http_status": 200,
+    "captured": "2026-10-19, local stack, synthetic 240-product catalog",
+    "note": "One request, recorded once. latency_ms values are from that single request and are not a benchmark. results trimmed to id, title, brand, category, price and scores."
+  },
+  "query": "hp laptop",
+  "search_version": "v0_lexical",
+  "document_version": "1",
+  "top_k": 5,
+  "result_count": 5,
+  "tsquery": "'hp' & 'laptop'",
+  "applied_filters": [],
+  "latency_ms": {
+    "lexical_ms": 10.034,
+    "total_ms": 10.154
+  },
+  "results": [
+    {
+      "rank": 1,
+      "lexical_score": 0.99004877,
+      "product_id": "SYN-LAP-0001",
+      "title": "HP Aurelia 14.0-inch Laptop - Intel Core i3, 8GB RAM, 256GB SSD Model LP101",
+      "brand": "HP",
+      "category": "laptop",
+      "price": "33999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 2,
+      "lexical_score": 0.99004877,
+      "product_id": "SYN-LAP-0015",
+      "title": "HP Corvid 15.6-inch Laptop - Intel Core i5, 12GB RAM, 512GB SSD Model LP115",
+      "brand": "HP",
+      "category": "laptop",
+      "price": "45999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 3,
+      "lexical_score": 0.99004877,
+      "product_id": "SYN-LAP-0022",
+      "title": "HP Aurelia 14.0-inch Laptop - Intel Core i5, 16GB RAM, 512GB SSD Model LP122",
+      "brand": "HP",
+      "category": "laptop",
+      "price": "65999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 4,
+      "lexical_score": 0.99004877,
+      "product_id": "SYN-LAP-0036",
+      "title": "HP Corvid 15.6-inch Laptop - Intel Core i3, 8GB RAM, 512GB SSD Model LP136",
+      "brand": "HP",
+      "category": "laptop",
+      "price": "40999.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 5,
+      "lexical_score": 0.99004877,
+      "product_id": "SYN-LAP-0057",
+      "title": "HP Corvid 14.0-inch Laptop - AMD Ryzen 5, 8GB RAM, 256GB SSD Model LP157",
+      "brand": "HP",
+      "category": "laptop",
+      "price": "43999.00",
+      "currency": "INR"
+    }
+  ]
+}

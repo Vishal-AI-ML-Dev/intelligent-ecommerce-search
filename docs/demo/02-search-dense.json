@@ -1,0 +1,80 @@
+{
+  "_example": {
+    "endpoint": "POST /search/dense",
+    "request": {
+      "query": "noise cancelling headphones",
+      "top_k": 5
+    },
+    "http_status": 200,
+    "captured": "2026-10-19, local stack, synthetic 240-product catalog",
+    "note": "One request, recorded once. latency_ms values are from that single request and are not a benchmark. results trimmed to id, title, brand, category, price and scores."
+  },
+  "query": "noise cancelling headphones",
+  "search_version": "dense_only",
+  "embedding_model_id": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "embedding_dimension": 384,
+  "embedding_text_version": "1",
+  "distance_metric": "cosine",
+  "top_k": 5,
+  "result_count": 5,
+  "applied_filters": [],
+  "latency_ms": {
+    "model_load_ms": 9937.125,
+    "query_embedding_ms": 16.883,
+    "vector_ms": 7.766,
+    "total_ms": 9961.908
+  },
+  "results": [
+    {
+      "rank": 1,
+      "dense_score": 0.5874105341785838,
+      "product_id": "SYN-HDP-0040",
+      "title": "Sennheiser Timbre Over-ear Wireless Headphones with Active Noise Cancellation Model HD140",
+      "brand": "Sennheiser",
+      "category": "headphones",
+      "price": "18299.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 2,
+      "dense_score": 0.5868073948140515,
+      "product_id": "SYN-HDP-0025",
+      "title": "Sennheiser Timbre Over-ear Wireless Headphones with Active Noise Cancellation Model HD125",
+      "brand": "Sennheiser",
+      "category": "headphones",
+      "price": "29099.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 3,
+      "dense_score": 0.5693361419835016,
+      "product_id": "SYN-HDP-0042",
+      "title": "Bose Calm Over-ear Wireless Headphones with Active Noise Cancellation Model HD142",
+      "brand": "Bose",
+      "category": "headphones",
+      "price": "21499.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 4,
+      "dense_score": 0.5687534727152023,
+      "product_id": "SYN-HDP-0027",
+      "title": "Bose Calm Over-ear Wireless Headphones with Active Noise Cancellation Model HD127",
+      "brand": "Bose",
+      "category": "headphones",
+      "price": "33199.00",
+      "currency": "INR"
+    },
+    {
+      "rank": 5,
+      "dense_score": 0.5559332568764833,
+      "product_id": "SYN-HDP-0008",
+      "title": "JBL Beat Over-ear Wireless Headphones with Active Noise Cancellation Model HD108",
+      "brand": "JBL",
+      "category": "headphones",
+      "price": "14399.00",
+      "currency": "INR"
+    }
+  ]
+}
