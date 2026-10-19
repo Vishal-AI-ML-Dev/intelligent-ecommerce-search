@@ -334,7 +334,7 @@ They are not written to `run.json`, so they are not recorded here.
 | Jev abstentions (no unique top label) | 0 |
 | Tokens | 25,801 input, 5,596 output |
 | Estimated cost | $0.001084 (25,801 × $0.042 per million; an estimate, not billing data) |
-| Per-attempt latency (`latency_ms` measured by the provider client, n = 40) | min 296 ms, median 325 ms, mean 365 ms, p95 442 ms, max 1,190 ms (the first attempt) |
+| Per-attempt latency (`latency_ms` measured by the provider client, n = 40) | min 296 ms, median 325 ms, mean 365 ms, p95 442 ms, max 1,190 ms (the first attempt). The p95 here is a linear interpolation between order statistics (it matches Python's `statistics.quantiles(method="inclusive")`, 441.8 ms; the method was not recorded when this row was written). The `qd-report-1` report uses nearest rank instead and gives p95 418.9 ms; its p99 at n = 40 is the maximum, not a tail estimate. |
 | Wall clock, first dispatch to `complete` | 19.7 s, sequential |
 
 One sequential run of 40 calls is not a latency benchmark and says nothing about latency under
@@ -525,3 +525,42 @@ inputs, same bytes) and writes only `--out`, which it never overwrites. `evaluat
   billing data. Attempts with unknown usage are counted. The per-1,000-attempt figure counts
   them at zero (a lower estimate), and a second figure covers attempts with returned usage
   only. A run without recorded prices has no cost estimate.
+
+## Gate-tooling commands (offline walkthrough)
+
+All four command groups need an explicit `--root` (no default) for `partitions/`,
+`thresholds/`, `consumption/` and `acceptance/`. Batches are sealed work directories. Every
+value below is a placeholder; none is an approved parameter, and no acceptance criterion has a
+default.
+
+```text
+# 1. Partitions (write-once; screening re-checked whenever members are resolved)
+python -m evals.query_decisions partition create --root R --id cal-1 --role calibration \
+    --screening parser_abstains_on_category --source CAL_BATCH dq-001,dq-002
+python -m evals.query_decisions partition create --root R --id eval-1 --role evaluation \
+    --screening parser_abstains_on_category --source EVAL_BATCH dq-001,dq-002,dq-003
+python -m evals.query_decisions partition show --root R --id eval-1
+python -m evals.query_decisions partition check --root R --calibration cal-1 --evaluation eval-1
+
+# 2. Sweep supplied thresholds on calibration data only (an evaluation partition is refused)
+python -m evals.query_decisions sweep --root R --calibration cal-1 --batch CAL_BATCH RUN \
+    --threshold T1 --threshold T2 --out sweep.json
+
+# 3. Freeze one threshold with every acceptance criterion (all required, write-once)
+python -m evals.query_decisions freeze --root R --id t-1 --calibration cal-1 --threshold T \
+    --model jev-1.13.0 --confidence-level C --wrong-commit-definition strict|lenient \
+    --max-wrong-commit-upper-bound U --min-coverage V --min-accepted-fills N \
+    --max-unknown-or-fallback-rate X --max-unclear-rate Y [--selection-note TEXT]
+
+# 4. Run the evaluation batch only after the freeze, then score and record it once
+python -m evals.query_decisions accept --root R --threshold t-1 --evaluation eval-1 \
+    --batch EVAL_BATCH RUN
+```
+
+- The sweep selects nothing. The selection rule and its values are the owner's decision.
+- `accept` refuses an evaluation member dispatched before the threshold was frozen, and
+  applies the consumption safeguards above. An identical repeat writes nothing.
+- Refusals print one `error:` line and exit with code 2; a missing required argument is an
+  argparse usage error (also code 2).
+- These commands make no call and read no key. The runs themselves use `run`, which needs
+  separate approval for any live call.

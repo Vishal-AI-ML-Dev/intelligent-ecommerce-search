@@ -16,10 +16,11 @@ Commands (the work directory defaults to the git-ignored `data/processed/m12_dia
 * `evaluate --run-id ID [--out FILE]`: offline diagnostic report (JSON, `qd-diagnostic-2`).
 * `report --run-id ID [--out FILE] [--bins N]`: offline metrics report (JSON, `qd-report-1`):
   category and intent metrics, raw-probability diagnostics, latency and estimated cost.
+* `partition`, `sweep`, `freeze`, `accept`: offline category-gate tooling with an explicit
+  `--root` (see `gate_cli`).
 """
 
 import argparse
-import json
 import sys
 from datetime import date
 from decimal import Decimal
@@ -28,6 +29,12 @@ from pathlib import Path
 from ecommerce_search.decision.jev_provider import JevConfigurationError
 from evals.contracts.canonical import ContractError
 from evals.query_decisions.contracts import QueryDecisionError
+from evals.query_decisions.gate_cli import (
+    GATE_COMMANDS,
+    add_gate_commands,
+    emit_json,
+    run_gate_command,
+)
 from evals.query_decisions.labeling import WORK_ROOT, label_session, load_sealed, seal_labels
 from evals.query_decisions.runner import (
     DRY_RUN_MODEL,
@@ -64,6 +71,7 @@ def _parser() -> argparse.ArgumentParser:
     report.add_argument("--run-id", required=True)
     report.add_argument("--out", type=Path)
     report.add_argument("--bins", type=int, default=10)
+    add_gate_commands(commands)
     return parser
 
 
@@ -78,14 +86,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"sealed {seal.query_count} queries; labels {seal.labels_sha256}")
         elif args.command == "run":
             return _run(args)
+        elif args.command in GATE_COMMANDS:
+            run_gate_command(args)
         elif args.command == "report":
             from evals.query_decisions.reporting import build_report
 
-            _emit(build_report(args.work_dir, args.run_id, bins=args.bins), args.out)
+            emit_json(build_report(args.work_dir, args.run_id, bins=args.bins), args.out)
         else:
             from evals.query_decisions.evaluate import evaluate
 
-            _emit(evaluate(args.work_dir, args.run_id), args.out)
+            emit_json(evaluate(args.work_dir, args.run_id), args.out)
     except (ContractError, QueryDecisionError, ValueError, FileExistsError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
@@ -93,16 +103,6 @@ def main(argv: list[str] | None = None) -> int:
         print("error: jev configuration invalid", file=sys.stderr)
         return 2
     return 0
-
-
-def _emit(report: dict, out: Path | None) -> None:
-    text = json.dumps(report, indent=2, sort_keys=True)
-    if out is None:
-        print(text)
-        return
-    with open(out, "x", encoding="utf-8", newline="\n") as handle:  # never overwrites
-        handle.write(text + "\n")
-    print(f"report written to {out}")
 
 
 def _run(args: argparse.Namespace) -> int:
