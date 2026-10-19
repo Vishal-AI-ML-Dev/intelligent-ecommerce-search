@@ -3,9 +3,10 @@
 Work directory layout (default under the git-ignored `data/processed/m12_diagnostic/`):
 
 * `queries.jsonl`: written by the query author (format in `contracts.DecisionQuery`);
-* `labels.jsonl`: canonical JSONL of `DecisionLabel`, written only by the labelling session;
+* `labels.jsonl`: canonical JSONL of `DecisionLabel` (or `CategoryOnlyLabel`), written only by
+  the labelling session;
 * `label.lock`: held while a session runs;
-* `seal.json`: `LabelSeal`, written once with exclusive creation;
+* `seal.json`: `LabelSeal` (or `CategoryOnlySeal`), written once with exclusive creation;
 * `runs/<run-id>/`: Jev runs (`runner`), which refuse to start before the seal.
 
 The labelling view shows the query id, progress and the query text only. This module never
@@ -13,9 +14,15 @@ imports the parser or the Jev provider and never reads a run directory, so no pr
 shown. Every confirmed label is saved atomically (temporary file, fsync, replace) before the next
 query, and a later session resumes at the first unlabelled query. Once `seal.json` exists, labels
 can no longer change. A lock left behind by a hard kill is never removed automatically.
+
+Annotation modes (`contracts.AnnotationMode`): the default asks for category and intent (`qd-2`
+labels and seal). `category_only=True` asks for the category only and writes `qd-cat-1` labels
+whose intent is the explicit marker `not_annotated`, sealed by a `qd-cat-1` seal. A label file
+holds one mode; resuming it in the other mode, or reading a file that mixes modes, is refused.
 """
 
 import contextlib
+import json
 import os
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
@@ -38,7 +45,12 @@ from evals.query_decisions.contracts import (
     INTENT_LABELS,
     QUESTION_SET_VERSION,
     SCHEMA_VERSION,
+    AnnotationMode,
+    AnyLabel,
+    AnySeal,
     CategoryGold,
+    CategoryOnlyLabel,
+    CategoryOnlySeal,
     DecisionLabel,
     DecisionQuery,
     GoldKind,
@@ -78,16 +90,48 @@ def read_queries(work_dir: Path) -> tuple[DecisionQuery, ...]:
     return load_queries(path.read_bytes())
 
 
-def read_labels(work_dir: Path, queries: tuple[DecisionQuery, ...]) -> tuple[DecisionLabel, ...]:
+CATEGORY_ONLY_SCHEMA_VERSION = "qd-cat-1"
+_LABEL_MODELS: dict[object, type[DecisionLabel] | type[CategoryOnlyLabel]] = {
+    SCHEMA_VERSION: DecisionLabel,
+    CATEGORY_ONLY_SCHEMA_VERSION: CategoryOnlyLabel,
+}
+_SEAL_MODELS: dict[object, type[LabelSeal] | type[CategoryOnlySeal]] = {
+    SCHEMA_VERSION: LabelSeal,
+    CATEGORY_ONLY_SCHEMA_VERSION: CategoryOnlySeal,
+}
+
+
+def _schema_version(line: str) -> object:
+    try:
+        raw = json.loads(line)
+    except ValueError:
+        return None  # the strict decoder reports the error
+    return raw.get("schema_version") if isinstance(raw, dict) else None
+
+
+def read_labels(work_dir: Path, queries: tuple[DecisionQuery, ...]) -> tuple[AnyLabel, ...]:
+    """The saved labels, all of one annotation mode (`qd-2` or `qd-cat-1`)."""
     path = safe_child(work_dir, LABELS_FILE)
     if not path.is_file():
         return ()
-    labels = tuple(decode_jsonl(path.read_bytes(), DecisionLabel))
+    data = path.read_bytes()
+    versions = {_schema_version(line) for line in data.decode("utf-8", "replace").splitlines()}
+    if len(versions) > 1:
+        raise QueryDecisionError("labels.jsonl mixes annotation modes or schema versions")
+    model = _LABEL_MODELS.get(next(iter(versions), SCHEMA_VERSION))
+    if model is None:
+        raise QueryDecisionError("labels.jsonl has an unsupported schema_version")
+    labels: tuple[AnyLabel, ...] = tuple(decode_jsonl(data, model))
     _check_labels(labels, queries)
     return labels
 
 
-def _check_labels(labels: tuple[DecisionLabel, ...], queries: tuple[DecisionQuery, ...]) -> None:
+def labels_mode(labels: tuple[AnyLabel, ...]) -> AnnotationMode | None:
+    """The one annotation mode of a label file (`None` when it holds no labels)."""
+    return labels[0].annotation_mode if labels else None
+
+
+def _check_labels(labels: tuple[AnyLabel, ...], queries: tuple[DecisionQuery, ...]) -> None:
     known = {query.query_id for query in queries}
     digest = queries_sha256(queries)
     handles = {label.annotator_handle for label in labels}
@@ -152,8 +196,12 @@ def label_session(
     ask: Callable[[str], str],
     say: Callable[[str], None],
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    category_only: bool = False,
 ) -> int:
-    """Label every unlabelled query, one at a time. Returns how many labels this session saved."""
+    """Label every unlabelled query, one at a time. Returns how many labels this session saved.
+
+    With `category_only`, only the category is asked and intent is recorded as not annotated."""
+    mode = AnnotationMode.CATEGORY_ONLY if category_only else AnnotationMode.CATEGORY_AND_INTENT
     try:  # before the lock and before any prompt
         TypeAdapter(AnnotatorHandle).validate_python(annotator)
     except ValidationError:
@@ -169,6 +217,12 @@ def label_session(
         labels = list(read_labels(work_dir, queries))
         if labels and labels[0].annotator_handle != annotator:
             raise QueryDecisionError("labels.jsonl belongs to another annotator")
+        existing = labels_mode(tuple(labels))
+        if existing is not None and existing is not mode:
+            raise QueryDecisionError(
+                f"labels.jsonl was labelled in {existing.value} mode; resume it in that mode "
+                f"(this session is {mode.value})"
+            )
         done = {label.query_id for label in labels}
         pending = [query for query in queries if query.query_id not in done]
         say(f"{len(done)} of {len(queries)} labelled. Type q at any prompt to stop.")
@@ -178,7 +232,7 @@ def label_session(
             say(f"  {query.text}")
             try:
                 category = _ask_gold(ask, say, CATEGORY_HELP, CategoryGold)
-                intent = _ask_gold(ask, say, INTENT_HELP, IntentGold)
+                intent = None if category_only else _ask_gold(ask, say, INTENT_HELP, IntentGold)
                 note = _ask(ask, "note (optional, Enter for none): ") or None
                 if note is not None and not _valid_note(note):
                     say(
@@ -192,18 +246,28 @@ def label_session(
             except QuitSession:
                 say("stopped; nothing partial was saved")
                 break
-            label = DecisionLabel(
-                schema_version=SCHEMA_VERSION,
-                dataset_id=DATASET_ID,
-                query_id=query.query_id,
-                queries_sha256=digest,
-                annotator_handle=annotator,
-                labelled_at=now(),
-                labelling_view="query_text_only",
-                category=category,
-                semantic_intent=intent,
-                note=note,
-            )
+            common = {
+                "dataset_id": DATASET_ID,
+                "query_id": query.query_id,
+                "queries_sha256": digest,
+                "annotator_handle": annotator,
+                "labelled_at": now(),
+                "labelling_view": "query_text_only",
+                "category": category,
+                "note": note,
+            }
+            label: AnyLabel
+            if intent is None:
+                label = CategoryOnlyLabel(
+                    schema_version=CATEGORY_ONLY_SCHEMA_VERSION,
+                    annotation_mode=AnnotationMode.CATEGORY_ONLY,
+                    semantic_intent="not_annotated",
+                    **common,
+                )
+            else:
+                label = DecisionLabel(
+                    schema_version=SCHEMA_VERSION, semantic_intent=intent, **common
+                )
             labels.append(label)
             _write_atomic(safe_child(work_dir, LABELS_FILE), encode_jsonl(labels))
             saved += 1
@@ -241,8 +305,9 @@ def _ask_gold[G: (CategoryGold, IntentGold)](
 
 def seal_labels(
     work_dir: Path, *, now: Callable[[], datetime] = lambda: datetime.now(UTC)
-) -> LabelSeal:
-    """Seal once every query has exactly one label from the one annotator."""
+) -> AnySeal:
+    """Seal once every query has exactly one label from the one annotator. The seal records the
+    labels' annotation mode (`qd-2` or `qd-cat-1`)."""
     if safe_child(work_dir, SEAL_FILE).exists():
         raise QueryDecisionError("the labels are already sealed")
     if safe_child(work_dir, LOCK_FILE).exists():
@@ -252,8 +317,7 @@ def seal_labels(
     if {label.query_id for label in labels} != {query.query_id for query in queries}:
         raise QueryDecisionError("every query needs a label before sealing")
     counts = source_counts(queries)
-    seal = LabelSeal(
-        schema_version=SCHEMA_VERSION,
+    fields = dict(
         dataset_id=DATASET_ID,
         question_set_version=QUESTION_SET_VERSION,
         queries_sha256=queries_sha256(queries),
@@ -267,18 +331,31 @@ def seal_labels(
         sealed_at=now(),
         evidence_scope="development_diagnostic_not_held_out",
     )
+    seal: AnySeal
+    if labels_mode(labels) is AnnotationMode.CATEGORY_ONLY:
+        seal = CategoryOnlySeal(
+            schema_version=CATEGORY_ONLY_SCHEMA_VERSION,
+            annotation_mode=AnnotationMode.CATEGORY_ONLY,
+            **fields,
+        )
+    else:
+        seal = LabelSeal(schema_version=SCHEMA_VERSION, **fields)
     write_exclusive(work_dir, {SEAL_FILE: encode_json_object(seal)})
     return seal
 
 
 def load_sealed(
     work_dir: Path,
-) -> tuple[LabelSeal, tuple[DecisionQuery, ...], tuple[DecisionLabel, ...]]:
+) -> tuple[AnySeal, tuple[DecisionQuery, ...], tuple[AnyLabel, ...]]:
     """The seal and the exact queries and labels it binds; refuses any change since sealing."""
     path = safe_child(work_dir, SEAL_FILE)
     if not path.is_file():
         raise QueryDecisionError("the labels are not sealed")
-    seal = decode_json_object(path.read_bytes(), LabelSeal)
+    data = path.read_bytes()
+    model = _SEAL_MODELS.get(_schema_version(data.decode("utf-8", "replace")))
+    if model is None:
+        raise QueryDecisionError("seal.json has an unsupported schema_version")
+    seal: AnySeal = decode_json_object(data, model)
     queries = read_queries(work_dir)
     labels = read_labels(work_dir, queries)
     if queries_sha256(queries) != seal.queries_sha256:
@@ -291,4 +368,6 @@ def load_sealed(
     # itself are not covered by any hash.
     if {label.annotator_handle for label in labels} != {seal.annotator_handle}:
         raise QueryDecisionError("the seal's annotator_handle does not match the labels")
+    if labels_mode(labels) is not seal.annotation_mode:
+        raise QueryDecisionError("the seal's annotation mode does not match the labels")
     return seal, queries, labels

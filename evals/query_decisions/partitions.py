@@ -15,6 +15,8 @@ text; it stores no query text and no label, so the labels stay bound by their ba
 * Chronology: a partition must be sealed strictly after every source batch seal. This is checked
   when the partition is built and again when its members are resolved. It compares recorded
   timestamps only; it is not proof of when anything was written.
+* Source batches may hold full (`qd-2`) or category-only (`qd-cat-1`) labels. Both carry the
+  category gold the gate needs; a category-only member has `intent_gold` `None` (not annotated).
 
 Partitions are development tooling for M12 decisions. They are never M9 search held-out evidence,
 and nothing here calls Jev, labels anything or changes search behaviour.
@@ -132,7 +134,8 @@ class BatchRun:
 @dataclass(frozen=True)
 class MemberRecord:
     """One resolved member: its sealed query and category gold, the deterministic parse
-    recomputed now, and the run outcome (if a run was given and the query was dispatched)."""
+    recomputed now, and the run outcome (if a run was given and the query was dispatched).
+    `intent_gold` is `None` when intent was not annotated (category-only labels)."""
 
     member: PartitionMember
     query: DecisionQuery
@@ -303,7 +306,7 @@ def resolve_members(seal: PartitionSeal, batches: Sequence[BatchRun]) -> tuple[M
                 run=header,
                 run_complete=state is not None and state.complete,
                 run_blocked_by=None if state is None else state.blocked_by,
-                intent_gold=golds[member.query_id].semantic_intent,
+                intent_gold=golds[member.query_id].intent_gold,
             )
         )
     return tuple(records)
@@ -333,7 +336,7 @@ def batch_records(work_dir: Path, run_id: str | None) -> tuple[MemberRecord, ...
             run=header,
             run_complete=state is not None and state.complete,
             run_blocked_by=None if state is None else state.blocked_by,
-            intent_gold=by_id[query.query_id].semantic_intent,
+            intent_gold=by_id[query.query_id].intent_gold,
         )
         for query in queries
     )

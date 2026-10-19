@@ -32,14 +32,13 @@ Nothing here selects a threshold: the sweep scores only thresholds the caller su
 from collections import Counter
 from collections.abc import Callable, Sequence
 from decimal import ROUND_HALF_EVEN, Decimal
-from typing import Any, cast
+from typing import Any
 
 from evals.query_decisions.contracts import (
     CATEGORY_LABELS,
     INTENT_LABELS,
     NONE_LABEL,
     GoldKind,
-    IntentGold,
 )
 from evals.query_decisions.evaluate import jev_prediction, score
 from evals.query_decisions.gate import shadow_category_gate
@@ -182,13 +181,15 @@ def intent_metrics(records: Sequence[MemberRecord], predict: Predictor) -> dict[
       stated intents and is not single-intent correctness;
     * `ambiguous`: `none_on_ambiguous`, `commit_in_candidates`, `commit_outside_candidates`,
       abstain;
-    * `unclear`: counted only, never scored.
+    * `unclear`: counted only, never scored;
+    * intent not annotated (category-only labels, `intent_gold` is `None`): excluded from every
+      count above and counted in `not_annotated_excluded`, a key present only when some intent
+      was not annotated (so full-label reports are unchanged). It is never read as `none`.
 
     The confusion matrix covers `label`-kind golds (the intents and `none`) against predictions
     (the labels plus `abstain`); per-intent precision, recall and F1 come from it.
     """
-    if any(record.intent_gold is None for record in records):
-        raise ValueError("intent metrics need every record's intent gold")
+    not_annotated = sum(record.intent_gold is None for record in records)
     kinds: dict[str, Counter[str]] = {
         name: Counter() for name in ("single", "none", "multi", "ambiguous")
     }
@@ -197,7 +198,9 @@ def intent_metrics(records: Sequence[MemberRecord], predict: Predictor) -> dict[
     outcomes: Counter[str] = Counter()
     unclear = 0
     for record in records:
-        gold = cast(IntentGold, record.intent_gold)  # checked above
+        if record.intent_gold is None:
+            continue
+        gold = record.intent_gold
         prediction = predict(record)
         outcome = score(gold, prediction)
         outcomes[outcome] += 1
@@ -217,7 +220,7 @@ def intent_metrics(records: Sequence[MemberRecord], predict: Predictor) -> dict[
 
     single = section("single", ("correct", "wrong", "predicted_none", ABSTAIN))
     per_intent, macro = _per_label(confusion, INTENT_LABELS, INTENTS)
-    return {
+    result: dict[str, Any] = {
         "members": len(records),
         "unclear_excluded": unclear,
         "outcomes": dict(sorted(outcomes.items())),
@@ -237,6 +240,9 @@ def intent_metrics(records: Sequence[MemberRecord], predict: Predictor) -> dict[
         "macro_f1": macro,
         "macro_f1_intents": sum(1 for i in per_intent.values() if i["f1"] is not None),
     }
+    if not_annotated:
+        result["not_annotated_excluded"] = not_annotated
+    return result
 
 
 def fill_counts(records: Sequence[MemberRecord], threshold: Decimal) -> dict[str, Any]:

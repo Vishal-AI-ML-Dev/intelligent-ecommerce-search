@@ -43,6 +43,11 @@ such query; `deterministic_abstains_scored` excludes unclear golds and is the de
 `wrong_commit`, `commit_*` and `out_of_set` are incorrect fills).
 Deterministic-first gating could only change those abstaining queries; it cannot correct a wrong
 deterministic decision.
+
+Category-only batches (`qd-cat-1` labels): intent was not annotated. Each intent cell has gold
+kind `not_annotated` and outcome `excluded_not_annotated` for both predictors; it is never
+scored as `none` or `unclear` and is left out of the fills. The report then also carries
+`annotation_mode: category_only`; for full-label batches the report is unchanged.
 """
 
 from collections import Counter
@@ -55,12 +60,13 @@ from ecommerce_search.query_understanding.models import QueryUnderstanding
 from evals.contracts.canonical import decode_json_object
 from evals.query_decisions.contracts import (
     NONE_LABEL,
+    AnnotationMode,
+    AnyLabel,
+    AnySeal,
     CategoryGold,
-    DecisionLabel,
     DecisionQuery,
     GoldKind,
     IntentGold,
-    LabelSeal,
     QueryDecisionError,
 )
 from evals.query_decisions.labeling import load_sealed
@@ -80,6 +86,9 @@ INCORRECT_FILLS = frozenset(
     {"wrong", "wrong_commit", "commit_in_candidates", "commit_outside_candidates", "out_of_set"}
 )
 ABSTAIN = "abstain"
+NOT_ANNOTATED = "not_annotated"
+EXCLUDED_NOT_ANNOTATED = "excluded_not_annotated"
+EXCLUDED = frozenset({"excluded_unclear", EXCLUDED_NOT_ANNOTATED})
 
 
 def score(gold: CategoryGold | IntentGold, prediction: str | None) -> str:
@@ -131,13 +140,13 @@ def evaluate(work_dir: Path, run_id: str) -> dict[str, Any]:
     if (header.queries_sha256, header.labels_sha256) != (seal.queries_sha256, seal.labels_sha256):
         raise ValueError("the run does not belong to the sealed batch")
     _events, state = read_journal(safe_child(work_dir, f"{RUNS_DIR}/{run_id}/{JOURNAL_FILE}"))
-    by_id: dict[str, DecisionLabel] = {label.query_id: label for label in labels}
+    by_id: dict[str, AnyLabel] = {label.query_id: label for label in labels}
 
     parses = {query.query_id: parse_normalized_query(query.text) for query in queries}
     rows = [_row(q, parses[q.query_id], by_id[q.query_id], state) for q in queries]
     outcomes = list(state.results.values())
     synthetic = header.mode is RunMode.DRY_RUN or seal.synthetic
-    return {
+    report: dict[str, Any] = {
         "report_version": "qd-diagnostic-2",
         "dataset_id": seal.dataset_id,
         "evidence_scope": "development diagnostic; not held-out evidence",
@@ -177,9 +186,12 @@ def evaluate(work_dir: Path, run_id: str) -> dict[str, Any]:
         "questions": {q: _question_summary(rows, q) for q in QUESTIONS},
         "per_query": rows,
     }
+    if seal.annotation_mode is AnnotationMode.CATEGORY_ONLY:
+        report["annotation_mode"] = seal.annotation_mode.value
+    return report
 
 
-def _evidence_notes(seal: LabelSeal) -> list[str]:
+def _evidence_notes(seal: AnySeal) -> list[str]:
     notes = ["development diagnostic only; never held-out evidence"]
     if seal.ai_authored_queries:
         notes.append(
@@ -201,7 +213,7 @@ def _synthetic_reason(header: RunHeader, synthetic_queries: bool) -> str | None:
 
 
 def _row(
-    query: DecisionQuery, parsed: QueryUnderstanding, label: DecisionLabel, state: Any
+    query: DecisionQuery, parsed: QueryUnderstanding, label: AnyLabel, state: Any
 ) -> dict[str, Any]:
     deterministic = {
         "category": None if parsed.category is None else parsed.category.value,
@@ -215,19 +227,27 @@ def _row(
         "stratum": query.stratum,
         "language_style": query.language_style.value,
     }
+    golds: dict[str, CategoryGold | IntentGold | None] = {
+        "category": label.category,
+        "semantic_intent": label.intent_gold,
+    }
     for question in QUESTIONS:
-        gold: CategoryGold | IntentGold = getattr(label, question)
+        gold = golds[question]
         j_prediction, j_abstain = jev_prediction(outcome, attempted, question)
         d_prediction = deterministic[question]
         row[question] = {
-            "gold_kind": gold_kind(gold),
+            "gold_kind": NOT_ANNOTATED if gold is None else gold_kind(gold),
             "deterministic": d_prediction,
-            "deterministic_outcome": score(gold, d_prediction),
+            "deterministic_outcome": _scored(gold, d_prediction),
             "jev": j_prediction,
             "jev_abstain_reason": j_abstain,
-            "jev_outcome": score(gold, j_prediction),
+            "jev_outcome": _scored(gold, j_prediction),
         }
     return row
+
+
+def _scored(gold: CategoryGold | IntentGold | None, prediction: str | None) -> str:
+    return EXCLUDED_NOT_ANNOTATED if gold is None else score(gold, prediction)
 
 
 def _question_summary(rows: list[dict[str, Any]], question: str) -> dict[str, Any]:
@@ -235,7 +255,7 @@ def _question_summary(rows: list[dict[str, Any]], question: str) -> dict[str, An
     decided = [(qid, c) for qid, c in cells if c["deterministic"] and c["jev"]]
     disagreements = [(qid, c) for qid, c in decided if c["deterministic"] != c["jev"]]
     abstains = [c for _, c in cells if c["deterministic"] is None]
-    fills = [c for c in abstains if c["jev_outcome"] != "excluded_unclear"]
+    fills = [c for c in abstains if c["jev_outcome"] not in EXCLUDED]
     fill_outcomes = Counter(c["jev_outcome"] for c in fills)
     return {
         "gold_kinds": _counts(c["gold_kind"] for _, c in cells),

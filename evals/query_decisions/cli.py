@@ -3,6 +3,8 @@
 Commands (the work directory defaults to the git-ignored `data/processed/m12_diagnostic/`):
 
 * `label --annotator ann-1`: blind labelling, query text only (see `labeling`).
+* `label --annotator ann-1 --category-only`: blind labelling of the category only (`qd-cat-1`);
+  intent is recorded as not annotated. A label file cannot be resumed in the other mode.
 * `seal`: seal the queries and labels once every query is labelled.
 * `run --run-id ID --max-attempts N`: dry run (default). Drives the real provider against an
   in-memory synthetic transport; no network, no key, not Jev output.
@@ -53,6 +55,7 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     label = commands.add_parser("label")
     label.add_argument("--annotator", required=True)
+    label.add_argument("--category-only", action="store_true")
     commands.add_parser("seal")
     run = commands.add_parser("run")
     run.add_argument("--run-id", required=True)
@@ -79,11 +82,20 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "label":
-            saved = label_session(args.work_dir, args.annotator, ask=input, say=print)
+            saved = label_session(
+                args.work_dir,
+                args.annotator,
+                ask=input,
+                say=print,
+                category_only=args.category_only,
+            )
             print(f"saved {saved} label(s)")
         elif args.command == "seal":
             seal = seal_labels(args.work_dir)
-            print(f"sealed {seal.query_count} queries; labels {seal.labels_sha256}")
+            print(
+                f"sealed {seal.query_count} queries ({seal.annotation_mode.value}); "
+                f"labels {seal.labels_sha256}"
+            )
         elif args.command == "run":
             return _run(args)
         elif args.command in GATE_COMMANDS:

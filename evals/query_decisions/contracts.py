@@ -28,6 +28,12 @@ Labels are always human annotations (`DecisionLabel.annotator_handle`), whatever
 `qd-2` (this version) added `ai_authored`, `author_tool` and the seal's source counts; files of
 any other `schema_version` are refused.
 
+Category-only labels (`qd-cat-1`, `CategoryOnlyLabel` and `CategoryOnlySeal`) extend `qd-2` for
+category calibration: the queries file is unchanged `qd-2`, the annotator is asked the category
+only, and `semantic_intent` is the explicit marker `not_annotated`. It is never read as `none`
+or `unclear`; intent scoring excludes such labels and counts them as not annotated. A label
+file and its seal hold one annotation mode only. `qd-2` labels and seals are unchanged.
+
 This is development data. It is never held-out evidence.
 """
 
@@ -174,11 +180,14 @@ class IntentGold(_Gold):
     KINDS = frozenset(GoldKind)
 
 
-class DecisionLabel(_Frozen):
-    """One annotator's blind label for one query. `labelling_view` records what the annotator
-    was shown: the query text only, never parser or Jev output."""
+class AnnotationMode(StrEnum):
+    """What the annotator was asked. One label file and its seal hold one mode only."""
 
-    schema_version: Literal["qd-2"]
+    CATEGORY_AND_INTENT = "category_and_intent"  # `qd-2` labels and seals
+    CATEGORY_ONLY = "category_only"  # `qd-cat-1` labels and seals
+
+
+class _LabelFields(_Frozen):
     dataset_id: Literal["m12-diag-dev"]
     query_id: DecisionQueryId
     queries_sha256: Sha256
@@ -186,17 +195,48 @@ class DecisionLabel(_Frozen):
     labelled_at: UtcTimestamp
     labelling_view: Literal["query_text_only"]
     category: CategoryGold
-    semantic_intent: IntentGold
     note: FreeText | None = None
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.query_id,)
 
 
-class LabelSeal(_Frozen):
-    """Binds the exact queries and labels before any Jev call. Written once, never replaced."""
+class DecisionLabel(_LabelFields):
+    """One annotator's blind label for one query. `labelling_view` records what the annotator
+    was shown: the query text only, never parser or Jev output."""
 
     schema_version: Literal["qd-2"]
+    semantic_intent: IntentGold
+
+    @property
+    def annotation_mode(self) -> AnnotationMode:
+        return AnnotationMode.CATEGORY_AND_INTENT
+
+    @property
+    def intent_gold(self) -> IntentGold:
+        return self.semantic_intent
+
+
+class CategoryOnlyLabel(_LabelFields):
+    """A blind label with the category only (`qd-cat-1`, for category calibration).
+
+    The annotator was not asked about intent: `semantic_intent` is the explicit marker
+    `not_annotated`, never `none`, `unclear` or a label from any other source. The query file
+    stays `qd-2`; only the label and seal records carry this version."""
+
+    schema_version: Literal["qd-cat-1"]
+    annotation_mode: Literal[AnnotationMode.CATEGORY_ONLY]
+    semantic_intent: Literal["not_annotated"]
+
+    @property
+    def intent_gold(self) -> None:
+        return None
+
+
+AnyLabel = DecisionLabel | CategoryOnlyLabel
+
+
+class _SealFields(_Frozen):
     dataset_id: Literal["m12-diag-dev"]
     question_set_version: Literal["jq-1"]
     queries_sha256: Sha256
@@ -228,6 +268,26 @@ class LabelSeal(_Frozen):
 
     def sort_key(self) -> tuple[str, ...]:
         return (self.queries_sha256,)
+
+
+class LabelSeal(_SealFields):
+    """Binds the exact queries and labels before any Jev call. Written once, never replaced."""
+
+    schema_version: Literal["qd-2"]
+
+    @property
+    def annotation_mode(self) -> AnnotationMode:
+        return AnnotationMode.CATEGORY_AND_INTENT
+
+
+class CategoryOnlySeal(_SealFields):
+    """The seal of a category-only label file (`qd-cat-1`); intent was not annotated."""
+
+    schema_version: Literal["qd-cat-1"]
+    annotation_mode: Literal[AnnotationMode.CATEGORY_ONLY]
+
+
+AnySeal = LabelSeal | CategoryOnlySeal
 
 
 def load_queries(data: bytes) -> tuple[DecisionQuery, ...]:

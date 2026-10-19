@@ -66,9 +66,9 @@ from evals.contracts.canonical import decode_json_object, encode_json_object
 from evals.contracts.models import Sha256, UtcTimestamp
 from evals.query_decisions.contracts import (
     QUESTION_SET_VERSION,
+    AnySeal,
     DecisionQuery,
     DecisionQueryId,
-    LabelSeal,
     QueryDecisionError,
 )
 from evals.query_decisions.labeling import load_sealed
@@ -307,9 +307,7 @@ def _stop_for(outcome: JevOutcome, state: JournalState, consecutive: int) -> Sto
     return None
 
 
-def live_refusal(
-    seal: LabelSeal, *, prices_complete: bool, ai_authored_approved: bool
-) -> str | None:
+def live_refusal(seal: AnySeal, *, prices_complete: bool, ai_authored_approved: bool) -> str | None:
     """Why a live run over this sealed batch must not start, or None. Pure; checked by the CLI
     before `Settings` (and the key) is read, and again by `run_diagnostic`. In order: missing
     prices, date or tripwire; any synthetic fixture (always refused, approval or not); AI-authored

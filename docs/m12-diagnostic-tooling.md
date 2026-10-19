@@ -564,3 +564,34 @@ python -m evals.query_decisions accept --root R --threshold t-1 --evaluation eva
   argparse usage error (also code 2).
 - These commands make no call and read no key. The runs themselves use `run`, which needs
   separate approval for any live call.
+
+
+## Category-only annotation (`qd-cat-1`)
+
+For category calibration, a batch can be labelled for the category only:
+
+```text
+python -m evals.query_decisions --work-dir DIR label --annotator ann-1 --category-only
+python -m evals.query_decisions --work-dir DIR seal
+```
+
+- The session asks for the category, an optional note and the save confirmation only. The
+  view is unchanged: query id, progress and query text. It shows no parser output, stratum,
+  authoring note or proposed answer.
+- Labels are `CategoryOnlyLabel` records (`schema_version` `qd-cat-1`,
+  `annotation_mode` `category_only`). Intent is the explicit marker
+  `semantic_intent: "not_annotated"`. It is never written or read as `none`, `unclear` or a
+  label from any other source. The queries file stays `qd-2`.
+- One label file holds one mode. Resuming it in the other mode is refused before any prompt,
+  and a file that mixes modes is refused when read.
+- `seal` writes a `CategoryOnlySeal` (`qd-cat-1`, `annotation_mode: category_only`).
+  `load_sealed` refuses a seal whose mode does not match its labels.
+- Category evaluation is unchanged. In `evaluate`, intent cells have gold kind `not_annotated`
+  and outcome `excluded_not_annotated`, and they are left out of the fills. In `report`,
+  `intent_metrics` counts them in `not_annotated_excluded` and scores nothing. Both reports gain
+  `annotation_mode: category_only`. Partitions and the gate use the category gold and work
+  unchanged; such members have no intent gold.
+- `qd-2` labels and seals are unchanged byte for byte. For live-001, `evaluate` and `report`
+  give the same SHA-256 under the code before and after this change (`d463d614…` and
+  `39cc7c35…`; the latter is the saved `metrics-report-v1.json`). The saved `report.json` is
+  `qd-diagnostic-1`, so it predates the current evaluator and was not expected to match.

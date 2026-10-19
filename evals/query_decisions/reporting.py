@@ -11,7 +11,10 @@ Sections:
   no recorded result) and queries not attempted, each counted separately.
 * `category` and `intent`: `category_metrics.classification_metrics` and
   `category_metrics.intent_metrics` for the deterministic parser and for Jev. Unclear golds are
-  counted, never scored; `none` is a decision and abstention is not.
+  counted, never scored; `none` is a decision and abstention is not. For a category-only batch
+  (`qd-cat-1` labels) intent was not annotated: every member is excluded from the intent
+  metrics and counted in `not_annotated_excluded`, and the report carries
+  `annotation_mode: category_only`. Reports over full-label batches are unchanged.
 * `category_probability`: diagnostics of Jev's **raw provider probabilities** for category.
   These are not calibrated confidence and are never called so.
   - Eligible: queries whose gold is a single label (one category or `none`) and whose recorded
@@ -54,7 +57,12 @@ from evals.query_decisions.category_metrics import (
     jev_intent_predictor,
     jev_predictor,
 )
-from evals.query_decisions.contracts import CATEGORY_LABELS, GoldKind, QueryDecisionError
+from evals.query_decisions.contracts import (
+    CATEGORY_LABELS,
+    AnnotationMode,
+    GoldKind,
+    QueryDecisionError,
+)
 from evals.query_decisions.labeling import load_sealed
 from evals.query_decisions.partitions import MemberRecord, batch_records
 from evals.query_decisions.runner import RunHeader, RunMode
@@ -82,7 +90,7 @@ def build_report(work_dir: Path, run_id: str, *, bins: int = DEFAULT_BINS) -> di
     if header is None:
         raise QueryDecisionError("no such run in the work directory")
     synthetic = header.mode is RunMode.DRY_RUN or seal.synthetic
-    return {
+    report: dict[str, Any] = {
         "report_version": REPORT_VERSION,
         "evidence_scope": "development diagnostic; not held-out evidence",
         "synthetic": synthetic,
@@ -107,6 +115,9 @@ def build_report(work_dir: Path, run_id: str, *, bins: int = DEFAULT_BINS) -> di
         "latency": latency_summary(records),
         "usage_and_cost": usage_and_cost(records, header),
     }
+    if seal.annotation_mode is AnnotationMode.CATEGORY_ONLY:
+        report["annotation_mode"] = seal.annotation_mode.value
+    return report
 
 
 def run_summary(records: Sequence[MemberRecord]) -> dict[str, Any]:
