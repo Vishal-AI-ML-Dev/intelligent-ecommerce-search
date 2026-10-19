@@ -33,9 +33,11 @@ class SearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(description="Search text. Whitespace is collapsed; see /docs for limits.")
+    # Strict: only a JSON integer or null; true, "3" and 2.0 are rejected, not coerced.
     top_k: int | None = Field(
         default=None,
         ge=1,
+        strict=True,
         description="Maximum results to return. Default and upper bound come from settings.",
     )
 
@@ -95,9 +97,11 @@ class DenseSearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(description="Search text. Whitespace is collapsed; see /docs for limits.")
+    # Strict: only a JSON integer or null; true, "3" and 2.0 are rejected, not coerced.
     top_k: int | None = Field(
         default=None,
         ge=1,
+        strict=True,
         description="Maximum results to return. Default and upper bound come from settings.",
     )
 
@@ -169,9 +173,11 @@ class HybridSearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(description="Search text. Whitespace is collapsed; see /docs for limits.")
+    # Strict: only a JSON integer or null; true, "3" and 2.0 are rejected, not coerced.
     top_k: int | None = Field(
         default=None,
         ge=1,
+        strict=True,
         description="Maximum results to return. Default and upper bound come from settings.",
     )
 
@@ -305,9 +311,11 @@ class FilteredSearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(description="Search text. Whitespace is collapsed; see /docs for limits.")
+    # Strict: only a JSON integer or null; true, "3" and 2.0 are rejected, not coerced.
     top_k: int | None = Field(
         default=None,
         ge=1,
+        strict=True,
         description="Maximum results to return. Default and upper bound come from settings.",
     )
 
@@ -422,9 +430,11 @@ class RerankedSearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(description="Search text. Whitespace is collapsed; see /docs for limits.")
+    # Strict: only a JSON integer or null; true, "3" and 2.0 are rejected, not coerced.
     top_k: int | None = Field(
         default=None,
         ge=1,
+        strict=True,
         description="Maximum results to return. Default and upper bound come from settings.",
     )
 

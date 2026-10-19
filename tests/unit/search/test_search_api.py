@@ -139,6 +139,24 @@ def test_top_k_out_of_bounds_is_422(client_for, calls, top_k):
     assert calls == []
 
 
+@pytest.mark.parametrize("top_k", [True, False, "3", 2.0, 2.5], ids=repr)
+def test_post_top_k_must_be_a_json_integer(client_for, calls, top_k):
+    with client_for() as client:
+        response = client.post("/search", json={"query": "laptop", "top_k": top_k})
+    assert response.status_code == 422
+    assert [e["loc"] for e in response.json()["detail"]] == [["body", "top_k"]]
+    assert calls == []
+
+
+def test_post_top_k_integer_and_null_and_get_string_still_work(client_for, calls):
+    with client_for() as client:
+        assert client.post("/search", json={"query": "laptop", "top_k": 3}).json()["top_k"] == 3
+        assert client.post("/search", json={"query": "laptop", "top_k": None}).json()["top_k"] == 10
+        # A query string is always text; GET keeps parsing "3" as 3.
+        assert client.get("/search", params={"q": "laptop", "top_k": "3"}).json()["top_k"] == 3
+    assert calls == [("laptop", 3), ("laptop", 10), ("laptop", 3)]
+
+
 def test_top_k_boundaries_follow_settings(client_for):
     with client_for(search_lexical_k=7, search_default_top_k=3) as client:
         assert client.get("/search", params={"q": "x", "top_k": 7}).status_code == 200
