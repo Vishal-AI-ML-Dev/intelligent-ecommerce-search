@@ -89,7 +89,9 @@ the runner and the evaluator.
 The seal also records how many queries each source contributed, and they must add up to the
 query count. `synthetic` is true exactly when a synthetic fixture is sealed; an AI-authored
 query does not make the batch synthetic. On every load the counts are checked against the sealed
-queries, and a mismatch is refused.
+queries, and a mismatch is refused. The seal's `annotator_handle` must also equal the handle on
+the sealed labels. This check covers the handle only: `sealed_at` and `seal.json` itself are not
+hashed, so the seal is not tamper-proof.
 
 **4. Dry run.** The real provider runs against an in-memory transport that returns one fixed,
 synthetic, valid `none`/`none` answer with zero tokens. No network, no key, and the output is
@@ -145,6 +147,15 @@ run --run-id <id> --max-attempts N --live
   `max_attempts` may not exceed the number of queries.
 - **Fixed settings:** `run.json` fixes the mode, cap, prices and seal binding. Restarting with
   different values is refused.
+- **One invocation per run:** `runs/<run-id>/run.lock` is created exclusively before `run.json`
+  and the journal are read, and held until the last journal line is written. A second
+  invocation of the same run refuses before it builds a provider or dispatches, and changes
+  nothing. The lock is removed on normal and error exits.
+  - A lock left by a hard kill is never removed automatically. Check that no invocation is
+    running and review the journal (for example, for a dispatch without a result) before
+    deleting it by hand.
+  - The lock covers one run id. A different run id over the same batch is a separate run and
+    sends the queries again.
 - **Stop conditions:**
   - the attempt cap;
   - the estimated-spend tripwire;
@@ -217,12 +228,14 @@ run --run-id <id> --max-attempts N --live
     evaluation.
 - **Jev predictions** are the unique top label, which may be `none`. Otherwise Jev abstains, and
   the reason is recorded as `tie`, `fallback`, `unknown` or `not_attempted`.
+- **Report format `qd-diagnostic-2`** (current). `live-001/report.json` was written in
+  `qd-diagnostic-1` and is kept unchanged; see "Report format versions" below.
 - **Scoring** is defined in the `evaluate` module docstring:
-  - `correct`, `wrong` and `predicted_none` against a single label;
+  - `correct`, `wrong` and `predicted_none` (a missed decision) against a single label;
   - `correct_none` and `wrong_commit` against gold `none`;
-  - `commit_in_candidates`, `commit_outside_candidates` and `predicted_none` against an
-    ambiguous gold;
-  - `in_set`, `out_of_set` and `predicted_none` against a multi-intent gold;
+  - `commit_in_candidates`, `commit_outside_candidates` and `none_on_ambiguous` (no label
+    committed) against an ambiguous gold;
+  - `in_set`, `out_of_set` and `predicted_none` (a missed decision) against a multi-intent gold;
   - `excluded_unclear` for unclear golds.
 - **Reported for each question:**
   - gold kinds;
@@ -230,7 +243,9 @@ run --run-id <id> --max-attempts N --live
   - Jev outcomes and abstention reasons;
   - Jev validity and fallbacks, and the run's token totals;
   - D/J disagreements, with the outcome pairs and query ids;
-  - Jev's outcomes where the deterministic parser abstains (correct and incorrect fills).
+  - where the deterministic parser abstains: `deterministic_abstains_total` (every such
+    query) and `deterministic_abstains_scored` (unclear golds excluded), and Jev's outcomes and
+    correct and incorrect fills over the scored ones only.
 - **Sources.**
   - The report shows how many queries each source contributed (`query_sources`), any AI tools
     named (`ai_author_tools`), and `source` on every row.
@@ -241,6 +256,17 @@ run --run-id <id> --max-attempts N --live
 - **What deterministic-first gating can change.** It could change only the queries where the
   parser abstains, so it improves missing-decision coverage. It cannot correct a wrong
   deterministic decision.
+
+### Report format versions
+
+| Version | Change |
+|---|---|
+| `qd-diagnostic-1` | Original. `predicted_none` also covered `none` on an ambiguous gold. `deterministic_abstains` and `jev_on_deterministic_abstains` included unclear golds (as `excluded_unclear`); `correct_fills` and `incorrect_fills` did not. |
+| `qd-diagnostic-2` | `none` on an ambiguous gold is `none_on_ambiguous`. `deterministic_abstains` is replaced by `deterministic_abstains_total` and `deterministic_abstains_scored`; `jev_on_deterministic_abstains` covers scored queries only. |
+
+The `live-001` figures below were derived from the `qd-diagnostic-1` report with unclear golds
+excluded and the ambiguous cases separated by hand, so they already follow the
+`qd-diagnostic-2` definitions. The saved report was not regenerated.
 
 ## live-001 (2026-10-19)
 
@@ -256,6 +282,21 @@ write it.
 - Labels were sealed before the run and were not changed after it.
 - This is a development diagnostic only. It is **not held-out evidence**, and the report says
   so (`evidence_scope`, `evidence_notes`; `synthetic: false`).
+
+### Evidence file hashes (recorded 2026-10-19)
+
+SHA-256 of the saved files as they are on disk, under `data/processed/m12_diagnostic/`
+(git-ignored, not committed). These hashes let a later reader detect a change to those bytes;
+they do not prove when the files were written or who wrote them.
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `queries.jsonl` | 10,329 | `6f0c9ae30486fed33ab6e607e495813ebe6c1e8efd82da81736d816bb16e7d0a` |
+| `labels.jsonl` | 16,276 | `d805dce2053220d32e1a8b9357faa91305813cf7e399dfb866c2ca0c53c2f4e0` |
+| `seal.json` | 492 | `b1afc71566869baa7c3a20cbfc8af65e5169a4d850d21a6f28e8175059b53965` |
+| `runs/live-001/run.json` | 494 | `f400570c3dad7abe1b7029480e0d853877e21e4abc27857d3c0e65d8f7604d51` |
+| `runs/live-001/journal.jsonl` | 35,880 | `5cfbfc692445904369a277c766da0aa7e49f02e3b86fdc446f4613d5e7f49807` |
+| `runs/live-001/report.json` (`qd-diagnostic-1`) | 27,634 | `012b621e27d21f92e6a89d11c3cfd59b6e56dd6ddb2f515d02abb70b3ea83877` |
 
 ### Run settings and bindings
 

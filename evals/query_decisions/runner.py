@@ -13,6 +13,10 @@ Accounting (`runs/<run-id>/journal.jsonl`, append-only, fsynced per line):
   keeps its fallback (or unknown) outcome. `max_attempts` may not exceed the number of queries.
 * `run.json` fixes the mode, cap, prices and seal binding when the run starts; a later invocation
   with different values is refused.
+* `run.lock` (exclusive creation) is held from before `run.json` and the journal are read until
+  the last journal line is written, so a second invocation of the same run refuses before it
+  builds a provider or dispatches anything. A lock left behind by a hard kill is never removed
+  automatically: check that no invocation is running and review the journal before deleting it.
 
 Stop conditions (a `stop` event is written; the next invocation refuses to continue until it is
 started with `resume_approved=True`, which is itself journalled):
@@ -34,9 +38,10 @@ text. The dry-run mode drives the real provider against an in-memory transport t
 fixed synthetic answer; it never touches the network and its outcomes are not Jev output.
 """
 
+import contextlib
 import os
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -72,6 +77,7 @@ from evals.runners.golden_io import safe_child, write_exclusive
 RUNS_DIR = "runs"
 RUN_FILE = "run.json"
 JOURNAL_FILE = "journal.jsonl"
+RUN_LOCK_FILE = "run.lock"
 RUN_ID_PATTERN = r"^[a-z0-9][a-z0-9-]{0,31}$"
 TRANSIENT_FALLBACKS = frozenset(
     {"timeout", "transport_error", "rate_limited", "server_error", "deadline_exceeded"}
@@ -261,6 +267,26 @@ def estimated_spend(header: RunHeader, outcomes: Sequence[JevOutcome]) -> Decima
     ) / million
 
 
+@contextlib.contextmanager
+def run_lock(work_dir: Path, run_id: str) -> Iterator[None]:
+    """Hold `runs/<run-id>/run.lock`; refuse if it exists. Only the holder removes it."""
+    path = safe_child(work_dir, f"{RUNS_DIR}/{run_id}/{RUN_LOCK_FILE}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(path, "x", encoding="utf-8") as handle:
+            handle.write(f"pid={os.getpid()}\n")
+    except FileExistsError:
+        raise QueryDecisionError(
+            f"{RUN_LOCK_FILE} exists: another invocation of this run is active, or one was "
+            "killed. Check that none is running and review the journal, then delete the lock "
+            "by hand."
+        ) from None
+    try:
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def _append(path: Path, event: BaseModel) -> None:
     with open(path, "a", encoding="utf-8", newline="\n") as handle:
         handle.write(event.model_dump_json() + "\n")
@@ -336,42 +362,49 @@ def run_diagnostic(
     if header.max_attempts > len(queries):
         raise QueryDecisionError("max_attempts may not exceed the number of queries (no resends)")
 
-    run_file = safe_child(work_dir, f"{RUNS_DIR}/{header.run_id}/{RUN_FILE}")
-    if run_file.is_file():
-        if decode_json_object(run_file.read_bytes(), RunHeader) != header:
-            raise QueryDecisionError("this run was started with different settings")
-    else:
-        write_exclusive(
-            work_dir, {f"{RUNS_DIR}/{header.run_id}/{RUN_FILE}": encode_json_object(header)}
-        )
-    journal = safe_child(work_dir, f"{RUNS_DIR}/{header.run_id}/{JOURNAL_FILE}")
+    # Held from before run.json and the journal are read until the last journal line is
+    # written, so a competing invocation refuses before it builds a provider.
+    with run_lock(work_dir, header.run_id):
+        run_file = safe_child(work_dir, f"{RUNS_DIR}/{header.run_id}/{RUN_FILE}")
+        if run_file.is_file():
+            if decode_json_object(run_file.read_bytes(), RunHeader) != header:
+                raise QueryDecisionError("this run was started with different settings")
+        else:
+            write_exclusive(
+                work_dir, {f"{RUNS_DIR}/{header.run_id}/{RUN_FILE}": encode_json_object(header)}
+            )
+        journal = safe_child(work_dir, f"{RUNS_DIR}/{header.run_id}/{JOURNAL_FILE}")
 
-    _events, state = read_journal(journal)
-    stopped: str | None = None
-    if state.complete:
-        say("the run is already complete; nothing to do")
-    elif state.blocked_by is not None and not resume_approved:
-        raise QueryDecisionError(f"the run is blocked ({state.blocked_by}); resume needs approval")
-    elif state.blocked_by is None and resume_approved:
-        raise QueryDecisionError("the run is not blocked; there is nothing to approve")
-    else:
-        if resume_approved:
-            _append(journal, ResumeApprovedEvent(at=now()))
-        stopped = _dispatch_pending(header, queries, state, journal, provider_factory, secret, now)
-    _events, state = read_journal(journal)
-    summary = RunSummary(
-        run_id=header.run_id,
-        mode=header.mode,
-        attempts=state.attempts,
-        max_attempts=header.max_attempts,
-        results=len(state.results),
-        unresolved=len(state.unresolved),
-        not_attempted=len(queries) - len(state.dispatched),
-        outcomes=dict(sorted(state.fallback_counts().items())),
-        estimated_usd=estimated_spend(header, list(state.results.values())),
-        stopped=stopped,
-        complete=state.complete,
-    )
+        _events, state = read_journal(journal)
+        stopped: str | None = None
+        if state.complete:
+            say("the run is already complete; nothing to do")
+        elif state.blocked_by is not None and not resume_approved:
+            raise QueryDecisionError(
+                f"the run is blocked ({state.blocked_by}); resume needs approval"
+            )
+        elif state.blocked_by is None and resume_approved:
+            raise QueryDecisionError("the run is not blocked; there is nothing to approve")
+        else:
+            if resume_approved:
+                _append(journal, ResumeApprovedEvent(at=now()))
+            stopped = _dispatch_pending(
+                header, queries, state, journal, provider_factory, secret, now
+            )
+        _events, state = read_journal(journal)
+        summary = RunSummary(
+            run_id=header.run_id,
+            mode=header.mode,
+            attempts=state.attempts,
+            max_attempts=header.max_attempts,
+            results=len(state.results),
+            unresolved=len(state.unresolved),
+            not_attempted=len(queries) - len(state.dispatched),
+            outcomes=dict(sorted(state.fallback_counts().items())),
+            estimated_usd=estimated_spend(header, list(state.results.values())),
+            stopped=stopped,
+            complete=state.complete,
+        )
     say(_summary_text(summary))
     return summary
 

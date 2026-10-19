@@ -24,17 +24,23 @@ Scoring of one decided prediction against the gold label (`score`):
 | any other | abstain | `abstain` |
 | label L (not none) | L / none / other | `correct` / `predicted_none` / `wrong` |
 | none | none / a label | `correct_none` / `wrong_commit` |
-| ambiguous {A, B, ...} | none / in set / outside | `predicted_none` / `commit_in_candidates` / |
+| ambiguous {A, B, ...} | none / in set / outside | `none_on_ambiguous` / `commit_in_candidates` / |
 | | | `commit_outside_candidates` |
 | multi {A, B, ...} | none / in set / outside | `predicted_none` / `in_set` / `out_of_set` |
 
 For gold `none`, a deterministic abstention means no constraint is applied, which is the right
 search outcome; it is still counted as `abstain`, not as a decision.
 
+`predicted_none` is a missed decision (a single or multi gold where `none` was predicted);
+`none_on_ambiguous` is `none` on an ambiguous gold, where no label is committed. They are kept
+apart (`qd-diagnostic-2`; `qd-diagnostic-1` reported both as `predicted_none`).
+
 Reported per question: gold kinds; deterministic and Jev outcome counts; Jev abstention reasons;
 D/J disagreements (both decided, different labels) with the outcome pair; and Jev's outcome on
-the queries where the deterministic parser abstains (`fills`: `correct` and `in_set` are correct
-fills; `wrong`, `wrong_commit`, `commit_*` and `out_of_set` are incorrect fills).
+the queries where the deterministic parser abstains. `deterministic_abstains_total` counts every
+such query; `deterministic_abstains_scored` excludes unclear golds and is the denominator of
+`jev_on_deterministic_abstains` and the fills (`correct` and `in_set` are correct fills; `wrong`,
+`wrong_commit`, `commit_*` and `out_of_set` are incorrect fills).
 Deterministic-first gating could only change those abstaining queries; it cannot correct a wrong
 deterministic decision.
 """
@@ -89,7 +95,7 @@ def score(gold: CategoryGold | IntentGold, prediction: str | None) -> str:
             return "correct"
         return "predicted_none" if prediction == NONE_LABEL else "wrong"
     if prediction == NONE_LABEL:
-        return "predicted_none"
+        return "none_on_ambiguous" if gold.kind is GoldKind.AMBIGUOUS else "predicted_none"
     inside = prediction in gold.candidates
     if gold.kind is GoldKind.AMBIGUOUS:
         return "commit_in_candidates" if inside else "commit_outside_candidates"
@@ -132,7 +138,7 @@ def evaluate(work_dir: Path, run_id: str) -> dict[str, Any]:
     outcomes = list(state.results.values())
     synthetic = header.mode is RunMode.DRY_RUN or seal.synthetic
     return {
-        "report_version": "qd-diagnostic-1",
+        "report_version": "qd-diagnostic-2",
         "dataset_id": seal.dataset_id,
         "evidence_scope": "development diagnostic; not held-out evidence",
         "synthetic": synthetic,
@@ -228,7 +234,8 @@ def _question_summary(rows: list[dict[str, Any]], question: str) -> dict[str, An
     cells = [(row["query_id"], row[question]) for row in rows]
     decided = [(qid, c) for qid, c in cells if c["deterministic"] and c["jev"]]
     disagreements = [(qid, c) for qid, c in decided if c["deterministic"] != c["jev"]]
-    fills = [c for _, c in cells if c["deterministic"] is None]
+    abstains = [c for _, c in cells if c["deterministic"] is None]
+    fills = [c for c in abstains if c["jev_outcome"] != "excluded_unclear"]
     fill_outcomes = Counter(c["jev_outcome"] for c in fills)
     return {
         "gold_kinds": _counts(c["gold_kind"] for _, c in cells),
@@ -243,7 +250,8 @@ def _question_summary(rows: list[dict[str, Any]], question: str) -> dict[str, An
             f"{c['deterministic_outcome']}|{c['jev_outcome']}" for _, c in disagreements
         ),
         "disagreement_query_ids": [qid for qid, _ in disagreements],
-        "deterministic_abstains": len(fills),
+        "deterministic_abstains_total": len(abstains),
+        "deterministic_abstains_scored": len(fills),
         "jev_on_deterministic_abstains": dict(sorted(fill_outcomes.items())),
         "correct_fills": sum(fill_outcomes[o] for o in CORRECT_FILLS),
         "incorrect_fills": sum(fill_outcomes[o] for o in INCORRECT_FILLS),

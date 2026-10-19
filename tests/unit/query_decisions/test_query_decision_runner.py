@@ -14,6 +14,7 @@ from evals.query_decisions.contracts import QueryDecisionError
 from evals.query_decisions.labeling import seal_labels
 from evals.query_decisions.runner import (
     JOURNAL_FILE,
+    RUN_LOCK_FILE,
     RUNS_DIR,
     RunMode,
     dry_run_provider,
@@ -32,6 +33,7 @@ from query_decision_support import (
 )
 
 from ecommerce_search.decision import jev_provider
+from ecommerce_search.decision.provider import DecisionResult
 
 SECRET = "ts-fixture-secret-not-real"  # noqa: S105 - test value
 
@@ -370,3 +372,80 @@ def test_cli_evaluate_refuses_an_unknown_run_cleanly(sealed_dir, capsys):
     captured = capsys.readouterr()
     assert captured.err == "error: no such run in the work directory\n"
     assert captured.out == ""
+
+
+# --- per-run lock ---------------------------------------------------------------------------
+
+
+def _files(work_dir, run_id="r1"):
+    run_dir = work_dir / RUNS_DIR / run_id
+    return {p.name: p.read_bytes() for p in sorted(run_dir.iterdir())} if run_dir.is_dir() else {}
+
+
+def test_an_existing_run_lock_refuses_before_any_provider_or_change(sealed_dir):
+    capped = header(sealed_dir, max_attempts=2)
+    run(sealed_dir, [outcome(), outcome()], capped)
+    lock = sealed_dir / RUNS_DIR / "r1" / RUN_LOCK_FILE
+    lock.write_text("pid=0\n", encoding="utf-8")
+    before = _files(sealed_dir)
+    built = []
+
+    with pytest.raises(QueryDecisionError, match="run.lock exists"):
+        run_diagnostic(
+            sealed_dir,
+            capped,
+            lambda: built.append(1),
+            resume_approved=True,
+            say=lambda _: None,
+        )
+    assert built == []
+    assert _files(sealed_dir) == before  # journal, run.json and the foreign lock untouched
+
+
+def test_a_competing_invocation_during_dispatch_is_refused(sealed_dir):
+    run_header = header(sealed_dir)
+    refusals = []
+
+    class Competing:
+        def understand(self, query, deterministic_result):
+            with pytest.raises(QueryDecisionError, match="run.lock exists") as error:
+                run_diagnostic(
+                    sealed_dir, run_header, lambda: pytest.fail("built"), say=lambda _: None
+                )
+            refusals.append(error.value)
+            return DecisionResult(
+                provider="jev",
+                provider_version="jq-1",
+                understanding=deterministic_result,
+                jev=outcome(),
+            )
+
+        def close(self):
+            pass
+
+    summary = run_diagnostic(sealed_dir, run_header, Competing, say=lambda _: None)
+    assert summary.complete and len(refusals) == QUERY_COUNT
+    _, state = read_journal(sealed_dir / RUNS_DIR / "r1" / JOURNAL_FILE)
+    assert state.attempts == QUERY_COUNT and len(state.results) == QUERY_COUNT
+    assert not (sealed_dir / RUNS_DIR / "r1" / RUN_LOCK_FILE).exists()
+
+
+def test_the_run_lock_is_released_on_refusals_and_errors(sealed_dir):
+    lock = sealed_dir / RUNS_DIR / "r1" / RUN_LOCK_FILE
+    run(sealed_dir, [outcome()], header(sealed_dir, max_attempts=1))
+    assert not lock.exists()
+    with pytest.raises(QueryDecisionError, match="different settings"):
+        run(sealed_dir, [], header(sealed_dir, max_attempts=2))
+    assert not lock.exists()
+
+    def failing_factory():
+        raise RuntimeError("factory failed")
+
+    with pytest.raises(RuntimeError, match="factory failed"):
+        run_diagnostic(
+            sealed_dir,
+            header(sealed_dir, run_id="r2"),
+            failing_factory,
+            say=lambda _: None,
+        )
+    assert not (sealed_dir / RUNS_DIR / "r2" / RUN_LOCK_FILE).exists()

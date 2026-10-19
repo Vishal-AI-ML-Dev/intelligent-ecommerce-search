@@ -24,7 +24,7 @@ from ecommerce_search.decision.provider import CategoryProposal, JevOutcome
         ("none", "none", "correct_none"),
         ("none", "laptop", "wrong_commit"),
         ("none", None, "abstain"),
-        ("ambiguous:laptop,phone", "none", "predicted_none"),
+        ("ambiguous:laptop,phone", "none", "none_on_ambiguous"),
         ("ambiguous:laptop,phone", "phone", "commit_in_candidates"),
         ("ambiguous:laptop,phone", "shoes", "commit_outside_candidates"),
     ],
@@ -103,20 +103,52 @@ def test_diagnostic_counts_over_a_scripted_run(sealed_dir):
     assert (category["both_decided"], category["disagreements"]) == (2, 1)
     assert category["disagreement_outcomes"] == {"correct|wrong": 1}
     assert category["disagreement_query_ids"] == ["dq-002"]
-    assert category["deterministic_abstains"] == 4
+    # dq-003 to dq-006 have no deterministic category; dq-006's unclear gold is not scored.
+    assert category["deterministic_abstains_total"] == 4
+    assert category["deterministic_abstains_scored"] == 3
+    assert "deterministic_abstains" not in category
     assert category["jev_on_deterministic_abstains"] == {
         "abstain": 1,
         "correct": 1,
-        "excluded_unclear": 1,
         "wrong_commit": 1,
     }
     assert (category["correct_fills"], category["incorrect_fills"]) == (1, 1)
+    assert report["report_version"] == "qd-diagnostic-2"
 
     intent = report["questions"]["semantic_intent"]
     assert intent["gold_kinds"] == {"label": 2, "multi": 1, "none": 2, "unclear": 1}
     assert intent["deterministic_outcomes"]["correct"] == 2  # gaming, travel
     assert intent["jev_outcomes"]["correct_none"] == 2
     assert "per_query" in report and len(report["per_query"]) == 6
+
+
+def test_none_on_ambiguous_is_counted_apart_from_a_missed_fill(sealed_dir):
+    script = [
+        outcome("laptop", "none"),  # dq-001
+        outcome("laptop", "gaming"),  # dq-002
+        outcome("none", "travel"),  # dq-003: gold headphones, D abstains -> missed fill
+        outcome("none", "none"),  # dq-004: gold none -> correct_none
+        outcome("none", "none"),  # dq-005: ambiguous gold, no commit; multi intent -> missed
+        outcome("none", "none"),  # dq-006: unclear gold, excluded
+    ]
+    run(sealed_dir, script)
+    questions = evaluate(sealed_dir, "r1")["questions"]
+
+    category = questions["category"]
+    assert category["jev_on_deterministic_abstains"] == {
+        "correct_none": 1,
+        "none_on_ambiguous": 1,
+        "predicted_none": 1,
+    }
+    assert (
+        category["deterministic_abstains_total"],
+        category["deterministic_abstains_scored"],
+    ) == (
+        4,
+        3,
+    )
+    assert (category["correct_fills"], category["incorrect_fills"]) == (0, 0)
+    assert questions["semantic_intent"]["jev_outcomes"]["predicted_none"] == 1  # the multi gold
 
 
 def test_report_records_parser_versions_and_evaluation_time_computation(sealed_dir):

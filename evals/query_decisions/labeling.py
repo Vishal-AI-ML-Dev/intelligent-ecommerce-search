@@ -287,4 +287,8 @@ def load_sealed(
         raise QueryDecisionError("labels.jsonl changed after sealing")
     if seal.counts() != source_counts(queries):
         raise QueryDecisionError("the seal's source counts do not match the sealed queries")
+    # Cross-checks the handle against the hashed labels only; `sealed_at` and the seal file
+    # itself are not covered by any hash.
+    if {label.annotator_handle for label in labels} != {seal.annotator_handle}:
+        raise QueryDecisionError("the seal's annotator_handle does not match the labels")
     return seal, queries, labels

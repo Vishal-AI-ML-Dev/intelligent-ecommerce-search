@@ -11,6 +11,7 @@ from evals.query_decisions.labeling import (
     LABELS_FILE,
     LOCK_FILE,
     QUERIES_FILE,
+    SEAL_FILE,
     label_session,
     load_sealed,
     read_labels,
@@ -160,6 +161,16 @@ def test_changes_after_sealing_are_refused(sealed_dir):
     queries = sealed_dir / QUERIES_FILE
     queries.write_text(queries.read_text(encoding="utf-8").replace("refrigerator", "fridge"))
     with pytest.raises(QueryDecisionError):
+        load_sealed(sealed_dir)
+
+
+def test_a_seal_whose_annotator_differs_from_the_labels_is_refused(sealed_dir):
+    seal = sealed_dir / SEAL_FILE
+    data = seal.read_bytes()
+    original = f'"annotator_handle":"{FIXTURE_HANDLE}"'.encode()
+    assert data.count(original) == 1
+    seal.write_bytes(data.replace(original, b'"annotator_handle":"ann-8"'))  # keeps LF endings
+    with pytest.raises(QueryDecisionError, match="annotator_handle does not match"):
         load_sealed(sealed_dir)
 
 
