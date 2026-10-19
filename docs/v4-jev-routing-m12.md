@@ -1,6 +1,8 @@
 # Experimental V4: Jev retrieval routing (Milestone 12, rule `jr-1`)
 
-**Status: experimental, off by default.**
+**Status: experimental, off by default.** M12 was closed as development-scoped, partially met
+(owner decision, 2026-10-19; see `docs/m12-diagnostic-tooling.md`). V3 remains the baseline, V4
+stays opt-in, and the confidence gate stays off.
 
 - V4 is implemented, and its live Jev integration was exercised (three approved calls, below).
 - **No relevance improvement was demonstrated.**

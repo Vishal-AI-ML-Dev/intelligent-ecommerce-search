@@ -64,12 +64,25 @@ Development is organized milestone by milestone. See
     cancellation behaviour; server-side cancellation and billing behaviour; quality improvement,
     calibration and latency distributions.
   - See `docs/jev-provider-m11.md`.
-- M12 (Jev V4 experiment): in progress.
-  - Built: offline tooling for the diagnostic batch.
-  - Run: one live development diagnostic run (`live-001`, 2026-10-19) over 40 AI-authored
-    queries labelled by one human annotator. It is not held-out evidence.
-  - Unchanged: `fp-1` and every endpoint.
-  - See `docs/m12-diagnostic-tooling.md`.
+- M12 (Jev V4 experiment): **closed as development-scoped, partially met** (owner decision,
+  2026-10-19). The original M12 requirements are not all fulfilled.
+  - Built:
+    - the diagnostic, calibration and gate tooling;
+    - category-only annotation;
+    - an experimental, ungated, opt-in V4 at `/search/routed`, off unless
+      `SEARCH_V4_JEV_ENABLED=true`, which makes paid Jev calls.
+  - Run, all on development data that is not held-out evidence:
+    - `live-001` (40 queries) and `cal1-live-001` (80 queries), AI-authored and labelled by one
+      human annotator;
+    - three live V3/V4 comparison queries.
+  - Results:
+    - calibration found no candidate confidence gate;
+    - the V3/V4 comparison showed no relevance improvement;
+    - the planned confidence-gated V4 was not realized;
+    - no independent held-out confirmation was performed.
+  - Unchanged: V3 as the baseline, `fp-1`, the V0–V3 endpoints and every default. The
+    confidence gate is off.
+  - See `docs/m12-diagnostic-tooling.md` and `docs/v4-jev-routing-m12.md`.
 - M13–M27: not started. This includes Buyer RAG, Return Intelligence, human review (HITL), the
   dual frontend and marketplace integration. M27 is optional.
 

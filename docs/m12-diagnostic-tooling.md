@@ -1,40 +1,47 @@
-# Milestone 12 — diagnostic batch tooling (offline only)
+# Milestone 12 — Jev V4 experiment: tooling, runs and report
 
 ## Status
 
-**M12 is in progress.** Approved scope (owner, 2026-10-18): **minimal offline tooling for a
-40-query diagnostic batch** (`m12-diag-dev`). This is not the M12 experiment.
-- **Batch (2026-10-18/19).** 40 queries, `dq-001`–`dq-040`, all written by Notion AI
-  (`source: ai_authored`, `author_tool: notion-ai`; no underlying model is recorded).
-  - Labelled by one human annotator, `ann-1`, query text only. The annotator had AI-assisted
-    clarification of the labelling rules and answer syntax, so this is not fully unaided
-    annotation.
-  - Labels were sealed before any live call and have not changed since.
-  - The files are git-ignored under `data/processed/m12_diagnostic/`.
-- **Runs.** One mocked dry run (`dry-run-001`, synthetic, not Jev output) and one
-  owner-approved live run (`live-001`, 2026-10-19). See [live-001](#live-001-2026-10-19). No
-  other live diagnostic call is approved.
-- **Unchanged:** `jq-1`, `fp-1`, every endpoint, `.env`, the reranker settings and the default
-  search behaviour.
-- **Offline category-gate tooling (2026-10-19, owner-approved scope):** partition contracts and
-  seals, category-only metrics, a frozen-threshold artifact, a pure shadow gate and an
-  acceptance scorer with configurable criteria. See
-  [Category-only gate tooling](#category-only-gate-tooling-offline). No partition, threshold or
-  acceptance report exists on real data, and the shadow gate is used by no endpoint.
+**M12 is closed as development-scoped, partially met (owner decision, 2026-10-19).**
+- The original Milestone 12 requirements in `docs/MASTER_PLAN.md` are unchanged and are **not**
+  all fulfilled.
+- See [Owner decision](#owner-decision-2026-10-19) for the exact met, unmet, deferred and
+  optional items, and the [M12 experiment report](#m12-experiment-report-2026-10-19) for the
+  evidence.
+
+- **Batches.** Both are git-ignored under `data/processed/` and were sealed before any live call.
+  - Diagnostic `m12_diagnostic`: 40 queries, `dq-001`–`dq-040`, written by Notion AI
+    (`author_tool: notion-ai`).
+  - Calibration `m12_calibration_cal1`: 80 queries, written by Claude in Claude Code
+    (`author_tool: claude-code`), with category-only labels (`qd-cat-1`).
+  - All labels are by one human annotator, `ann-1`, query text only, with AI-assisted rule
+    clarification and at least one AI-assisted label confirmation. The cal1 pre-seal review was
+    also AI-assisted. This is not fully unaided annotation.
+- **Runs (owner-approved).**
+  - `dry-run-001`: mocked and synthetic, not Jev output.
+  - `live-001`: the 40 diagnostic queries.
+  - `cal1-live-001`: the 80 calibration queries.
+  - Three live V3/V4 comparison queries.
+  - No other live call is approved.
+- **Built.** The diagnostic and gate tooling, the `qd-report-1` report, category-only annotation,
+  and an experimental, ungated, opt-in V4 at `/search/routed` (`docs/v4-jev-routing-m12.md`).
+- **Unchanged.** `jq-1`, `fp-1`, the V0–V3 endpoints and every default. The confidence gate is
+  off, and no threshold is frozen.
 - **Not built:**
   - hard filters or `fp-2`, and any gate applied to search;
-  - a chosen threshold, fitted calibration or approved acceptance criteria;
+  - a frozen threshold, a fitted calibration or approved acceptance criteria;
   - main-set authoring;
   - a bootstrap or McNemar framework;
   - counterfactual retrieval.
 
-The diagnostic batch is **development evidence only, never held-out evidence**. Any change to the
-question set, the rubric or the gate design is allowed only at this stage. The later evaluation
-partition is authored and sealed separately.
+All M12 data is **development evidence only, never held-out evidence**.
 
 Code: `evals/query_decisions/` (`contracts`, `labeling`, `runner`, `evaluate`, `cli`; category
-gate tooling in `partitions`, `gate`, `category_metrics`, `acceptance`).
-Tests: `tests/unit/query_decisions/` (synthetic fixtures only, fully mocked, no network).
+gate tooling in `partitions`, `gate`, `category_metrics`, `acceptance`, `gate_cli`; `reporting`),
+`src/ecommerce_search/search/routed.py`, `src/ecommerce_search/api/routed.py` and
+`evals/runners/compare_v3_v4.py`.
+Tests: `tests/unit/query_decisions/` and `tests/unit/search/test_routed_api.py` /
+`test_compare_v3_v4.py` (synthetic fixtures, fully mocked, no network).
 
 ## Workflow
 
@@ -595,3 +602,160 @@ python -m evals.query_decisions --work-dir DIR seal
   give the same SHA-256 under the code before and after this change (`d463d614…` and
   `39cc7c35…`; the latter is the saved `metrics-report-v1.json`). The saved `report.json` is
   `qd-diagnostic-1`, so it predates the current evaluator and was not expected to match.
+
+## M12 experiment report (2026-10-19)
+
+Consolidated from existing evidence only. Every M12 query is AI-authored: `notion-ai` for the
+40-query diagnostic batch and `claude-code` for the 80-query cal1 batch. Category labels are by
+one human annotator (`ann-1`) with AI-assisted rule clarification, at least one AI-assisted
+label confirmation and an AI-assisted pre-seal review of cal1. All of it is development data,
+never held-out evidence.
+
+### Implemented
+
+- **Diagnostic tooling** (`f2d33f1`, `9f605a9`, `03d683c`):
+  - sealed blind labelling;
+  - the budgeted, journalled live runner (retries 0, one call in flight, spend tripwire);
+  - the `qd-diagnostic-2` evaluator.
+- **Offline gate tooling** (`2712037`, `93dbc32`):
+  - partitions with chronology checks;
+  - the pure `cg-shadow-1` category gate, threshold sweep and write-once frozen threshold;
+  - Clopper–Pearson acceptance scoring with a consumption record.
+- **Reproducible report** `qd-report-1` (`931414d`): category and intent metrics, Brier and ECE
+  of raw probabilities, nearest-rank latency, and cost estimated from returned usage.
+- **Category-only annotation** `qd-cat-1` (`ad2f735`).
+- **Experimental V4 and comparison tooling** (`2fa1d56`): `/search/routed` and
+  `evals.runners.compare_v3_v4` (see `docs/v4-jev-routing-m12.md`).
+
+### Experiments performed and results
+
+**1. Diagnostic run `live-001`:** 40 queries, 40/40 valid outcomes; report
+`metrics-report-v1.json`.
+- Category on 30 single-category golds:
+  - deterministic: 15 correct, 15 abstain, 0 wrong; accuracy 0.500;
+  - Jev: 28 correct, 2 predicted `none`, 0 wrong; accuracy 0.933, macro F1 0.972.
+- Intent on 11 single-intent golds: deterministic accuracy 0.364, Jev 0.636.
+- Raw category probabilities (33 eligible): Brier 0.139, ECE 0.097.
+- Jev latency, nearest rank: p50 325 ms, p95 419 ms.
+- Estimated $0.001084 in total, or $0.027 per 1,000 attempts.
+
+**2. Calibration run `cal1-live-001`:** 80 queries, 80/80 valid outcomes; report
+`metrics-report-v1.json` (`b87ab416bfa104f7752f8e815e51cb6420e0907f321f5f08ac73a3ab5c516451`).
+- These queries were screened so the parser gives no category, so the deterministic parser
+  abstained on all 49 scored queries.
+- Jev on 32 single-category golds: 27 correct, 3 wrong, 2 predicted `none`; accuracy 0.844,
+  macro F1 0.806.
+- Jev also made 5 wrong commits on gold `none` and 1 commit inside an ambiguous gold's
+  candidates. 31 golds were `unclear` and excluded.
+- Intent was not annotated: all 80 queries are counted as not annotated, and no intent metric
+  is computed.
+- Raw category probabilities (48 eligible): Brier 0.339, ECE 0.184. 40 of 48 fall in the
+  (0.9, 1.0] bin, with accuracy 0.850 there.
+- Jev latency: p50 326 ms, p95 382 ms. With n = 80 the nearest-rank p99 is the maximum, 600 ms.
+- Estimated $0.002156 in total, or $0.027 per 1,000 attempts.
+
+**3. Calibration sweep:** partition `cal-exp1` (69 members), protocol `cal-protocol-1`.
+- **No candidate gate.** At every pre-registered threshold from 0.50 to 0.99, the one-sided 95%
+  Clopper–Pearson upper bound on strict wrong fills was 0.245 to 0.299, against the required
+  ≤ 0.10.
+- Even at 0.99, 5 of 37 accepted fills were wrong.
+- As pre-registered: no threshold was frozen, and no evaluation partition was built or run.
+
+**4. V3-versus-V4 comparisons** (details and hashes in `docs/v4-jev-routing-m12.md`):
+- **Offline, recorded outcomes:**
+  - 120 M12 queries without relevance judgements: 58 routed, 21 rankings changed.
+  - Category agreement in the top 10 was higher for 12 queries and equal for 50; this is not
+    relevance.
+  - 20 judged pilot/dev queries: 17 equal by construction, so NDCG@10 ties.
+- **Live, three approved Jev calls** on gq-p17, gq-p18 and gq-p20:
+  - Jev routed one query (`headphones`) and returned `none` twice;
+  - no ranking changed: NDCG@10 tied twice and was undefined once;
+  - estimated $0.00008.
+
+### Negative and inconclusive results
+
+These comparisons and measurements were performed. Their outcome was negative or inconclusive:
+
+- **Calibration: no candidate gate qualified** (the sweep above).
+- **V3 versus V4: no relevance improvement was demonstrated.**
+  - On the judged queries, every comparable result was a tie or undefined.
+  - The 21 rank changes on unjudged queries are not relevance evidence.
+  - The Milestone 12 acceptance text asks for the comparison and the measurements, not for an
+    improvement. A measured benefit is the condition for enabling Jev in the default/V4
+    configuration (FR-DEC-4 in `docs/spec.md`; `docs/architecture.md`), and that condition is
+    not met.
+- **Raw probabilities are not reliable confidence.** Two separate saved figures happen to share
+  n = 40:
+  - **Sweep, partition `cal-exp1`** (69 members: 49 cal1 and 20 diagnostic). At threshold 0.90,
+    an accepted fill is a unique top category other than `none` with raw probability ≥ 0.90.
+    There were 40 fills, of which 5 were wrong (12.5%) under the strict definition: another
+    category, gold `none`, or any commit on an ambiguous gold. The lenient count is also 5.
+  - **Reliability bin, cal1 report only.** The 48 eligible queries have a single-label gold
+    (a category or `none`). The bin holds the predictions whose unique top label, `none`
+    included, has raw probability > 0.9. There were 40 such predictions, of which 6 were
+    incorrect (accuracy 0.850): 5 category commits and 1 `none` prediction. These are not all
+    fills.
+
+### Planned confidence-gated V4: not realized
+
+The plan's `V4 = V3 + confidence-gated Jev decisions` was not built, because calibration found no
+qualifying gate. The experimental V4 that exists is a different, ungated arm (next section).
+
+### Not performed
+
+- **Independent confirmation was not performed.** No frozen threshold was evaluated on a
+  separate, held-out evaluation partition; no threshold qualified for it.
+- The optional general-LLM comparison (optional in the plan).
+- End-to-end V4 latency P50/P95/P99 under load, and repeat-stability runs.
+- A judged retrieval comparison on queries where V4 changes the ranking. No existing judgements
+  cover those queries.
+- Model-derived hard filters. Correctly not implemented, because no threshold is validated.
+
+### Planned V4 versus implemented V4
+
+The plan defines `V4 = V3 + confidence-gated Jev decisions`. The implemented V4 is different. It
+is an **ungated, experimental soft-routing arm**:
+- Jev's category adds one candidate branch, merged by RRF and reranked.
+- Nothing is gated, and no confidence band is implemented.
+- It is off by default (`SEARCH_V4_JEV_ENABLED`).
+
+The planned confidence-gated V4 was not built, because calibration found no qualifying gate.
+
+### Recommendation
+
+- Retain V3 as the existing baseline.
+- Keep V4 opt-in and experimental.
+- Do not enable a confidence gate.
+
+### Owner decision (2026-10-19)
+
+**Option A approved: M12 is closed as development-scoped, partially met.**
+- V3 remains the unchanged baseline.
+- V4 stays opt-in and experimental (`SEARCH_V4_JEV_ENABLED` defaults to `false`).
+- The confidence gate stays off.
+- The original requirements are preserved as written. M13 has not started.
+
+Against the original Milestone 12 text:
+
+| Requirement | Status |
+|---|---|
+| Create human-reviewed decision data | **Partly met.** 120 queries, labels by one human annotator, sealed before the calls. The queries are AI-authored, annotation was AI-assisted, there was no second reviewer, and it is development data only. |
+| Compare deterministic | **Met** (development data). |
+| Compare an optional LLM | **Optional; not done.** |
+| Compare Jev | **Met** (development data, two live runs). |
+| Compare confidence-gated Jev | **Unmet.** No gate qualified, so there was nothing to compare. |
+| Measure classification | **Met** (development data). Category on both runs; intent on `live-001` only. |
+| Measure calibration | **Met as a measurement.** Brier score, ECE and the sweep. **Negative result:** no candidate gate. |
+| Measure coverage | **Met** (sweep coverage and abstention counts). |
+| Measure latency | **Partly met.** Per-call Jev latency on both runs, and three single V4 request timings. There is no end-to-end V4 P50/P95/P99 and no measurement under load. |
+| Measure cost | **Met as an estimate** from returned usage at a dated published price; not billing data. |
+| Measure end-to-end retrieval metrics | **Performed; no improvement demonstrated.** On the 20 judged pilot/dev queries, 17 are identical by construction and the 3 live ones tied or were undefined. |
+| "This is V4" (V3 + confidence-gated Jev) | **Not realized as planned.** An ungated, experimental soft-routing V4 exists instead. |
+
+Deferred, not performed:
+- independent held-out confirmation with a frozen threshold;
+- enabling Jev in the default/V4 configuration (FR-DEC-4 requires a measured benefit, which was
+  not shown);
+- model-derived hard filters;
+- V4 latency under load and repeat stability;
+- a judged comparison on queries where V4 changes the ranking.
