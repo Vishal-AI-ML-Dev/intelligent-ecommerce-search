@@ -2,15 +2,18 @@
 
 ## Status
 
-Approved scope (owner, 2026-10-18): **minimal offline tooling for a 40-query diagnostic batch**
-(`m12-diag-dev`). This is not the M12 experiment.
-- **Nothing has run.** No query file exists, no label exists, and no live Jev call was made.
-- **Query authorship.** The schema is `qd-2`, which supports AI-authored development queries.
-  - 10 draft queries were written by Notion AI (`author_tool: notion-ai`; no underlying model
-    is recorded).
-  - They exist only in the planning conversation. They have not been imported, and no file
-    holds them.
-  - Who writes the remaining queries, and who labels all of them, is still open.
+**M12 is in progress.** Approved scope (owner, 2026-10-18): **minimal offline tooling for a
+40-query diagnostic batch** (`m12-diag-dev`). This is not the M12 experiment.
+- **Batch (2026-10-18/19).** 40 queries, `dq-001`–`dq-040`, all written by Notion AI
+  (`source: ai_authored`, `author_tool: notion-ai`; no underlying model is recorded).
+  - Labelled by one human annotator, `ann-1`, query text only. The annotator had AI-assisted
+    clarification of the labelling rules and answer syntax, so this is not fully unaided
+    annotation.
+  - Labels were sealed before any live call and have not changed since.
+  - The files are git-ignored under `data/processed/m12_diagnostic/`.
+- **Runs.** One mocked dry run (`dry-run-001`, synthetic, not Jev output) and one
+  owner-approved live run (`live-001`, 2026-10-19). See [live-001](#live-001-2026-10-19). No
+  other live diagnostic call is approved.
 - **Unchanged:** `jq-1`, `fp-1`, every endpoint, `.env`, the reranker settings and the default
   search behaviour.
 - **Not built:**
@@ -36,7 +39,7 @@ are listed in order; each one is described below.
 2. `uv run python -m evals.query_decisions label --annotator ann-1`
 3. `uv run python -m evals.query_decisions seal`
 4. `uv run python -m evals.query_decisions run --run-id dry-1 --max-attempts 40`
-5. A live run: not approved (see below).
+5. A live run: only with separate owner approval for that run (see below).
 6. `uv run python -m evals.query_decisions evaluate --run-id <id> --out <new file>`
 
 **1. Queries (`queries.jsonl`).** Written by the query author: UTF-8 JSONL, one object per
@@ -92,7 +95,8 @@ queries, and a mismatch is refused.
 synthetic, valid `none`/`none` answer with zero tokens. No network, no key, and the output is
 not Jev output.
 
-**5. Live run: requires separate owner approval and has never been run.** The command would be:
+**5. Live run: requires separate owner approval for each run.** One run (`live-001`) has been
+approved and run. The command is:
 
 ```
 run --run-id <id> --max-attempts N --live
@@ -121,8 +125,8 @@ run --run-id <id> --max-attempts N --live
   setting or file.
 - **`--approve-ai-authored`** records the operator's decision in `run.json`
   (`ai_authored_approved`, schema `qd-run-2`).
-  - **It does not authorize paid calls.** Every live run still needs separate owner approval,
-    and no live diagnostic run is approved.
+  - **It does not authorize paid calls.** Every live run still needs separate owner approval.
+    Only `live-001` was approved.
   - A restart with a different value is refused.
   - The flag is refused for dry runs.
 - The prices are supplied by the operator together with the date they were checked. Nothing in
@@ -183,6 +187,10 @@ run --run-id <id> --max-attempts N --live
   **81 passed, exit code 0**. Ruff was clean.
 - **After adding `qd-2` (AI-authored sources):** the same focused command, with a new temp
   folder, gave **109 passed, exit code 0**. Ruff was clean.
+- **After adding the AI-authored end-to-end test:** the same focused command, with a new temp
+  folder, gave **110 passed, exit code 0**, and Ruff was clean. This was the last run before
+  commit `9f605a9` and is the count in its commit message. The source is the saved session
+  transcript; the pytest log itself was a temporary file.
 - **Ruff:** `uv run --offline ruff check .` passed, and `ruff format --check` reported the new
   files as already formatted.
 - **Not run:** the full unit suite and the integration tests.
@@ -195,8 +203,9 @@ run --run-id <id> --max-attempts N --live
     numbering, which suggests something deleted it during the run.
   - What deleted it is unknown, and nothing implicates the M12 code.
   - Later runs of the same combination passed.
-- **No real data and no live calls yet.** There are no real diagnostic queries, labels, seal
-  or runs, and no live diagnostic call has been made.
+- **No real data and no live calls as of 2026-10-18.** The batch, seal and runs came later;
+  see [live-001](#live-001-2026-10-19). The tests were not re-run for that run or for this
+  documentation.
 
 ## Diagnostic report (`evaluate.py`)
 
@@ -232,3 +241,144 @@ run --run-id <id> --max-attempts N --live
 - **What deterministic-first gating can change.** It could change only the queries where the
   parser abstains, so it improves missing-decision coverage. It cannot correct a wrong
   deterministic decision.
+
+## live-001 (2026-10-19)
+
+One owner-approved live diagnostic run over the sealed batch. Everything below comes from the
+saved `run.json`, `journal.jsonl` and `report.json` in
+`data/processed/m12_diagnostic/runs/live-001/` (git-ignored). No further API call was made to
+write it.
+
+**Evidence scope.**
+- The 40 queries are AI-authored (Notion AI).
+- One human annotator, `ann-1`, labelled them with AI-assisted clarification of the rules and
+  answer syntax.
+- Labels were sealed before the run and were not changed after it.
+- This is a development diagnostic only. It is **not held-out evidence**, and the report says
+  so (`evidence_scope`, `evidence_notes`; `synthetic: false`).
+
+### Run settings and bindings
+
+| Item | Value (from `run.json` unless noted) |
+|---|---|
+| Run id, mode | `live-001`, `live` (`qd-run-2`) |
+| Model | `jev-1.13.0` requested; `jev-1.13.0` returned on all 40 results (journal) |
+| Endpoint | `https://api.typesafe.ai`, checked just before dispatch as a true/false comparison in a separate settings load (no values printed); the run loads settings itself, and the URL is not stored in `run.json` |
+| Attempt cap, retries, in flight | 40, 0, 1 |
+| AI-authored approval | `ai_authored_approved: true` (operator decision; not itself a paid-call approval) |
+| Prices | $0.042 per million input tokens, $0 per million output tokens; checked 2026-10-19 at https://docs.typesafe.ai/models (the page shows no last-updated date) |
+| Estimated-spend tripwire | $0.05 (an estimate from returned usage, not a billing cap) |
+| Question set | `jq-1` |
+| Queries hash (canonical) | `480ce1ca0cd354b2494b1652272a23e4d6ddb720197d8fc3aef0dd1567e11211` |
+| Labels hash | `d805dce2053220d32e1a8b9357faa91305813cf7e399dfb866c2ca0c53c2f4e0` |
+| `queries.jsonl` file SHA-256 | `6f0c9ae30486fed33ab6e607e495813ebe6c1e8efd82da81736d816bb16e7d0a` |
+| Seal | 40 queries (40 AI-authored, 0 human-authored, 0 synthetic fixtures), annotator `ann-1`, sealed 2026-10-19T02:57:30Z |
+
+The attempt timeout, retry budget and deadline were taken from the settings defaults at run time.
+They are not written to `run.json`, so they are not recorded here.
+
+### Run outcome
+
+| Measure | Value |
+|---|---|
+| Attempts / results / valid results | 40 / 40 / 40 |
+| Fallbacks / unknown outcomes / not attempted | 0 / 0 / 0 |
+| Stop condition | none; the journal ends with `complete` |
+| Jev abstentions (no unique top label) | 0 |
+| Tokens | 25,801 input, 5,596 output |
+| Estimated cost | $0.001084 (25,801 × $0.042 per million; an estimate, not billing data) |
+| Per-attempt latency (`latency_ms` measured by the provider client, n = 40) | min 296 ms, median 325 ms, mean 365 ms, p95 442 ms, max 1,190 ms (the first attempt) |
+| Wall clock, first dispatch to `complete` | 19.7 s, sequential |
+
+One sequential run of 40 calls is not a latency benchmark and says nothing about latency under
+load.
+
+### Scoring definitions used below
+
+- **D** is the deterministic parser, recomputed at evaluation time (`qu-1`, lexicon `1`).
+  **J** is Jev's unique top label.
+- **Unclear golds are excluded** from every denominator: 5 for category and 6 for intent. The
+  denominators are therefore 35 for category and 34 for intent.
+- **Fill:** a query where D abstains and J's answer is scored.
+  - **Correct fill:** J outcome `correct` (single-label gold, same label) or `in_set`
+    (multi-intent gold, J picked one of the stated intents).
+  - **Incorrect fill:** J outcome `wrong` (single-label gold, another label), `wrong_commit`
+    (gold `none`, J committed to a label), `commit_in_candidates` or
+    `commit_outside_candidates` (ambiguous gold, J committed) or `out_of_set` (multi-intent
+    gold, J outside the set).
+  - **Missed fill:** a single-label gold where J answered `none` (`predicted_none`). This is
+    neither a correct nor an incorrect fill.
+  - J `none` on gold `none` (`correct_none`) and J `none` on an ambiguous gold are not fills.
+    No label is committed.
+- **Filter-outcome view (hypothetical).** This shows what a label would mean as a search
+  constraint. On gold `none`, a D abstention applies no constraint, which is the correct
+  no-filter behaviour, even though the scorer counts it as `abstain`. Nothing here was applied
+  to search: `fp-1` and every endpoint are unchanged.
+
+**Zero incorrect fills, checked.** In every `per_query` row where D returned no decision, J's
+outcome was checked against the incorrect-fill set above. The count was 0 for category (20
+scored D abstentions) and 0 for intent (28 scored D abstentions). That matches `incorrect_fills`
+in the report.
+
+### Category (35 scored queries)
+
+| Gold | n | D | J |
+|---|---|---|---|
+| Single category | 30 | 15 correct, 15 abstain, 0 wrong | 28 correct, 2 `none`, 0 wrong |
+| `none` | 3 | 3 abstain (correct no-filter) | 3 `correct_none` |
+| `ambiguous` | 2 | 2 abstain | 2 `none` (no commit) |
+
+- **Fills (D abstains, 20 scored):** of the 15 single-category golds, 13 were correct fills, 2
+  were missed fills and none were incorrect. J answered `none` on all 3 gold-`none` queries and
+  both ambiguous queries.
+- **Both decided:** 15 queries, all single-category. D and J agreed on all 15 and both were
+  correct.
+- **Filter-outcome view:**
+  - D alone gives 15 correct filters, 3 correct no-filters, 15 missed single-category filters,
+    2 ambiguous queries without a filter and 0 wrong filters.
+  - D first with J on D's abstentions would give 28 correct filters, 3 correct no-filters, 2
+    missed, 2 ambiguous without a filter and 0 wrong filters.
+
+### Semantic intent (34 scored queries)
+
+| Gold | n | D | J |
+|---|---|---|---|
+| Single intent | 11 | 4 correct, 1 wrong, 6 abstain | 7 correct, 1 wrong, 3 `none` |
+| `none` | 18 | 17 abstain (correct no-filter), 1 `wrong_commit` | 17 `correct_none`, 1 `wrong_commit` |
+| `multi` | 5 | 5 abstain | 5 `in_set` |
+
+- **Fills (D abstains, 28 scored):**
+  - Of the 6 single-intent golds, 4 were correct fills and 2 were missed fills.
+  - All 5 multi-intent golds were `in_set` fills.
+  - All 17 gold-`none` queries got `correct_none`.
+  - There were no incorrect fills.
+- **Both decided (6):** D was correct on 4, `wrong` on 1 and `wrong_commit` on 1. J agreed with D
+  on 5 of them, including the same `wrong` and `wrong_commit`. The one disagreement is `dq-027`,
+  where D was correct and J answered `none`.
+- **Wrong commits are not fills.** J's single `wrong` and single `wrong_commit` were both on
+  queries D had already decided, with the same label. Deterministic-first gating would not have
+  consulted J there and could not have corrected them.
+- **Single-intent correctness and multi-intent selection are separate measures.** An `in_set`
+  answer chose one of the stated intents. It does not capture all of them and is not counted as
+  single-intent correctness.
+- **Filter-outcome view:**
+  - D alone gives 4 correct single-intent filters, 17 correct no-filters, 2 wrong filters (1
+    `wrong`, 1 `wrong_commit`), 6 missed single-intent filters and 5 multi-intent queries
+    without a filter.
+  - D first with J on D's abstentions would give 8 correct single-intent filters, 5 multi-intent
+    in-set selections, 17 correct no-filters, 2 missed, and the same 2 wrong filters.
+
+### Conclusion
+
+- **Signal.** This development batch shows a promising category-coverage signal. Where the
+  parser abstained, Jev filled 13 of 15 single-category queries correctly with no incorrect
+  fills.
+- **Not established.** These are counts from one run over 40 AI-authored queries labelled by
+  one annotator, with no intervals or repeats. The 13 correct fills are not a reliability
+  guarantee. The run establishes no:
+  - search-relevance improvement (no retrieval was run);
+  - calibrated gate or threshold;
+  - production reliability;
+  - repeat stability (each query was sent once).
+- **Unchanged.** M12 remains in progress. `jq-1`, `fp-1`, every endpoint, `.env` and the
+  default search behaviour are unchanged.

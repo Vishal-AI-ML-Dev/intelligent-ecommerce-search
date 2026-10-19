@@ -64,9 +64,14 @@ Development is organized milestone by milestone. See
     cancellation behaviour; server-side cancellation and billing behaviour; quality improvement,
     calibration and latency distributions.
   - See `docs/jev-provider-m11.md`.
-- M12–M27: not started. This includes the Jev V4 experiment (M12), Buyer RAG, Return
-  Intelligence, human review (HITL), the dual frontend and marketplace integration. M27 is
-  optional.
+- M12 (Jev V4 experiment): in progress.
+  - Built: offline tooling for the diagnostic batch.
+  - Run: one live development diagnostic run (`live-001`, 2026-10-19) over 40 AI-authored
+    queries labelled by one human annotator. It is not held-out evidence.
+  - Unchanged: `fp-1` and every endpoint.
+  - See `docs/m12-diagnostic-tooling.md`.
+- M13–M27: not started. This includes Buyer RAG, Return Intelligence, human review (HITL), the
+  dual frontend and marketplace integration. M27 is optional.
 
 Milestone 1 (Foundation): typed settings, FastAPI app with `GET /health`,
 PostgreSQL 16 + pgvector via Docker Compose, SQLAlchemy 2 (sync) with psycopg 3,
