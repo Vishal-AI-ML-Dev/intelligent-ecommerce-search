@@ -16,9 +16,14 @@
   other live diagnostic call is approved.
 - **Unchanged:** `jq-1`, `fp-1`, every endpoint, `.env`, the reranker settings and the default
   search behaviour.
+- **Offline category-gate tooling (2026-10-19, owner-approved scope):** partition contracts and
+  seals, category-only metrics, a frozen-threshold artifact, a pure shadow gate and an
+  acceptance scorer with configurable criteria. See
+  [Category-only gate tooling](#category-only-gate-tooling-offline). No partition, threshold or
+  acceptance report exists on real data, and the shadow gate is used by no endpoint.
 - **Not built:**
-  - hard filters or `fp-2`;
-  - gates, thresholds or fitted calibration;
+  - hard filters or `fp-2`, and any gate applied to search;
+  - a chosen threshold, fitted calibration or approved acceptance criteria;
   - main-set authoring;
   - a bootstrap or McNemar framework;
   - counterfactual retrieval.
@@ -27,7 +32,8 @@ The diagnostic batch is **development evidence only, never held-out evidence**. 
 question set, the rubric or the gate design is allowed only at this stage. The later evaluation
 partition is authored and sealed separately.
 
-Code: `evals/query_decisions/` (`contracts`, `labeling`, `runner`, `evaluate`, `cli`).
+Code: `evals/query_decisions/` (`contracts`, `labeling`, `runner`, `evaluate`, `cli`; category
+gate tooling in `partitions`, `gate`, `category_metrics`, `acceptance`).
 Tests: `tests/unit/query_decisions/` (synthetic fixtures only, fully mocked, no network).
 
 ## Workflow
@@ -423,3 +429,65 @@ in the report.
   - repeat stability (each query was sent once).
 - **Unchanged.** M12 remains in progress. `jq-1`, `fp-1`, every endpoint, `.env` and the
   default search behaviour are unchanged.
+
+## Category-only gate tooling (offline)
+
+Library functions only (no CLI yet). Every value that the draft proposal below suggests (sizes,
+threshold grid, acceptance floors) is **not** built in: thresholds and criteria are supplied by
+the operator and frozen, and none has a default.
+
+- **Partitions (`partitions.py`, `qd-part-1`).** A calibration or evaluation partition selects
+  query ids from sealed batches and is written once to `partitions/<id>.json`.
+  - Members are bound by their batch's queries and labels hashes, query id and the SHA-256 of the
+    normalized text. No query text or label is copied.
+  - `screening="parser_abstains_on_category"` admits only queries where `qu-1` gives no
+    category. It is checked again when members are resolved, so a parser change that breaks it
+    is refused.
+  - `check_disjoint` refuses a calibration and evaluation pair that shares a member or a
+    normalized text, including across batches.
+  - Resolving members needs exactly the partition's source batches. Each member must be found
+    unchanged, and runs must belong to their batch.
+  - A partition must be sealed strictly after every source batch seal, checked when it is built
+    and again when its members are resolved. This compares recorded timestamps only.
+- **Shadow gate (`gate.py`, `cg-shadow-1`).** A pure function over the deterministic parse and a
+  recorded `JevOutcome`. The parser's category always wins. Otherwise Jev's unique top category
+  is accepted when it is not `none` and its raw probability is at least the frozen threshold.
+  - A Jev `none`, a tie, a fallback, a missing outcome or a lower probability applies nothing.
+  - It returns a `GateDecision` record only. It reads and builds no `FilterSpec`, nothing in
+    `src/` imports it, and `fp-1` still refuses any Jev-provider decision (tested).
+  - The raw probability is used as returned. It is not a calibrated gate confidence (FR-DEC-5).
+- **Frozen threshold (`qd-threshold-1`).** Written once to `thresholds/<id>.json`. It binds the
+  calibration partition's file SHA-256, the model, the question set, the threshold and the
+  acceptance criteria. Loading refuses a calibration partition whose bytes changed.
+- **Metrics (`category_metrics.py`).** For the deterministic parser, Jev and the shadow gate:
+  outcome counts, single-category accuracy and coverage, a confusion matrix, per-category
+  precision, recall and F1, macro F1, ambiguous-gold outcomes, and unclear golds counted only.
+  `threshold_sweep` scores only thresholds the caller supplies; it selects nothing.
+- **Acceptance (`acceptance.py`, `qd-acceptance-1`).** Scores one frozen threshold on one
+  evaluation partition with exact one-sided Clopper–Pearson bounds.
+  - It refuses overlapping partitions, a run whose model or question set differs from the
+    threshold, and any evaluation member dispatched at or before the threshold was frozen.
+  - Outcomes: `insufficient_evidence` (missing, incomplete or blocked run; run-issue or unclear
+    rate above its maximum; too few accepted fills; no coverage denominator), then `fail`
+    (wrong-commit upper bound or coverage outside its criterion), else `pass`.
+  - A pass means only a candidate soft gate for a later retrieval experiment on that sampled
+    design. It is not a production decision, a hard filter or held-out evidence.
+  - `confirm_acceptance` records each confirmation before writing its report
+    (`consumption/<content-sha256>.json`, then `acceptance/<threshold-id>.json`, each all or
+    nothing). Evaluation data is identified by the SHA-256 of its canonical partition members,
+    not by partition id or path, so a renamed or re-created partition is the same data.
+  - Refused: evaluation data, any member or any normalized text already consumed by a different
+    confirmation (a different threshold file, content or run hashes); a threshold already used
+    for a different confirmation; a report without its record; a stored report that differs
+    from the recomputed one.
+  - An identical repeat writes nothing and returns the stored report. An interruption between
+    the record and the report is completed by an identical repeat. An interruption inside a
+    write leaves a staging directory that blocks every later write in the root until a person
+    inspects it.
+  - **Enforcement boundary:** records live in the work root. Reuse is detected only among
+    confirmations recorded in the same root; scoring a copy in another root, or after deleting a
+    record, is not detected. Beyond that root the one-confirmation rule is procedural.
+- **Verification (2026-10-19):** focused M12 tests (`pytest tests/unit/query_decisions`)
+  149 passed, exit 0 (synthetic and mocked only). Ruff on the new modules and tests: clean
+  after `ruff format` fixed one over-long line; the tests were not re-run after that
+  formatting-only change. Not run: the full unit suite and integration tests.
