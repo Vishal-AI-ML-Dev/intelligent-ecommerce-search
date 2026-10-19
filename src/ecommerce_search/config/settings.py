@@ -25,6 +25,8 @@ from ecommerce_search.reranking.spec import (
 
 # A versioned Jev model id; the moving aliases (`jev-latest`, `jev-preview`, `jev`) are rejected.
 _JEV_PINNED_MODEL = re.compile(r"jev-\d+\.\d+\.\d+")
+# The only model experimental V4 may call (the M12 diagnostic and calibration runs used it).
+V4_JEV_MODEL = "jev-1.13.0"
 
 
 def _secret_input_names(fields: dict[str, FieldInfo]) -> frozenset[str]:
@@ -181,6 +183,12 @@ class Settings(BaseSettings):
     # Calls in flight at once (including cancelled calls still unwinding); extra calls fall back.
     jev_max_in_flight: int = Field(default=8, ge=1, le=64)
 
+    # Experimental V4 (`/search/routed`, Milestone 12): explicit opt-in to live Jev calls from that
+    # route only. Off by default; while off, V4 returns the V3 baseline and builds no provider.
+    # When on, the key is required and the model must be the approved pin; V4 always calls with
+    # retries 0 and one call in flight (`v4_jev_config`). Independent of `jev_enabled`.
+    search_v4_jev_enabled: bool = False
+
     @field_validator(
         "reranker_batch_size",
         "search_rerank_depth",
@@ -259,7 +267,7 @@ class Settings(BaseSettings):
             raise ValueError("jev_base_url must be a plain https URL")
         return value.rstrip("/")
 
-    @field_validator("reranker_enabled", "jev_enabled", mode="before")
+    @field_validator("reranker_enabled", "jev_enabled", "search_v4_jev_enabled", mode="before")
     @classmethod
     def _strict_boolean(cls, value: object) -> object:
         # Only a real bool or the words true/false (any case); no 1/0, yes/no, on/off.
@@ -319,6 +327,10 @@ class Settings(BaseSettings):
     def _jev_is_configured_consistently(self) -> "Settings":
         if self.jev_enabled and self.typesafe_api_key is None:
             raise ValueError("typesafe_api_key is required when jev_enabled is true")
+        if self.search_v4_jev_enabled and self.typesafe_api_key is None:
+            raise ValueError("typesafe_api_key is required when search_v4_jev_enabled is true")
+        if self.search_v4_jev_enabled and self.jev_model != V4_JEV_MODEL:
+            raise ValueError(f"search_v4_jev_enabled requires jev_model {V4_JEV_MODEL}")
         # Every configured retry must stay reachable after a timed-out attempt plus its backoff;
         # otherwise the budget would silently cancel retries that the configuration asks for.
         needed = self.jev_max_retries * (self.jev_attempt_timeout_seconds + JEV_BACKOFF_MAX_SECONDS)
@@ -333,6 +345,22 @@ class Settings(BaseSettings):
         if self.jev_retry_budget_seconds > self.jev_deadline_seconds:
             raise ValueError("jev_retry_budget_seconds must not exceed jev_deadline_seconds")
         return self
+
+    def v4_jev_config(self) -> JevConfig | None:
+        """The experimental V4 Jev configuration (retries 0, one call in flight), or None while
+        V4 Jev routing is off."""
+        if not self.search_v4_jev_enabled or self.typesafe_api_key is None:
+            return None
+        return JevConfig(
+            api_key=self.typesafe_api_key,
+            model=self.jev_model,
+            base_url=self.jev_base_url,
+            attempt_timeout_seconds=self.jev_attempt_timeout_seconds,
+            max_retries=0,
+            retry_budget_seconds=self.jev_retry_budget_seconds,
+            deadline_seconds=self.jev_deadline_seconds,
+            max_in_flight=1,
+        )
 
     def jev_config(self) -> JevConfig | None:
         """The Jev provider configuration, or None while Jev is disabled."""

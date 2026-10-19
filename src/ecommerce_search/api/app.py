@@ -10,6 +10,8 @@ from ecommerce_search.api.filtered import router as filtered_router
 from ecommerce_search.api.health import router as health_router
 from ecommerce_search.api.hybrid import router as hybrid_router
 from ecommerce_search.api.reranked import router as reranked_router
+from ecommerce_search.api.routed import LazyJevProvider
+from ecommerce_search.api.routed import router as routed_router
 from ecommerce_search.api.search import router as search_router
 from ecommerce_search.config import Settings, get_settings
 from ecommerce_search.db.engine import create_db_engine, create_session_factory
@@ -55,6 +57,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            if app.state.v4_jev_provider is not None:
+                app.state.v4_jev_provider.close()
             engine.dispose()
             logger.info("engine disposed")
 
@@ -71,10 +75,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings.reranker_spec(), reranker_models_dir, batch_size=settings.reranker_batch_size
         )
     )
+    # Experimental V4 only, and only with SEARCH_V4_JEV_ENABLED=true: the Jev provider is built by
+    # the first request that needs it (no thread, SDK import or call at start-up).
+    v4_config = settings.v4_jev_config()
+    app.state.v4_jev_provider = None if v4_config is None else LazyJevProvider(v4_config)
     app.include_router(health_router)
     app.include_router(search_router)
     app.include_router(dense_router)
     app.include_router(hybrid_router)
     app.include_router(filtered_router)
     app.include_router(reranked_router)
+    app.include_router(routed_router)
     return app

@@ -583,3 +583,84 @@ class RerankedSearchResponse(BaseModel):
     query_understanding: FilteredQueryUnderstandingBlock
     reranker: RerankerBlock
     latency_ms: RerankedSearchLatency
+
+
+# ---- experimental Jev-routed search (Milestone 12, V4) ----------------------------------------
+
+
+class RoutedSearchRequest(RerankedSearchRequest):
+    """Body of `POST /search/routed`. Same validation as `GET /search/routed`."""
+
+
+JevRoutingStatus = Literal[
+    "disabled",
+    "skipped_no_searchable_text",
+    "skipped_deterministic_category",
+    "skipped_category_conflict",
+    "jev_fallback",
+    "jev_no_category",
+    "routed",
+]
+
+
+class JevRoutingBlock(BaseModel):
+    """What experimental V4 asked Jev and whether the Jev-scoped branch was used."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    experimental: Literal[True] = Field(
+        description="Always true: V4 routing is an unvalidated experiment, not a default."
+    )
+    routing_version: Literal["jr-1"]
+    gate: Literal["none_validated"] = Field(
+        description="No confidence threshold has been validated; no gate is applied and the "
+        "probability below is recorded only."
+    )
+    status: JevRoutingStatus = Field(
+        description="`disabled`: V4 Jev routing is off by configuration. `skipped_*`: Jev was "
+        "not asked (no searchable text, the parser gave a category, or the parser reported a "
+        "category conflict). `jev_fallback`: the call failed or was refused; V3 is returned. "
+        "`jev_no_category`: Jev's top category was `none` or tied; V3 is returned. `routed`: the "
+        "Jev-scoped branch was added. Every status except `routed` returns the V3 ranking."
+    )
+    jev_called: bool
+    routing_used: bool
+    routed_category: str | None = Field(description="Jev's category that scoped the branch.")
+    fallback_reason: str | None = Field(description="The provider's fixed fallback reason.")
+    model: str | None = Field(description="The pinned Jev model asked; null when not asked.")
+    jev_latency_ms: float | None = Field(description="Provider-measured call time.")
+    raw_top_category_probability: float | None = Field(
+        description="Jev's raw provider probability of its unique top category label. Not "
+        "calibrated, not a confidence and never used to decide anything."
+    )
+    routed_filters: list[AppliedFilter] = Field(
+        description="Filters of the extra branch: the deterministic fp-1 filters plus Jev's "
+        "category. They scope only the branch, never the combined result."
+    )
+    routed_lexical_hit_count: int | None
+    routed_dense_hit_count: int | None
+
+
+class RoutedSearchResult(RerankedSearchResult):
+    routed_lexical_rank: int | None = Field(
+        description="Rank in the Jev-scoped lexical branch; null when not found there."
+    )
+    routed_dense_rank: int | None = Field(
+        description="Rank in the Jev-scoped dense branch; null when not found there."
+    )
+    in_baseline_sources: bool = Field(
+        description="Whether the V3 sources found this product (false: branch only)."
+    )
+
+
+class RoutedSearchLatency(RerankedSearchLatency):
+    jev_decision_ms: float | None = Field(
+        description="Wall time of the Jev call in this request; null when Jev was not asked."
+    )
+
+
+class RoutedSearchResponse(RerankedSearchResponse):
+    search_version: Literal["v4_jev_routed_experimental"]  # type: ignore[assignment]
+    results: list[RoutedSearchResult]  # type: ignore[assignment]
+    latency_ms: RoutedSearchLatency  # type: ignore[assignment]
+    jev_routing: JevRoutingBlock

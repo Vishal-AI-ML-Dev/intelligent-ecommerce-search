@@ -1560,7 +1560,7 @@ def test_frozen_operations_and_components_are_byte_identical_to_head(make_settin
     frozen = frozen_openapi(schema)
     blob = json.dumps(frozen, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     assert hashlib.sha256(blob.encode()).hexdigest() == HEAD_FROZEN_DIGEST
-    assert set(schema["paths"]) == {*FROZEN_PATHS, PATH}
+    assert set(schema["paths"]) == {*FROZEN_PATHS, PATH, "/search/routed"}  # + experimental V4
     v3_only = {
         "RerankedSearchRequest",
         "RerankedSearchResponse",

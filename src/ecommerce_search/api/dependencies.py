@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -30,6 +30,13 @@ def get_decision_provider(request: Request) -> DecisionProvider:
     """The application's single decision provider (used by /search/hybrid, /search/filtered and
     /search/reranked)."""
     return request.app.state.decision_provider
+
+
+def get_v4_jev_provider(request: Request) -> Callable[[], DecisionProvider] | None:
+    """Experimental V4 only: a getter of the lazily built Jev provider, or None while
+    `SEARCH_V4_JEV_ENABLED` is off. Getting it never calls Jev."""
+    holder = request.app.state.v4_jev_provider
+    return None if holder is None else holder.get
 
 
 def get_reranker(request: Request) -> RerankerProvider | None:
