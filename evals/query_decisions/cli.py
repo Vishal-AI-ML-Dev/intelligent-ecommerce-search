@@ -13,7 +13,9 @@ Commands (the work directory defaults to the git-ignored `data/processed/m12_dia
   queries in a live run (required when the batch has any). It does not authorize paid calls.
   Batches with synthetic test fixtures are refused live even with it.
 * `run ... --resume-approved`: continue a run blocked by a stop or an unknown outcome.
-* `evaluate --run-id ID [--out FILE]`: offline diagnostic report (JSON).
+* `evaluate --run-id ID [--out FILE]`: offline diagnostic report (JSON, `qd-diagnostic-2`).
+* `report --run-id ID [--out FILE] [--bins N]`: offline metrics report (JSON, `qd-report-1`):
+  category and intent metrics, raw-probability diagnostics, latency and estimated cost.
 """
 
 import argparse
@@ -58,6 +60,10 @@ def _parser() -> argparse.ArgumentParser:
     evaluate = commands.add_parser("evaluate")
     evaluate.add_argument("--run-id", required=True)
     evaluate.add_argument("--out", type=Path)
+    report = commands.add_parser("report")
+    report.add_argument("--run-id", required=True)
+    report.add_argument("--out", type=Path)
+    report.add_argument("--bins", type=int, default=10)
     return parser
 
 
@@ -72,16 +78,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"sealed {seal.query_count} queries; labels {seal.labels_sha256}")
         elif args.command == "run":
             return _run(args)
+        elif args.command == "report":
+            from evals.query_decisions.reporting import build_report
+
+            _emit(build_report(args.work_dir, args.run_id, bins=args.bins), args.out)
         else:
             from evals.query_decisions.evaluate import evaluate
 
-            report = json.dumps(evaluate(args.work_dir, args.run_id), indent=2, sort_keys=True)
-            if args.out is None:
-                print(report)
-            else:
-                with open(args.out, "x", encoding="utf-8", newline="\n") as handle:
-                    handle.write(report + "\n")
-                print(f"report written to {args.out}")
+            _emit(evaluate(args.work_dir, args.run_id), args.out)
     except (ContractError, QueryDecisionError, ValueError, FileExistsError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
@@ -89,6 +93,16 @@ def main(argv: list[str] | None = None) -> int:
         print("error: jev configuration invalid", file=sys.stderr)
         return 2
     return 0
+
+
+def _emit(report: dict, out: Path | None) -> None:
+    text = json.dumps(report, indent=2, sort_keys=True)
+    if out is None:
+        print(text)
+        return
+    with open(out, "x", encoding="utf-8", newline="\n") as handle:  # never overwrites
+        handle.write(text + "\n")
+    print(f"report written to {out}")
 
 
 def _run(args: argparse.Namespace) -> int:

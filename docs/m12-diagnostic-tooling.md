@@ -491,3 +491,37 @@ the operator and frozen, and none has a default.
   149 passed, exit 0 (synthetic and mocked only). Ruff on the new modules and tests: clean
   after `ruff format` fixed one over-long line; the tests were not re-run after that
   formatting-only change. Not run: the full unit suite and integration tests.
+
+## Offline metrics report (`report`, `qd-report-1`)
+
+`python -m evals.query_decisions report --run-id ID [--out FILE] [--bins N]` builds a report for
+one run over one sealed batch (`reporting.py`). It makes no call, contains no timestamps (same
+inputs, same bytes) and writes only `--out`, which it never overwrites. `evaluate`
+(`qd-diagnostic-2`) is unchanged, and the saved `live-001` files were not regenerated.
+
+- **Run:** attempts, results, valid results, fallbacks by reason, unknown outcomes and
+  unattempted queries, each counted separately.
+- **Category and intent metrics** for the deterministic parser and for Jev. Unclear golds are
+  counted, never scored. `none` is a decision; an abstention is not.
+  - Intent keeps single intent (correct, wrong, `predicted_none`, abstain), gold `none`
+    (`correct_none`, `wrong_commit`, abstain), multi-intent (`in_set`, `out_of_set`,
+    `predicted_none`, abstain) and ambiguous golds apart, with a confusion matrix and
+    per-intent precision, recall and F1.
+- **Raw category-probability diagnostics.** These describe raw provider probabilities, **not
+  calibrated confidence**.
+  - Eligible: single-label golds (a category or `none`) with a valid outcome. Ambiguous,
+    multi and unclear golds, fallbacks, unknown outcomes and unattempted queries are excluded
+    and counted; no score is invented for them.
+  - Brier score: the mean over eligible queries of the sum over the five labels of
+    (p - y)^2; range 0 to 2.
+  - Reliability: confidence is the highest raw probability; queries with a tied top are left
+    out of the bins and counted. `--bins` equal-width bins (default 10, a reporting choice).
+    ECE is the sum over non-empty bins of n_bin / n times |accuracy - mean probability|.
+- **Latency:** provider-measured `latency_ms` of recorded outcomes, for all results and for
+  valid results: n, min, max, mean and p50/p90/p95/p99 by the nearest-rank method
+  (1-based rank ceil(q * n)). Attempts without an outcome have no timing and are counted. One
+  sequential run is not a latency benchmark.
+- **Usage and cost:** returned token counts and an estimate from the prices in `run.json`; not
+  billing data. Attempts with unknown usage are counted. The per-1,000-attempt figure counts
+  them at zero (a lower estimate), and a second figure covers attempts with returned usage
+  only. A run without recorded prices has no cost estimate.

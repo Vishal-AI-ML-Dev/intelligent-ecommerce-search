@@ -40,6 +40,7 @@ from evals.query_decisions.contracts import (
     CategoryGold,
     DecisionQuery,
     DecisionQueryId,
+    IntentGold,
     QueryDecisionError,
 )
 from evals.query_decisions.labeling import load_sealed
@@ -143,11 +144,17 @@ class MemberRecord:
     run: RunHeader | None
     run_complete: bool
     run_blocked_by: str | None
+    intent_gold: IntentGold | None = None
 
     @property
     def deterministic_category(self) -> str | None:
         category = self.deterministic.category
         return None if category is None else category.value
+
+    @property
+    def deterministic_intent(self) -> str | None:
+        intent = self.deterministic.semantic_intent
+        return None if intent is None else intent.value
 
 
 def text_sha256(text: str) -> str:
@@ -265,7 +272,7 @@ def resolve_members(seal: PartitionSeal, batches: Sequence[BatchRun]) -> tuple[M
             raise QueryDecisionError("a batch is listed twice")
         loaded[key] = (
             {query.query_id: query for query in queries},
-            {label.query_id: label.category for label in labels},
+            {label.query_id: label for label in labels},
             _run_state(batch, key),
         )
     needed = {(m.source_queries_sha256, m.source_labels_sha256) for m in seal.members}
@@ -288,7 +295,7 @@ def resolve_members(seal: PartitionSeal, batches: Sequence[BatchRun]) -> tuple[M
             MemberRecord(
                 member=member,
                 query=query,
-                category_gold=golds[member.query_id],
+                category_gold=golds[member.query_id].category,
                 deterministic=parsed,
                 outcome=None if state is None else state.results.get(member.query_id),
                 attempted=state is not None and member.query_id in state.dispatched,
@@ -296,9 +303,40 @@ def resolve_members(seal: PartitionSeal, batches: Sequence[BatchRun]) -> tuple[M
                 run=header,
                 run_complete=state is not None and state.complete,
                 run_blocked_by=None if state is None else state.blocked_by,
+                intent_gold=golds[member.query_id].semantic_intent,
             )
         )
     return tuple(records)
+
+
+def batch_records(work_dir: Path, run_id: str | None) -> tuple[MemberRecord, ...]:
+    """Every sealed query of one batch as a record (for whole-batch reports, not a partition)."""
+    seal, queries, labels = load_sealed(work_dir)
+    header, state, dispatched_at = _run_state(
+        BatchRun(work_dir, run_id), (seal.queries_sha256, seal.labels_sha256)
+    )
+    by_id = {label.query_id: label for label in labels}
+    return tuple(
+        MemberRecord(
+            member=PartitionMember(
+                source_queries_sha256=seal.queries_sha256,
+                source_labels_sha256=seal.labels_sha256,
+                query_id=query.query_id,
+                text_sha256=text_sha256(query.text),
+            ),
+            query=query,
+            category_gold=by_id[query.query_id].category,
+            deterministic=parse_normalized_query(query.text),
+            outcome=None if state is None else state.results.get(query.query_id),
+            attempted=state is not None and query.query_id in state.dispatched,
+            dispatched_at=dispatched_at.get(query.query_id),
+            run=header,
+            run_complete=state is not None and state.complete,
+            run_blocked_by=None if state is None else state.blocked_by,
+            intent_gold=by_id[query.query_id].semantic_intent,
+        )
+        for query in queries
+    )
 
 
 def _check_after_source(partition_sealed_at: datetime, source_sealed_at: datetime) -> None:
