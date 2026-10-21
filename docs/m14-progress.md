@@ -1,17 +1,17 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. M14-1 (Contracts & Questions) is implemented and uncommitted (2026-10-21).**
-M14 is not complete. No provider adapter, routing, dataset preparation, live call or evaluation
-exists. Nothing is staged or committed.
+Status: **in progress. M14-2 (Jev listing provider) is implemented with mocked tests only and is
+uncommitted (2026-10-21).** M14-1 is committed as `be2cdf3`. M14 is not complete. No routing,
+dataset preparation, live call or evaluation exists. M14-3 has not started.
 
 ## Batches
 
 | Batch | Scope | State |
 |---|---|---|
 | M14-0 | External dataset coverage probes and source selection (scratch only, no repo edits) | Done (previous session) |
-| M14-1 | Offline contracts, `jl-1` questions/state builder, provider Protocol, deterministic baseline | **Implemented, uncommitted** |
-| M14-2 | Jev listing provider adapter | Not started; needs approval |
-| later | Routing, data preparation, evaluation | Not started; each needs approval |
+| M14-1 | Offline contracts, `jl-1` questions/state builder, provider Protocol, deterministic baseline | Done, committed `be2cdf3` |
+| M14-2 | Jev listing provider adapter (mocked transport only) | **Implemented, mocked tests pass, uncommitted** |
+| M14-3 and later | Routing, data preparation, evaluation | Not started; each needs approval |
 
 ## Approved scope (owner, 2026-10-21)
 
@@ -198,11 +198,127 @@ All commands were run on 2026-10-21 with `uv run --offline`. Only the files abov
   - The HDD-only laptop exclusion rule needs correction during data preparation.
   - All M14-0 retained counts remain provisional until that preparation is approved.
 
+## M14-2 implementation (2026-10-21)
+
+| File | Change |
+|---|---|
+| `src/ecommerce_search/decision/jev_listing_provider.py` | New: `JevListingDecisionProvider`, which implements `ListingDecisionProvider` (`decide(state) -> ListingDecisionOutcome`) |
+| `src/ecommerce_search/decision/jev_provider.py` | Behaviour-preserving refactor: the submit-and-wait step of `_outcome` moved into `_send`, which raises a new private `_CallFallback(reason, request_id)`; `_Call.query` renamed `_Call.state` |
+| `tests/unit/listing_decisions/test_jev_listing_provider.py` | New: 45 mocked tests |
+
+Not changed: `decision/__init__.py`, settings and config, `listing_models.py`,
+`listing_questions.py` (so the `jl-1` digest is unchanged), `listing_provider.py`, the M12
+proposal, and the M11 tests. Nothing builds the provider from settings, and nothing calls it.
+
+### Design
+
+- **Two `system_one` Choice calls per listing:**
+  - **Call A** goes over `model_inputs(state)["listing_text"]`, which is exactly the raw title
+    and description. It asks `category` and `subcategory`.
+  - **Call B** goes over `model_inputs(state)["listing_claims"]`. It asks one
+    `attribute_support[<ordinal>]` question per asked claim. Its input is the same title and
+    description plus the asked claims only, each as `{field, value}`. The text is included
+    because a support question is answered against it; this is the input shape `jl-1` pinned in
+    M14-1.
+  - Call B is skipped when the state asks no claim.
+- **Unchanged `jl-1` wording:** instructions and criteria come from `listing_questions.questions`.
+  The adapter adds no wording.
+- **Reuse of M11:** the adapter wraps a `JevDecisionProvider`. It reuses that provider's event
+  loop, client, retry policy, admission (`max_in_flight`), error-to-reason mapping, and `_choice`
+  validation. `_choice` checks closed label sets, the probability-sum tolerance and the
+  `TOP_TIE_TOLERANCE` tie rule. None of this logic was copied.
+- **Deadline:** `deadline_seconds` bounds the whole `decide()` call. Call B gets only the time
+  left after call A.
+- **All-or-nothing validation:**
+  - Each response must answer exactly its call's questions. An unasked, omitted or unknown
+    ordinal, a missing answer, or a question from the other call is rejected.
+  - The response must name the configured model, otherwise `model_mismatch`.
+  - Every answer must use exactly its closed label set: no out-of-set choice, and no missing or
+    extra label.
+  - Token counts must be non-negative integers.
+  - The built outcome is re-checked with `validate_outcome`.
+  - Any failure in either call (HTTP or transport error, deadline, saturation, closed provider,
+    invalid response) returns a `jev` outcome with a `fallback_reason` and **no proposal**. Valid
+    answers from call A are discarded when call B fails.
+- **Labels:**
+  - A label is set only for a unique top label that is not `none` (category and subcategory).
+  - A tie within `TOP_TIE_TOLERANCE`, or a `none` answer, carries no label.
+  - Support labels are `supported`, `contradicted` and `not_stated`. A support tie carries no
+    label.
+- **Ordering:** `attribute_support` follows the state's ascending ordinal order, whatever order
+  the response used.
+- **Confidence:** `provider_confidence` is the provider's own number. `gate_confidence` stays
+  `None`. No calibration is claimed.
+- **Telemetry:**
+  - Token counts are summed over the calls made. A total is `None` unless every call reported
+    its count.
+  - `request_id` holds the request ids joined by `,` in call order, because the M14-1 contract
+    has a single field.
+- **Logging:** `jev_listing_decision` logs labels, probabilities, claim ordinals and
+  `state_sha256`. It never logs the key, listing text, claim values or exception text.
+
+### Commands and results (2026-10-21, `uv run --offline`)
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/search/test_jev_provider.py tests/unit/search/test_decision_provider.py tests/unit/search/test_query_understanding_contract.py` (after the `jev_provider.py` refactor, before any new code) | **138 passed** |
+| `ruff format` / `ruff check` (the two source files) | 1 file reformatted; **All checks passed** |
+| `pytest tests/unit/listing_decisions/test_jev_listing_provider.py` (first run) | 43 passed, 1 failed. An invalid token count in call A was only detected after call B had been sent. Fixed: usage is now validated per response, so call B is never made after an invalid call A. |
+| `pytest tests/unit/listing_decisions/test_jev_listing_provider.py` | **44 passed**; then **45 passed** after adding the shared-deadline test |
+| `pytest tests/unit/listing_decisions tests/unit/normalization tests/unit/search/test_decision_provider.py tests/unit/search/test_jev_provider.py tests/unit/search/test_query_understanding_contract.py` | **603 passed** in 19.73 s (the M14-1 set of 558 plus 45 new). This includes the unchanged M11 Jev tests and the M14-1 offline subprocess check. |
+| `ruff check` / `ruff format --check` (the 3 touched Python files) | **All checks passed**; **3 files already formatted** |
+
+**Not run:**
+- `tests/unit/test_unit_isolation.py` (the whole-unit-suite subprocess run, about 15 minutes);
+- integration tests;
+- any live or Jev call;
+- any database operation.
+
+### What the tests cover
+
+- **Request payloads:**
+  - call A: the exact state, questions, instructions and criteria;
+  - call B: the exact claims, one support question per asked claim, and the support labels.
+- **What is never sent:**
+  - omitted and numeric candidates;
+  - hidden target metadata (`Occasion`, category path), seller identity, price and seller
+    category, which appear in no request.
+- **Zero claims:** a listing with no asked claim makes one call only.
+- **Invalid answers:**
+  - an out-of-set category or subcategory, or an extra or missing label;
+  - an invalid support label;
+  - an answer for an omitted, unknown or unasked ordinal, or a missing asked claim;
+  - questions answered in the wrong call;
+  - invalid token counts;
+  - a model mismatch on either call;
+  - unparseable bodies.
+- **Ties and `none`:** the category tie boundaries at the M11 tolerance (equal, within, beyond);
+  subcategory and support ties; `none` answers.
+- **Order:** the output order is the same whatever order the response used.
+- **Failures:** HTTP failures on call A (call B skipped) and on call B (call A's answers
+  discarded), transport errors, a closed provider (nothing sent), and the shared deadline.
+- **Logs and reprs:** the key and listing text never appear.
+
+### M14-2 limitations
+
+- **Mocked only:**
+  - No real model has seen a `jl-1` question.
+  - Response shapes are the SDK's documented shapes replayed through `httpx2.MockTransport`,
+    not observed live responses.
+  - Answer quality, latency and cost are unmeasured.
+- **Number of calls:** two calls per listing doubles admission slots, latency and request count
+  compared with one call. A single-call shape was not evaluated.
+- **Private reuse:** the adapter uses the private M11 internals `_send`, `_choice`,
+  `_CallFallback` and `_InvalidResponse` within the `decision` package. Changes to those
+  internals now affect both providers.
+- **`request_id` is a joined string:** the field holds `,`-joined ids, not a single request id.
+- **Inherited from M11:** the probability-sum and tie tolerances (`1e-3`, `1e-9`) remain
+  provisional.
+- **Not built:** prompt-injection resistance is not demonstrated, and no routing, persistence or
+  evaluation exists.
+
 ## Next batch (needs explicit approval)
 
-M14-2: Jev listing provider adapter.
-- Map `jl-1` `QuestionSpec`s and `model_inputs` to the SDK, with mocked transport only.
-- Fall back to the deterministic baseline.
-- No live calls without a separate approval covering cap, prices and tripwire.
-
-M14-2 has not started.
+M14-3 is not started. Its scope (routing, data preparation or evaluation) needs explicit owner
+approval. No live calls are allowed without a separate approval covering the cap, prices and
+tripwire.

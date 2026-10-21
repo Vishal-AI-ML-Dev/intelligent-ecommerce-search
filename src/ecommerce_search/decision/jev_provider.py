@@ -122,6 +122,14 @@ class _InvalidResponse(Exception):
         self.reason = reason
 
 
+class _CallFallback(Exception):
+    """A call failed at runtime: fall back with this fixed reason (never the SDK error text)."""
+
+    def __init__(self, reason: JevFallbackReason, request_id: object = None) -> None:
+        self.reason = reason
+        self.request_id = request_id
+
+
 @dataclass(frozen=True)
 class JevConfig:
     """Validated by `Settings`; built only when `JEV_ENABLED=true`."""
@@ -140,10 +148,10 @@ class _Call:
     """One admitted call. `future` carries the outcome to the caller; `task` exists only once the
     loop has started the call (it stays None if the call is skipped)."""
 
-    __slots__ = ("query", "questions", "future", "task")
+    __slots__ = ("state", "questions", "future", "task")
 
-    def __init__(self, query: str, questions: Mapping[str, Any]) -> None:
-        self.query = query
+    def __init__(self, state: Any, questions: Mapping[str, Any]) -> None:
+        self.state = state
         self.questions = questions
         self.future: concurrent.futures.Future[Any] = concurrent.futures.Future()
         self.task: asyncio.Task[Any] | None = None
@@ -272,7 +280,7 @@ class JevDecisionProvider:
             call.future.cancel()
             self._slots.release()
             return
-        call.task = self._loop.create_task(self._client.system_one(call.query, call.questions))
+        call.task = self._loop.create_task(self._client.system_one(call.state, call.questions))
         call.task.add_done_callback(lambda task: self._finish(call, task))
 
     def _finish(self, call: _Call, task: asyncio.Task[Any]) -> None:
@@ -309,7 +317,7 @@ class JevDecisionProvider:
         )
 
     def _outcome(self, query: str, started: float) -> JevOutcome:
-        from typesafe_sdk import Choice, TypeSafeError
+        from typesafe_sdk import Choice
 
         questions = {
             CATEGORY_QUESTION: Choice(
@@ -317,13 +325,28 @@ class JevDecisionProvider:
             ),
             INTENT_QUESTION: Choice(instructions=_INTENT_INSTRUCTIONS, criteria=_INTENT_CRITERIA),
         }
+        try:
+            response = self._send(query, questions, started)
+        except _CallFallback as failed:
+            return self._fallback(failed.reason, started, failed.request_id)
+        try:
+            return self._validated(response, started)
+        except _InvalidResponse as invalid:
+            return self._fallback(invalid.reason, started, _request_id(response))
+
+    def _send(self, state: Any, questions: Mapping[str, Any], started: float) -> Any:
+        """One admitted `system_one` call, waited for until `deadline_seconds` after `started`.
+        Returns the unvalidated response; every runtime failure raises `_CallFallback` with its
+        fixed reason. Also used by the M14 listing provider (`jev_listing_provider`)."""
+        from typesafe_sdk import TypeSafeError
+
         with self._lock:  # no submission can race with close()
             if self._closed:
-                return self._fallback("provider_closed", started, None)
+                raise _CallFallback("provider_closed")
             # Admission before anything is queued: never more than max_in_flight queued or running.
             if not self._slots.acquire(blocking=False):
-                return self._fallback("saturated", started, None)
-            call = _Call(query, questions)
+                raise _CallFallback("saturated")
+            call = _Call(state, questions)
             try:
                 self._loop.call_soon_threadsafe(self._start, call)
             except BaseException:
@@ -333,21 +356,18 @@ class JevDecisionProvider:
         try:
             response = call.future.result(timeout=remaining)
         except TypeSafeError as error:  # before TimeoutError: the SDK timeout error subclasses it
-            return self._fallback(_error_reason(error), started, getattr(error, "request_id", None))
+            raise _CallFallback(_error_reason(error), getattr(error, "request_id", None)) from None
         except TimeoutError:
             if call.future.cancel():  # won the race: no outcome can reach this caller any more
                 self._cancel_on_loop(call)
             else:
                 _discard_late_result(call.future)
-            return self._fallback("deadline_exceeded", started, None)
+            raise _CallFallback("deadline_exceeded") from None
         except concurrent.futures.CancelledError:  # skipped or cancelled because of close()
-            return self._fallback("provider_closed", started, None)
+            raise _CallFallback("provider_closed") from None
         if self._closed:  # close() began while the call ran (it may have swallowed cancellation)
-            return self._fallback("provider_closed", started, None)
-        try:
-            return self._validated(response, started)
-        except _InvalidResponse as invalid:
-            return self._fallback(invalid.reason, started, _request_id(response))
+            raise _CallFallback("provider_closed")
+        return response
 
     def _fallback(
         self, reason: JevFallbackReason, started: float, request_id: object
