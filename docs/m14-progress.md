@@ -1309,6 +1309,77 @@ Monotonic rounding alone cannot. The two older invalid responses stay unknown.
 3. How is `choice` selected when two or more labels share the highest probability?
 4. Are the returned probabilities normalized after `choice` is selected?
 
+## `dev-full-1` continuation from 147 (2026-10-21)
+
+**Approval.** `owner-dev-full-1-continuation-from-147` allowed at most 3 resumes under the
+existing three-source send decision and the unresolved rights caveats. **This is not a rights
+clearance.** Validation, tolerances and the 2 % threshold are unchanged.
+
+**Pre-checks:**
+- pricing re-read on 2026-10-21 and unchanged ($0.042 per million input, output free;
+  `jev-latest` still `jev-1.13.0`);
+- the journal showed 147 results, 285 attempts, 3 invalid and 0 unaccounted.
+
+**Resumes:**
+- resume 1 stopped at exactly 148 results (3 invalid); the gate passed;
+- resume 2 stopped at exactly 149; the gate passed;
+- resume 3 ran on and stopped with `invalid_response_rate` at **220 results** (5/220 = 2.27 %)
+  after two new invalid responses.
+- **The approval is over.** No further resume, retry, resend or new run.
+
+**Run totals:**
+- **Counts:** 220 dispatched and unique (185 clean, 35 corrupted); 220 completed; 215 successes;
+  5 `invalid_response`; 0 unknown; **71 unattempted**.
+- **Attempts:** 427, all HTTP 200, with no transport error or refusal. Largest call 1,472 input /
+  188 output tokens.
+- **Diagnostic causes** (all 5 invalid responses):
+  - 2 not recorded (from before the fix; unknown);
+  - `choice_not_top` at call B, `attribute_support[1]`, on a Laptop Price listing;
+  - **2 × `probability_sum`**, both at call A, question `subcategory`, both on clean Laptop Price
+    listings. The returned probabilities did not sum to 1 within the provisional 1e-3 tolerance.
+    The values were not retained.
+  - **`probability_sum` is an unresolved provider issue.** The provider documents the sum as "1"
+    on one page and "approximately 1" on others, with no stated precision. No missing values are
+    inferred, nothing is normalised or replaced, and the tolerance is unchanged.
+- **Tokens and spend:** 393,100 input / 63,149 output tokens. Known estimated spend
+  **$0.0165102**; **0 unaccounted** attempts. An estimate, not billing data.
+- **Secrets:** the key was found in none of the run's files.
+- **Files:** `outcomes-220.jsonl` and `report-dev-220.json` in the git-ignored run folder; the
+  earlier exports are kept as superseded.
+
+**Dev evaluation of the 220 recorded outcomes. This is a partial sample**: the first 220 of the
+frozen order. The 60 clean items without an outcome are `not_attempted`, not errors.
+
+| Category | Eligible | Attempted | Predictions | Correct | Wrong | Abstentions | Answered-only | Overall / coverage |
+|---|---|---|---|---|---|---|---|---|
+| Pooled | 245 | 185 | 181 | 181 | 0 | 4 (`invalid_response`) | 1.0000 | 0.7388 / 0.7388 |
+| Flipkart | 122 | 92 | 91 | 91 | 0 | 1 | 1.0000 | 0.7459 / 0.7459 |
+| Laptop Price | 59 | 43 | 40 | 40 | 0 | 3 | 1.0000 | 0.6780 / 0.6780 |
+| Smartphones | 64 | 50 | 50 | 50 | 0 | 0 | 1.0000 | 0.7812 / 0.7812 |
+
+- **Category is not a whole-system 100 %:** the 4 clean fallbacks and 60 unattempted items count
+  against overall accuracy. There were no ties and no `none` answered for a product.
+- **Subcategory** (Flipkart; 54 eligible, 9 `sports` excluded):
+  - 34 attempted; 22 correct, 7 wrong, 5 `none` answers (not correct);
+  - answered-only accuracy 0.6471, overall 0.4074, coverage 0.6296;
+  - casual: 10 correct, 1 answered formal, 5 answered `none`; formal: 4 correct, 6 answered
+    casual; in-ear: 8 correct.
+- **Corruption** (Jev arm; completed pairs only):
+  - category swap: 6 of 16 evaluated, detected 6/6;
+  - attribute swap: 3 of 7 evaluated, `jev.claim_contradicted` detected 3/3, while
+    `m13.value_conflict` was absent 3/3;
+  - out-of-set subcategory: 2 of 3 evaluated, `m13.incompatible_subcategory` detected 2/2;
+  - injection: 10 of 20 evaluated, all ceiling-limited (`non_informative_ceiling_limited`), which
+    is not evidence of resistance.
+- **Descriptive:** support answers `not_stated` 251, `supported` 170, `contradicted` 3. All 185
+  clean Jev routes are `manual_review`.
+
+**What these results do not show:**
+- **Routing:** every listing routes to manual review because of missing required seller claims.
+- **Labels:** external source labels, not human-reviewed gold.
+- **Calibration:** unmeasured.
+- **Sample:** a partial, development-scoped sample.
+
 ## Next batch (needs explicit approval)
 
 1. The runner is committed with this record.
