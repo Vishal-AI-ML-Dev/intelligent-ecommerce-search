@@ -1,8 +1,9 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. One owner-approved live smoke run (`smoke-1`, one dev listing, two
-HTTP calls) has been made (2026-10-21).**
-- **No other live call:** a larger dev run needs its own send approval.
+Status: **in progress. Two owner-approved live runs have been made (2026-10-21):**
+- **`smoke-1`:** 1 listing.
+- **`dev-full-1`:** stopped by its `invalid_response_rate` rule after 97 of 291 dev listings.
+  Resuming it needs a new owner decision.
 - **Committed:**
   - M14-1 to M14-4: `be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`;
   - M14-6: `fe72bd4` (set `le-set-2`);
@@ -1037,6 +1038,156 @@ one-item smoke, not a set evaluation.**
 - **Subcategory:** 0 of 54 attempted. The smoke item has no subcategory label.
 - **Corruption:** no Jev pair was evaluated (0 of 46 pairs have both outcomes).
 - **Calibration:** no accuracy, calibration or quality conclusion follows from one item.
+
+## Full-dev run `dev-full-1` (2026-10-21; stopped early by its safety rule)
+
+**Approval.** The owner explicitly approved sending all 291 selected dev listings from Flipkart,
+Laptop Price and Smartphones (`send_approval_ref` `owner-explicit-three-source-dev-full-1`),
+acknowledging the recorded unresolved upstream-rights caveats. **This is not a rights
+clearance.** The owner chose Option A: the smoke listing is sent once more inside this separate,
+self-contained run.
+
+**Pre-send checks (all passed):**
+- `https://docs.typesafe.ai/models` re-read on 2026-10-21: still $0.042 per million input tokens
+  and output free. `jev-latest` still points to `jev-1.13.0`, and the page shows no update date.
+- `dev-full-1` did not exist.
+- The set (`le-set-2`, `11a1293b…4cda`) and the `jl-1`, `lr-1` and M13 rules digests match the
+  `smoke-1` binding.
+- A key is present in `.env`, and `JEV_MODEL` takes its default `jev-1.13.0`.
+
+**Configuration:**
+- `--live --max-items 291 --max-attempts 572`;
+- 4,000 input and 2,000 output tokens allowed per call;
+- prices $0.042 per million input and $0 output;
+- `max_estimated_usd` 0.10.
+
+**Correction to the preflight wording.** The preflight said known spend "can't exceed" the full
+reservation ($0.096096). That is not guaranteed. A single request can exceed its allowance
+before the runner sees its usage; the runner then records the overrun and stops, but that
+request has already been sent and may be billed. The reservation and the tripwire are estimates
+and stop conditions, **not billing caps**.
+
+**Outcome of the run:** stopped with `invalid_response_rate` after 97 of 291 listings.
+- **Why it stopped:** 2 invalid responses in 97 results is 2.06%, just above the 2% limit, which
+  applies once 20 results exist.
+- **Counts:** 97 dispatched (85 clean, 12 corrupted); 97 completed with a result; 95 successes; 2
+  fallbacks; 0 unknown; **194 unattempted**.
+- **The two fallbacks:** both are `invalid_response`, both at call A, both Flipkart (one clean,
+  one corrupted).
+  - Both came back with HTTP 200 and recorded usage, and were rejected by the provider's
+    validation.
+  - Response bodies are deliberately not journalled, so the exact validation failure is unknown.
+- **No other problems:** no transport error, no refusal, no retry and no resend.
+- **Not restarted:** the run is resumable only with an explicit `--resume-approved`, which needs
+  a new owner decision.
+- **HTTP attempts:** 188, all HTTP 200, 0 unaccounted. The largest call used 1,471 input and 187
+  output tokens, within the allowances.
+- **Tokens and spend:** 173,808 input / 27,845 output tokens (95 `complete`, 2 `partial`). Known
+  estimated spend **$0.007299936**, an estimate from returned usage, not billing data.
+- **Secrets:** the key was found in none of the run's files.
+
+**Dev evaluation of the 97 recorded outcomes** (`runs/dev-full-1/report-dev.json`; dev only, no
+failed checks). **This is a partial run, not a full-set result:** the 160 clean dev items
+without an outcome are `not_attempted`, not model errors.
+
+- **Category (external source labels):**
+
+  | | Eligible | Attempted | Predictions | Correct | Wrong | Abstentions | Answered-only | Overall | Coverage |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Pooled | 245 | 85 | 84 | 84 | 0 | 1 (`invalid_response`) | 1.0000 | 0.3429 | 0.3429 |
+  | Flipkart | 122 | 47 | 46 | 46 | 0 | 1 | 1.0000 | 0.3770 | 0.3770 |
+  | Laptop Price | 59 | 20 | 20 | 20 | 0 | 0 | 1.0000 | 0.3390 | 0.3390 |
+  | Smartphones | 64 | 18 | 18 | 18 | 0 | 0 | 1.0000 | 0.2812 | 0.2812 |
+
+  - Overall accuracy and coverage are low only because most items are unattempted.
+  - No predicted `none` on a product, and no tie.
+  - The pooled figure carries the source-format warning.
+- **Subcategory** (Flipkart only; 54 eligible, 9 `sports` excluded):
+  - 17 attempted; 11 correct, 2 wrong, 4 `none` answers on a labelled product;
+  - answered-only accuracy 0.6471, overall 0.2037, coverage 0.3148;
+  - casual: 6 correct, 1 answered formal, 4 answered `none`; formal: 2 correct, 1 answered casual;
+    in-ear: 3 correct;
+  - phone and laptop subcategories stay unmeasured.
+- **Descriptive (no correctness implied):**
+  - Jev `none` answers: category 21, subcategory 18. The category ones are the correct answer
+    for the `none` non-products.
+  - Support answers: `not_stated` 118, `supported` 80, `contradicted` 1.
+  - All 85 clean Jev routes are `manual_review`.
+- **Corruption** (Jev arm; only pairs with both outcomes count):
+  - category swap: 2 of 16 pairs evaluated; `jev.category_disagrees_with_seller` detected 2/2;
+  - attribute swap: 0 of 7 evaluated;
+  - out-of-set subcategory: 0 of 3 evaluated;
+  - injection: 2 of 20 evaluated, both ceiling-limited, so the status is
+    `non_informative_ceiling_limited`. This is not evidence of injection resistance.
+
+**What these results do not show:**
+- **Routing:** every listing routes to manual review because of missing required seller claims.
+  Route counts are descriptive only, and route correctness is unmeasured.
+- **Labels:** these are external source labels, not human-reviewed gold, and the results are
+  development-scoped.
+- **Calibration:** provider confidence is not gate confidence, and calibration is unmeasured.
+- **Sample:** the attempted 97 are the first 97 of the frozen hash order, a partial sample.
+
+## Invalid-response diagnostics and resume semantics (2026-10-21; uncommitted, no live call)
+
+`dev-full-1` stays paused. Nothing was resumed, re-sent or called.
+
+### Where `invalid_response` comes from, and the codes now recorded
+
+An `invalid_response` fallback now records an **allowlisted** cause (`rejection`), the call
+(`rejection_call`, `A`/`B`) and the question id (`rejection_question`), but only where the
+validator can actually tell the causes apart:
+
+| Source | Codes |
+|---|---|
+| The SDK rejects the response body against its schema (`TypeSafeAPIResponseValidationError`) | `sdk_response_validation` (includes a missing `model`, which the SDK rejects first) |
+| The listing provider's answer checks | `answers_not_mapping`, `question_set_mismatch`, `response_model_missing` (a backstop the SDK path did not reach in tests), `usage_invalid` |
+| The shared M11 `_choice` validator, per question | `answer_not_choice`, `choice_out_of_set`, `probability_labels_mismatch`, `probability_out_of_range`, `probability_sum`, `confidence_out_of_range`, `choice_not_top` |
+| The final outcome contract | `proposal_contract` |
+
+- **Never recorded:** response bodies, values, listing text, exception text or credentials. The
+  question id is structural (`category`, `subcategory`, `attribute_support[n]`).
+- **Contract rules:** the outcome contract allows these fields only on `invalid_response`, and
+  only from the allowlist.
+- **Other fallbacks** (for example `model_mismatch` or `server_error`) carry no code.
+- **M11 is unchanged:** the M11 query provider ignores the new detail, so its fallback reasons are
+  unchanged and its tests pass unchanged.
+- **The two `dev-full-1` invalid responses keep an unknown cause** (`rejection = None`;
+  `not_recorded` in the evaluator's new `jev_invalid_response_causes` count). Their cause is not
+  inferred.
+- **Unchanged:** the 2 % threshold and its denominator, usage tracking, binding and no-resend.
+
+### Resume semantics (verified with tests; behaviour unchanged)
+
+- **At resume time:** a `--resume-approved` invocation with identical parameters is accepted.
+  The frozen header matches, and `invalid_response_rate` is not terminal. The rate is **not**
+  checked at resume time.
+- **When the rate is checked:** only after each new result. It is cumulative over every result of
+  the run, and fires above 2 % once 20 results exist.
+- **What that means for `dev-full-1`:**
+  - after the 1st resumed listing, 2/98 = 2.04 %, so the run stops again;
+  - after the 2nd, 2/99 = 2.02 %, so it stops again;
+  - after the 3rd, 2/100 = 2 %, which is not above 2 %, so it continues;
+  - any further invalid response that puts the rate above 2 % stops it again.
+- **Caps are cumulative within the run:**
+  - **Attempts:** 188 used and 384 left. The remaining 194 listings plan 382 calls.
+  - **Spend:** known spend $0.007299936 counts toward the $0.10 tripwire. The remaining
+    reservation is 382 x 4,000 x $0.042/M = $0.064176.
+- **No resend:** already-dispatched listings are skipped on resume, and the transport refuses a
+  repeated call for a listing.
+- **Prices cannot be re-recorded:** `run.json` keeps the 2026-10-21 price-check date. A resume
+  cannot record a new check date without changing the frozen header, which is refused.
+
+### Commands and results (2026-10-21, `uv run --offline`)
+
+| Command | Result |
+|---|---|
+| Probe of each malformation through the real SDK path (mocked transport) | Every case gave the code at its actual rejection point; a missing `model` is rejected by the SDK (`sdk_response_validation`) |
+| `pytest tests/unit/listing_decisions/test_jev_listing_provider.py` | **73 passed** (12 code-accuracy cases; no-code cases; leakage; allowlist contract; old outcomes stay unknown) |
+| `pytest tests/unit/listing_eval/test_listing_eval_runner.py` | **45 passed** (6 rate-semantics cases added) |
+| Read-only checks on `dev-full-1` | The journal replays (97 results, 188 attempts, 0 unaccounted); the resume header matches the frozen header; the next item was never dispatched; evaluating the old export gives `not_recorded: 1` (clean items only) |
+| `pytest tests/unit/listing_decisions tests/unit/listing_eval tests/unit/search/test_jev_provider.py tests/unit/search/test_decision_provider.py tests/unit/search/test_query_understanding_contract.py` (unraisable warnings as errors) | 536 passed, 1 failed. The new descriptive key contained "reject", which the M14-4 no-rejection test forbids; renamed `jev_invalid_response_causes`. Then **537 passed** in 45.60 s. |
+| `ruff check` / `ruff format --check` (providers, evaluator and tests) | **All checks passed**; **41 files already formatted** |
 
 ## Next batch (needs explicit approval)
 

@@ -236,9 +236,12 @@ def descriptive(records: Sequence[ItemRecord]) -> dict[str, Any]:
     jev = [r for r in records if r.outcome is not None]
     proposals: Counter[str] = Counter()
     support: Counter[str] = Counter()
+    rejections: Counter[str] = Counter()  # invalid_response causes; not_recorded = unknown
     for outcome in (r.outcome for r in jev if r.outcome is not None):
         if outcome.fallback_reason is not None:
             proposals[f"fallback.{outcome.fallback_reason}"] += 1
+            if outcome.fallback_reason == "invalid_response":
+                rejections[outcome.rejection or "not_recorded"] += 1
             continue
         for name, proposal in (
             ("category", outcome.category),
@@ -267,6 +270,7 @@ def descriptive(records: Sequence[ItemRecord]) -> dict[str, Any]:
         "jev_items_without_outcome": len(records) - len(jev),
         "jev_abstention_counts": dict(sorted(proposals.items())),
         "jev_support_labels": dict(sorted(support.items())),
+        "jev_invalid_response_causes": dict(sorted(rejections.items())),
         "title_word_disclosure": {
             "note": "a category word in the seller's own title is evidence, not label leakage",
             "matching": MATCHING_VERSION,

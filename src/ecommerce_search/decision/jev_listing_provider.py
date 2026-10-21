@@ -98,31 +98,54 @@ class JevListingDecisionProvider:
         ]
         responses: list[Any] = []
         answers: dict[str, dict[str, Any]] = {}
+        call: str | None = None
         try:
             for input_id, group in calls:
+                call = "A" if input_id == TEXT_INPUT else "B"
                 response = self._jev._send(inputs[input_id], _sdk_questions(group), started)
                 responses.append(response)
                 answers.update(self._answers(response, group))
+            call = None  # a contract failure concerns the answers of every call
             outcome = self._proposals(state, answers, responses, started, len(calls))
         except _CallFallback as failed:
             ids = [*_request_ids(responses), failed.request_id]
-            return self._fallback(state, failed.reason, started, ids, responses, len(calls))
+            rejection = None
+            if failed.reason == "invalid_response":  # only the SDK schema check maps here
+                rejection = ("sdk_response_validation", call, None)
+            return self._fallback(
+                state, failed.reason, started, ids, responses, len(calls), rejection
+            )
         except _InvalidResponse as invalid:
             ids = _request_ids(responses)
-            return self._fallback(state, invalid.reason, started, ids, responses, len(calls))
+            rejection = None
+            if invalid.reason == "invalid_response" and invalid.detail is not None:
+                rejection = (invalid.detail, call, invalid.question)
+            return self._fallback(
+                state, invalid.reason, started, ids, responses, len(calls), rejection
+            )
         return outcome
 
     def _answers(self, response: Any, group: Sequence[QuestionSpec]) -> dict[str, dict[str, Any]]:
         answers = getattr(response, "answers", None)
-        if not isinstance(answers, Mapping) or set(answers) != {s.question_id for s in group}:
-            raise _InvalidResponse()  # a missing, extra, unasked or omitted question
+        if not isinstance(answers, Mapping):
+            raise _InvalidResponse(detail="answers_not_mapping")
+        if set(answers) != {s.question_id for s in group}:
+            # a missing, extra, unasked or omitted question
+            raise _InvalidResponse(detail="question_set_mismatch")
         response_model = getattr(response, "model", None)
         if not isinstance(response_model, str):
-            raise _InvalidResponse()
+            raise _InvalidResponse(detail="response_model_missing")
         if response_model != self._model:
             raise _InvalidResponse("model_mismatch")
         _token_counts(response)
-        return {s.question_id: _choice(answers[s.question_id], dict(s.criteria)) for s in group}
+        checked = {}
+        for s in group:
+            try:
+                checked[s.question_id] = _choice(answers[s.question_id], dict(s.criteria))
+            except _InvalidResponse as invalid:
+                invalid.question = s.question_id
+                raise
+        return checked
 
     def _proposals(
         self,
@@ -165,7 +188,7 @@ class JevListingDecisionProvider:
             )
             validate_outcome(state, outcome)
         except (ValueError, ListingDecisionMismatch):  # pydantic.ValidationError is a ValueError
-            raise _InvalidResponse() from None
+            raise _InvalidResponse(detail="proposal_contract") from None
         return outcome
 
     def _fallback(
@@ -176,6 +199,7 @@ class JevListingDecisionProvider:
         request_ids: Sequence[object],
         responses: Sequence[Any],
         planned: int,
+        rejection: tuple[str, str | None, str | None] | None = None,
     ) -> ListingDecisionOutcome:
         # Usage of the calls that did complete is kept, so a failed call B never hides call A's
         # tokens; the failed call itself stays unaccounted (`partial`).
@@ -189,6 +213,9 @@ class JevListingDecisionProvider:
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             usage=usage,
+            rejection=None if rejection is None else rejection[0],
+            rejection_call=None if rejection is None else rejection[1],
+            rejection_question=None if rejection is None else rejection[2],
             fallback_reason=reason,
         )
 
@@ -225,7 +252,7 @@ def _token_counts(response: Any) -> tuple[int | None, int | None]:
     counts = (getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None))
     for c in counts:
         if c is not None and (isinstance(c, bool) or not isinstance(c, int) or c < 0):
-            raise _InvalidResponse()
+            raise _InvalidResponse(detail="usage_invalid")
     return counts
 
 
@@ -266,7 +293,8 @@ def _log_outcome(outcome: ListingDecisionOutcome) -> None:
     }
     logger.info(
         "jev_listing_decision model=%s latency_ms=%.1f request_id=%s input_tokens=%s "
-        "output_tokens=%s usage=%s fallback_reason=%s state_sha256=%s proposals=%s",
+        "output_tokens=%s usage=%s fallback_reason=%s rejection=%s/%s/%s state_sha256=%s "
+        "proposals=%s",
         outcome.model,
         outcome.latency_ms,
         outcome.request_id,
@@ -274,6 +302,9 @@ def _log_outcome(outcome: ListingDecisionOutcome) -> None:
         outcome.output_tokens,
         outcome.usage,
         outcome.fallback_reason,
+        outcome.rejection,
+        outcome.rejection_call,
+        outcome.rejection_question,
         outcome.state_sha256,
         proposals,
     )

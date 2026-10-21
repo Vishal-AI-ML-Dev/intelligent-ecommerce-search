@@ -603,3 +603,162 @@ def test_the_usage_marker_must_agree_with_the_token_counts(fields) -> None:
         ListingDecisionOutcome(
             provider="deterministic", state_sha256=STATE.state_sha256(), usage="none"
         )
+
+
+# --- allowlisted rejection codes for invalid responses (diagnostic fix) ------------------------
+
+
+def _bad_text(**answer) -> dict:
+    return {"text": _ok(_text_body(**answer), "req-text")}
+
+
+_PROBS = _probabilities(CATEGORY_LABELS, {"laptop": 0.85})
+_REJECTIONS = {
+    "category-out-of-set": (
+        _bad_text(category=_answer(CATEGORY_LABELS, "tablet", {"laptop": 0.85})),
+        ("choice_out_of_set", "A", "category"),
+    ),
+    "missing-probability-label": (
+        _bad_text(
+            subcategory=_answer(
+                [lbl for lbl in SUBCATEGORY_LABELS if lbl != "none"], "everyday", {"everyday": 0.85}
+            )
+        ),
+        ("probability_labels_mismatch", "A", "subcategory"),
+    ),
+    "probability-above-one": (
+        _bad_text(
+            category=_answer(CATEGORY_LABELS, "laptop", probabilities={**_PROBS, "laptop": 1.2})
+        ),
+        ("probability_out_of_range", "A", "category"),
+    ),
+    "sum-not-one": (
+        _bad_text(
+            category=_answer(CATEGORY_LABELS, "laptop", probabilities={**_PROBS, "laptop": 0.5})
+        ),
+        ("probability_sum", "A", "category"),
+    ),
+    "confidence-above-one": (
+        _bad_text(category=_answer(CATEGORY_LABELS, "laptop", confidence=1.5)),
+        ("confidence_out_of_range", "A", "category"),
+    ),
+    "choice-not-top": (
+        _bad_text(category=_answer(CATEGORY_LABELS, "phone", {"laptop": 0.85})),
+        ("choice_not_top", "A", "category"),
+    ),
+    "not-a-choice-answer": (
+        _bad_text(category={"type": "noul", "noul": 0.9}),
+        ("answer_not_choice", "A", "category"),
+    ),
+    "missing-question": (
+        {
+            "text": _ok(
+                {**_text_body(), "answers": {"category": _answer(CATEGORY_LABELS, "laptop")}}, "t"
+            )
+        },
+        ("question_set_mismatch", "A", None),
+    ),
+    "support-label-out-of-set": (
+        {
+            "claims": _ok(
+                _claims_body(
+                    {qid: _answer(SUPPORT_LABELS, "supported") for qid in ASKED}
+                    | {ASKED[0]: _answer(SUPPORT_LABELS, "true", {"supported": 0.85})}
+                ),
+                "c",
+            )
+        },
+        ("choice_out_of_set", "B", ASKED[0]),
+    ),
+    "negative-tokens": (
+        {"text": _ok(_text_body(usage={"input_tokens": -1, "output_tokens": 0}), "t")},
+        ("usage_invalid", "A", None),
+    ),
+    "missing-model-rejected-by-the-sdk": (
+        {"text": _ok({k: v for k, v in _text_body().items() if k != "model"}, "t")},
+        ("sdk_response_validation", "A", None),
+    ),
+    "malformed-body": (
+        {"text": httpx2.Response(200, content=b"{not json")},
+        ("sdk_response_validation", "A", None),
+    ),
+}
+
+
+@pytest.mark.parametrize(("replies", "expected"), list(_REJECTIONS.values()), ids=list(_REJECTIONS))
+def test_invalid_responses_record_the_validator_that_rejected_them(replies, expected) -> None:
+    outcome = _decide(Server(**replies))
+    _assert_fallback(outcome, "invalid_response")
+    assert (outcome.rejection, outcome.rejection_call, outcome.rejection_question) == expected
+
+
+def test_other_fallbacks_and_successes_carry_no_rejection_code() -> None:
+    assert _decide(Server()).rejection is None
+    mismatch = _decide(Server(text=_ok(_text_body(model="jev-1.14.0"), "t")))
+    assert mismatch.fallback_reason == "model_mismatch" and mismatch.rejection is None
+    failed = _decide(Server(text=httpx2.Response(500, json={"error": "x"})))
+    assert failed.fallback_reason == "server_error" and failed.rejection is None
+
+
+def test_rejection_records_never_contain_response_values_text_or_the_key(caplog) -> None:
+    caplog.set_level(logging.DEBUG)
+    hostile = "tablet-IGNORE-PREVIOUS-" + KEY
+    outcome = _decide(
+        Server(
+            text=_ok(_text_body(category=_answer(CATEGORY_LABELS, hostile, {"laptop": 0.85})), "t")
+        )
+    )
+    assert outcome.rejection == "choice_out_of_set"
+    dumped = outcome.model_dump_json() + caplog.text
+    for forbidden in (hostile, "IGNORE-PREVIOUS", KEY, LAPTOP["title"], LAPTOP["description"]):
+        assert forbidden not in dumped
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"fallback_reason": "timeout", "rejection": "choice_out_of_set"},
+        {"fallback_reason": "invalid_response", "rejection_call": "A"},
+        {
+            "fallback_reason": "invalid_response",
+            "rejection": "choice_out_of_set",
+            "rejection_question": "category: value was tablet",
+        },
+        {"fallback_reason": "invalid_response", "rejection": "some_new_free_text_code"},
+    ],
+    ids=["code-on-another-reason", "call-without-code", "free-text-question", "unlisted-code"],
+)
+def test_the_rejection_fields_are_allowlisted(fields) -> None:
+    from pydantic import ValidationError
+
+    from ecommerce_search.decision.listing_models import ListingDecisionOutcome
+
+    with pytest.raises(ValidationError):
+        ListingDecisionOutcome(
+            provider="jev",
+            state_sha256=STATE.state_sha256(),
+            model=MODEL,
+            latency_ms=1.0,
+            **fields,
+        )
+
+
+def test_outcomes_recorded_before_the_fix_keep_an_unknown_cause() -> None:
+    from ecommerce_search.decision.listing_models import ListingDecisionOutcome
+
+    old = {
+        "provider": "jev",
+        "state_sha256": STATE.state_sha256(),
+        "model": MODEL,
+        "latency_ms": 1.0,
+        "fallback_reason": "invalid_response",
+        "usage": "partial",
+        "input_tokens": 900,
+        "output_tokens": 170,
+    }
+    outcome = ListingDecisionOutcome.model_validate_json(json.dumps(old))
+    assert (outcome.rejection, outcome.rejection_call, outcome.rejection_question) == (
+        None,
+        None,
+        None,
+    )

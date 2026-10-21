@@ -118,8 +118,15 @@ class JevConfigurationError(Exception):
 
 
 class _InvalidResponse(Exception):
-    def __init__(self, reason: JevFallbackReason = "invalid_response") -> None:
+    # `detail` is an allowlisted rejection code where the validator can tell failures
+    # apart; `question` is the question id. Neither carries a response value. The M11 query
+    # provider ignores both: its fallback reason is unchanged.
+    def __init__(
+        self, reason: JevFallbackReason = "invalid_response", detail: str | None = None
+    ) -> None:
         self.reason = reason
+        self.detail = detail
+        self.question: str | None = None
 
 
 class _CallFallback(Exception):
@@ -440,27 +447,27 @@ def _discard_late_result(future: concurrent.futures.Future[Any]) -> None:
 def _choice(answer: Any, criteria: Mapping[str, str]) -> dict[str, Any]:
     """Validate one Choice answer against its closed label set; never assume a unique maximum."""
     if getattr(answer, "type", None) != "choice":
-        raise _InvalidResponse()
+        raise _InvalidResponse(detail="answer_not_choice")
     raw_choice = getattr(answer, "choice", None)
     probabilities = getattr(answer, "probabilities", None)
     confidence = getattr(answer, "confidence", None)
     if not isinstance(raw_choice, str) or raw_choice not in criteria:
-        raise _InvalidResponse()
+        raise _InvalidResponse(detail="choice_out_of_set")
     if not isinstance(probabilities, Mapping) or set(probabilities) != set(criteria):
-        raise _InvalidResponse()
+        raise _InvalidResponse(detail="probability_labels_mismatch")
     values = list(probabilities.values())
     if not all(_is_unit_number(value) for value in values):
-        raise _InvalidResponse()
+        raise _InvalidResponse(detail="probability_out_of_range")
     if abs(math.fsum(values) - 1.0) > PROBABILITY_SUM_TOLERANCE:
-        raise _InvalidResponse()
+        raise _InvalidResponse(detail="probability_sum")
     if not _is_unit_number(confidence):
-        raise _InvalidResponse()
+        raise _InvalidResponse(detail="confidence_out_of_range")
     top = max(values)
     top_labels = tuple(
         label for label in criteria if probabilities[label] >= top - TOP_TIE_TOLERANCE
     )
     if raw_choice not in top_labels:
-        raise _InvalidResponse()
+        raise _InvalidResponse(detail="choice_not_top")
     return {
         "raw_choice": raw_choice,
         "top_labels": top_labels,

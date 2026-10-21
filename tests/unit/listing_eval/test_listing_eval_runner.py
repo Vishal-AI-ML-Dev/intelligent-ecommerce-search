@@ -705,3 +705,42 @@ def test_free_output_still_reserves_and_counts_input_spend(work) -> None:
         Decimal(1_000_000)
     )
     assert summary.unaccounted_attempts == 0
+
+
+# --- resume semantics of the invalid-response rate (documented, unchanged) ----------------------
+
+
+def _fallback(reason: str) -> ListingDecisionOutcome:
+    return ListingDecisionOutcome(
+        provider="jev", state_sha256="a" * 64, model="jev-1.13.0", latency_ms=1.0,
+        fallback_reason=reason,
+    )  # fmt: skip
+
+
+def _rate_state(results: int, invalid: int) -> rn.JournalState:
+    state = rn.JournalState()
+    for n in range(results):
+        state.results[f"i{n}"] = _fallback(
+            "invalid_response" if n < invalid else "deadline_exceeded"
+        )
+    return state
+
+
+@pytest.mark.parametrize(
+    ("results", "invalid", "stops"),
+    [
+        (97, 2, True),  # where dev-full-1 stopped: 2/97 = 2.06 %
+        (98, 2, True),  # the first listing after a resume: 2/98 = 2.04 % -> stops again
+        (99, 2, True),  # the second: 2/99 = 2.02 % -> stops again
+        (100, 2, False),  # the third: 2/100 = 2 % is not above 2 % -> continues
+        (101, 3, True),  # one more invalid response stops it again
+        (19, 5, False),  # under 20 results the rule never fires
+    ],
+)
+def test_the_invalid_response_rate_is_cumulative_over_the_whole_run(work, results, invalid, stops):
+    _, eval_set = work
+    header = _header(eval_set)
+    state = _rate_state(results, invalid)
+    newest = state.results[f"i{results - 1}"]
+    stop = rn._post_stop(header, state, f"i{results - 1}", newest)
+    assert (stop == "invalid_response_rate") is stops

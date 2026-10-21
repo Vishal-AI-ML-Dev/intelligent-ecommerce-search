@@ -280,6 +280,25 @@ class AttributeSupportProposal(_Proposal):
     ordinal: int = Field(ge=0)
 
 
+# Allowlisted causes of an `invalid_response` fallback, recorded only where the validator
+# can tell them apart. None means not recorded (for example outcomes from before this field).
+RejectionCode = Literal[
+    "sdk_response_validation",  # the SDK rejected the response body against its schema
+    "answers_not_mapping",
+    "question_set_mismatch",  # a missing, extra, unasked or omitted question
+    "response_model_missing",
+    "usage_invalid",  # a token count that is not a non-negative integer
+    "answer_not_choice",
+    "choice_out_of_set",
+    "probability_labels_mismatch",
+    "probability_out_of_range",
+    "probability_sum",
+    "confidence_out_of_range",
+    "choice_not_top",
+    "proposal_contract",  # the validated answers did not form a valid outcome
+]
+
+
 class ListingDecisionOutcome(_Frozen):
     """The answer to one state. The deterministic baseline proposes nothing. A model provider
     either returns every proposal (category, subcategory and one support answer per asked claim)
@@ -299,6 +318,11 @@ class ListingDecisionOutcome(_Frozen):
     # of those calls, and the other calls, for example a failed call B, are unaccounted);
     # `none` when no call did. None for outcomes recorded before this field existed.
     usage: Literal["complete", "partial", "none"] | None = None
+    rejection: RejectionCode | None = None  # invalid_response fallbacks only
+    rejection_call: Literal["A", "B"] | None = None
+    rejection_question: str | None = Field(
+        default=None, pattern=r"^(category|subcategory|attribute_support\[[0-9]+\])$"
+    )
     fallback_reason: JevFallbackReason | None = None
     category: CategoryProposal | None = None
     subcategory: SubcategoryProposal | None = None
@@ -319,6 +343,7 @@ class ListingDecisionOutcome(_Frozen):
                 self.input_tokens,
                 self.output_tokens,
                 self.usage,
+                self.rejection,
                 self.fallback_reason,
             )
             if has_any or any(v is not None for v in telemetry):
@@ -333,6 +358,12 @@ class ListingDecisionOutcome(_Frozen):
         if self.fallback_reason is None and None in (self.category, self.subcategory):
             raise ValueError("a successful outcome needs the category and subcategory proposals")
         counted = (self.input_tokens, self.output_tokens)
+        if self.rejection is not None and self.fallback_reason != "invalid_response":
+            raise ValueError("a rejection code is recorded only for invalid_response")
+        if self.rejection is None and (
+            self.rejection_call is not None or self.rejection_question is not None
+        ):
+            raise ValueError("a rejection call or question needs a rejection code")
         if self.usage == "none" and counted != (None, None):
             raise ValueError("usage none carries no token counts")
         if self.usage in ("complete", "partial") and None in counted:
