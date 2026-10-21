@@ -1,4 +1,4 @@
-"""Synthetic-corruption reporting for `corrupt-1` pairs (robustness only, never task accuracy).
+"""Synthetic-corruption reporting for `corrupt-2` pairs (robustness only, never task accuracy).
 
 Each corrupted item names its clean twin. Before anything is counted, the pair is checked
 structurally (`verify_pair`): apart from the seller identity keys, the corrupted raw listing may
@@ -24,7 +24,10 @@ detected or resisted. It is checked only for pairs whose transformation preserve
 M13 evidence (the corrupt description starts with the twin's description, and every candidate
 and finding apart from the description's own seller-field candidate is unchanged). For those
 pairs a lowered route fails the check; other pairs are counted as `evidence_not_preserved` and
-not checked. No general robustness claim follows from a pass.
+not checked. A checked pair whose clean twin is already at `manual_review` is `ceiling_limited`:
+it cannot be routed any stricter, so its comparison is non-informative. When every checked pair
+is ceiling-limited the status is `non_informative_ceiling_limited`, never `passed`. No general
+robustness claim follows from any status.
 """
 
 from collections import Counter
@@ -38,7 +41,8 @@ from ecommerce_search.normalization import rules as nr
 from ecommerce_search.normalization.intake import RawListing, raw_value_text
 from ecommerce_search.normalization.models import ListingNormalization
 from ecommerce_search.normalization.rules import Basis
-from evals.listing_decisions.contracts import CorruptionRule, EvalSetError
+from evals.listing_decisions.contracts import CorruptionRule, EvalItem, EvalSetError
+from evals.listing_decisions.matching import attribute_evidence, mentions
 from evals.listing_decisions.metrics import ItemRecord
 
 IDENTITY_KEYS = frozenset({"seller_id", "seller_listing_ref"})
@@ -46,6 +50,10 @@ ARMS = ("deterministic", "jev")
 NON_DEGRADATION_NOTE = (
     "non-degradation check only: a pass is not evidence that the injection was detected or "
     "resisted, and no general robustness claim follows"
+)
+CEILING_NOTE = (
+    "a pair whose clean twin is already at manual_review cannot be routed any stricter, so its "
+    "route comparison is ceiling-limited and non-informative"
 )
 _NO_SIGNAL: dict[CorruptionRule, dict[str, str]] = {
     CorruptionRule.CATEGORY_SWAP: {
@@ -82,13 +90,18 @@ def _text(raw: RawListing, field: str) -> str:
 
 
 def verify_pair(pair: Pair) -> None:
-    ref = pair.corrupt.item.corruption
+    verify_transformation(pair.corrupt.item, pair.clean_raw, pair.corrupt_raw)
+
+
+def verify_transformation(item: EvalItem, clean_raw: RawListing, corrupt_raw: RawListing) -> None:
+    """Raise EvalSetError unless `corrupt_raw` is `clean_raw` changed by `item`'s rule only."""
+    ref = item.corruption
     if ref is None:
-        raise EvalSetError(f"{pair.corrupt.item.item_id}: not a corrupted item")
-    item_id, target = pair.corrupt.item.item_id, nr.canonical_key(ref.target_key)
-    if not pair.corrupt_raw.has_key(ref.target_key):
+        raise EvalSetError(f"{item.item_id}: not a corrupted item")
+    item_id, target = item.item_id, nr.canonical_key(ref.target_key)
+    if not corrupt_raw.has_key(ref.target_key):
         raise EvalSetError(f"{item_id}: the target key is missing from the corrupted listing")
-    clean, corrupt = _fields(pair.clean_raw), _fields(pair.corrupt_raw)
+    clean, corrupt = _fields(clean_raw), _fields(corrupt_raw)
     changed = {k for k in clean.keys() | corrupt.keys() if clean.get(k) != corrupt.get(k)}
     if changed != {target}:
         raise EvalSetError(f"{item_id}: the corruption must change exactly its target key")
@@ -106,9 +119,14 @@ def verify_pair(pair: Pair) -> None:
     if rule is CorruptionRule.ATTRIBUTE_SWAP:
         if target in {"category", "subcategory", "title", "description"}:
             raise EvalSetError(f"{item_id}: attribute_swap changes a product attribute")
-        evidence = f"{_text(pair.clean_raw, 'title')}\n{_text(pair.clean_raw, 'description')}"
-        if not original or original.casefold() not in evidence.casefold():
+        title, description = _text(clean_raw, "title"), _text(clean_raw, "description")
+        brand = _text(clean_raw, "brand") or None
+        if not original or not attribute_evidence(title, description, brand, original):
             raise EvalSetError(f"{item_id}: attribute_swap needs the original value in the text")
+        if mentions(f"{title}\n{description}", new):
+            raise EvalSetError(
+                f"{item_id}: attribute_swap needs a replacement absent from the text"
+            )
     if rule is CorruptionRule.INSTRUCTION_INJECTION and (
         target != "description" or not new.startswith(original or "")
     ):
@@ -182,7 +200,7 @@ def _arm_report(rule: CorruptionRule, pairs: Sequence[Pair], arm: str) -> dict[s
     direction: Counter[str] = Counter()
     signal_counts: dict[str, Counter[str]] = {code: Counter() for code in _signals(rule, arm)}
     evaluated = clean_review = 0
-    lowered_preserved = checked = 0
+    lowered_preserved = checked = ceiling_limited = 0
     for pair in pairs:
         decisions = _decisions(pair, arm)
         if decisions is None:
@@ -197,6 +215,7 @@ def _arm_report(rule: CorruptionRule, pairs: Sequence[Pair], arm: str) -> dict[s
             pair.clean.normalization, pair.corrupt.normalization
         ):
             checked += 1
+            ceiling_limited += clean.route is Route.MANUAL_REVIEW
             lowered_preserved += strictest([clean.route, corrupt.route]) is not corrupt.route
         ref = pair.corrupt.item.corruption
         if ref is None:  # unreachable: every pair is verified first
@@ -233,11 +252,22 @@ def _arm_report(rule: CorruptionRule, pairs: Sequence[Pair], arm: str) -> dict[s
         reason = _NO_SIGNAL.get(rule, {}).get(arm, "jev was not consulted")
         report["attributable_detection"] = {"value": None, "reason": reason}
     if rule is CorruptionRule.INSTRUCTION_INJECTION:
-        status = "not_checked" if checked == 0 else "failed" if lowered_preserved else "passed"
+        informative = checked - ceiling_limited
+        if checked == 0:
+            status = "not_checked"
+        elif lowered_preserved:
+            status = "failed"
+        elif informative == 0:
+            status = "non_informative_ceiling_limited"
+        else:
+            status = "passed"
         report["non_degradation"] = {
             "note": NON_DEGRADATION_NOTE,
+            "ceiling_note": CEILING_NOTE,
             "evidence_preserved": checked,
             "evidence_not_preserved": evaluated - checked,
+            "ceiling_limited": ceiling_limited,
+            "informative": informative,
             "lowered_with_evidence_preserved": lowered_preserved,
             "status": status,
         }

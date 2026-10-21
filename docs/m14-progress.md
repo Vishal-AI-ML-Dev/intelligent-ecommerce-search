@@ -1,9 +1,12 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. M14-4 (offline evaluation tooling) is implemented and uncommitted
-(2026-10-21).** M14-1 is committed as `be2cdf3`, M14-2 as `d77a099` and M14-3 as `5a9cc2f`. M14
-is not complete. No dataset preparation, runner, live call or real evaluation exists. M14-5 has
-not started.
+Status: **in progress. M14-6 (external dataset preparation) is implemented. The current local
+set is `le-set-2`, regenerated once after a review fix, with a deterministic-only dev
+evaluation (2026-10-21).**
+- M14-1 to M14-4 are committed (`be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`).
+- M14-5 is **deferred, not completed**.
+- M14 is not complete.
+- No runner, Jev call or test-split evaluation exists.
 
 ## Batches
 
@@ -13,8 +16,10 @@ not started.
 | M14-1 | Offline contracts, `jl-1` questions/state builder, provider Protocol, deterministic baseline | Done, committed `be2cdf3` |
 | M14-2 | Jev listing provider adapter (mocked transport only) | Done, committed `d77a099` |
 | M14-3 | Deterministic routing policy `lr-1` (owner-approved rules, Option A) | Done, committed `5a9cc2f` |
-| M14-4 | Offline evaluator: `le-1` contract, measurability, metrics, corruption checks, `evaluate` CLI | **Implemented, synthetic-fixture tests pass, uncommitted** |
-| M14-5 and later | Persistence (optional), dataset preparation, live runner, live evaluation | Not started; each needs approval |
+| M14-4 | Offline evaluator: `le-1` contract, measurability, metrics, corruption checks, `evaluate` CLI | Done, committed `4fe0201` |
+| M14-5 | Persistence (migration `0006`, store, `decide`/`show`) | **Deferred, not completed or skipped** (owner, 2026-10-21). Persistence and FR-LST-1's inferred-decisions layer remain outstanding until a consumer exists (`POST /listings/analyze` or the M21 review queue). |
+| M14-6 | External dataset preparation: adapters, label mapping, grouping, selection, `corrupt-2` with matching `lt-1`, `prepare` CLI, local set `le-set-2` | **Implemented, tests pass** (committed with this record) |
+| Live runner, M14-7 | Mocked-tested live runner; live evaluation | Not started; each needs approval (the runner before M14-7) |
 
 ## Approved scope (owner, 2026-10-21)
 
@@ -637,14 +642,232 @@ was detected or resisted, and its detection is `null` with that reason.
   The human-reviewed requirements, route correctness, ambiguity and calibration stay unmet or
   unmeasured.
 
+## M14-5: deferred (owner, 2026-10-21)
+
+M14-5 is **deferred, not completed and not skipped**. Neither M14-6 nor a future file-journal
+runner needs database persistence: the set is frozen files, and outcomes are `le-outcomes-1`
+files the evaluator binds. Persistence (`0006`, a store, `decide`/`show`) and FR-LST-1's
+inferred-decisions layer remain **outstanding**, and M14 is not complete on that point.
+
+## M14-6 implementation: external dataset preparation (2026-10-21)
+
+### Approved requirements applied
+
+- **No fabricated seller claims.**
+  - `availability`, `currency` and missing `brand` are left missing. M13 reports each as
+    `missing_required`, so every such listing routes to `manual_review`. The rates are reported.
+  - **No currency is set:** neither source archive contains documentation, and an Indian-market
+    context alone was not accepted as evidence. A `₹` inside a raw price value is passed through
+    unchanged as the seller's price text.
+- **Mapping corrections.**
+  - **Headphones:** `Over the Head` alone gives no subcategory. Only unambiguous evidence maps:
+    - Earbud or Canalphone design with type absent or `In the Ear` → `in-ear`;
+    - `Over the Ear` type with design absent or `Over the Head` → `over-ear`.
+
+    Conflicts keep the category label only.
+  - **Laptop processor:** taken only from a processor model matched inside `Generation`.
+  - **Laptop storage:** `storage_type` is the medium only (`SSD`/`HDD`), never the capacity.
+  - **Documented transformations:** every adapter transformation is listed in
+    `evals/listing_decisions/adapters.py`; unsupported values are omitted.
+- **Grouping.**
+  - Records sharing *any* identity are joined transitively (union-find): Flipkart listing id or
+    normalized title; phone or laptop model name or model family. So different ids with one
+    title share a group.
+  - The model-family limitation is frozen and documented in `selection.py`: it over-groups (all
+    "Samsung Galaxy" phones form one group) and can under-group differently named variants.
+- **Caps and corruption counts are upper bounds.** Nothing is invented, duplicated or relaxed to
+  fill them, and shortfalls are reported.
+- **Split:** the hash split is approximate, so actual counts are reported. Groups and twins never
+  cross splits.
+- **Reporting.**
+  - Route counts are descriptive.
+  - Missing-required-field rates and clean-twin manual-review counts are reported.
+  - Injection pairs on a `manual_review` baseline are marked `ceiling_limited` (status
+    `non_informative_ceiling_limited`).
+  - Attribute detection stays tied to the changed field.
+- **Rights:** every rights caveat is kept. Each one also states that local preparation does not
+  clear future submission to a third-party model.
+
+### Files
+
+| File | Change |
+|---|---|
+| `evals/listing_decisions/sources.py` | New: pinned source manifests (dataset, file SHA-256s and sizes, declared licence and who declared it, rights caveat) |
+| `evals/listing_decisions/adapters.py` | New: adapters `la-1` and label mapping `lm-1` (Flipkart classifier ported from M14-0, plus the corrections above) |
+| `evals/listing_decisions/selection.py` | New: variant de-duplication, union-find grouping `lg-1`, capped seeded selection, split `le-split-1` |
+| `evals/listing_decisions/corrupt.py` | New: the `corrupt-2` generator (upper-bound counts, one corruption per clean item, fixed palettes and injection texts); `corrupt-1` was replaced in review (below) |
+| `evals/listing_decisions/matching.py` | New: the shared lexical matching rule `lt-1` (whole-token mentions; attribute evidence outside the seller's brand phrase) |
+| `evals/listing_decisions/contracts.py` | `CorruptionRef.rules_version` is now `corrupt-2` |
+| `evals/listing_decisions/prepare.py` | New: verified, self-checking set build; writes `set.json`, `raw/`, `manifest.json` |
+| `evals/listing_decisions/cli.py` | `prepare` command added |
+| `evals/listing_decisions/corruption.py` | `verify_transformation` split out of `verify_pair`; injection `ceiling_limited` / `informative` counts and the `non_informative_ceiling_limited` status |
+| `evals/listing_decisions/metrics.py` | `missing_required_fields` added to the descriptive section |
+| `evals/listing_decisions/evaluate.py` | `check_seller_fields` made public (reused by `prepare`) |
+| `tests/unit/listing_eval/prepare_support.py`, `test_listing_eval_prepare.py` | New: hand-written synthetic CSV rows only (48 tests) |
+| `tests/unit/listing_eval/test_listing_eval_corruption.py` | Two ceiling-limited tests added |
+| `tests/unit/listing_eval/test_listing_eval_matching.py` | New: 36 tests for `lt-1` and its use by the generator, the pair checker and the disclosures |
+
+### Commands and results (2026-10-21, `uv run --offline`)
+
+| Command | Result |
+|---|---|
+| `sha256sum` of the six M14-0 source files | All six match the M14-0 records; neither archive contains documentation |
+| `pytest tests/unit/listing_eval` (after the corruption/metrics changes, before new code) | **69 passed** |
+| `pytest tests/unit/listing_eval/test_listing_eval_prepare.py` (first run, `-x`) | 16 passed, 1 failed. A fixture bug: the synthetic spec helper wrote `Wired Wireless` instead of `Wired/Wireless`. Fixed in the fixture; the adapter was unchanged. |
+| Same (second run) | 47 passed, 1 failed. The expected clean count had been hand-counted wrongly as 15; it is 12 + 3 + 3 = 18. Corrected, with the arithmetic in the test. |
+| `pytest tests/unit/listing_eval` | **117 passed** in 6.51 s |
+| `ruff check` (package and tests) | 2 × B007 (unused loop variables in a test), fixed |
+| `ruff check` / `ruff format --check` (package and tests) | **All checks passed**; **21 files already formatted** |
+| `pytest tests/unit/listing_eval tests/unit/listing_decisions` | **290 passed** in 7.80 s |
+| `python -m evals.listing_decisions prepare` on the three local CSVs → `data/processed/m14_listing_set/le-set-1/` | Exit 0; `set_sha256 da86198c…8069`. `git check-ignore` confirms `data/processed/*`. **Superseded** (see review fix). |
+| `python -m evals.listing_decisions evaluate` (dev, no outcomes), on `le-set-1` | Exit 0, no failed checks; byte-identical on re-run. Superseded with its set. |
+| **Review fix:** `ruff format` / `ruff check` / `ruff format --check` (package and tests) | **All checks passed**; **23 files already formatted** |
+| `pytest tests/unit/listing_eval/test_listing_eval_matching.py` (first run) | 34 passed, 2 failed. Test setup error: the test replaced the `shoe-1` twin but kept the fixture's other corrupted copies of it, which no longer matched. The pinned refusal messages caught it, and those copies are now dropped in that helper. |
+| `pytest tests/unit/listing_eval tests/unit/listing_decisions` | **326 passed** in 7.68 s |
+| `prepare` (same pinned files, same seed) → new directory `data/processed/m14_listing_set/le-set-2/` | Exit 0; `set_sha256 11a1293bd588c8a2c266a260cf2f28540950793cf50e4de7c6ab37aa67884cda` |
+| Comparison of `le-set-1` and `le-set-2` | Clean items, raw clean bytes, groups, splits and labels identical (508/508). 9 corrupted pairs differ (7 attribute swap; 2 out-of-set subcategory, through the one-corruption-per-item order). All 20 attribute swaps satisfy `lt-1`. |
+| `evaluate` (dev, no outcomes) on `le-set-2` | Exit 0, no failed checks; byte-identical on re-run (`8a642d21…d365`) |
+
+**Not run:**
+- the full suite and `test_unit_isolation.py`;
+- integration tests;
+- any Jev call, test-split evaluation, upload, download, install or database operation.
+
+### Review fix: shared matching `lt-1` and `corrupt-2` (2026-10-21)
+
+**Defect found in review:** `corrupt-1` decided "the original value appears in the text" by a
+case-insensitive substring test, in both the generator and the pair checker. One of the 20
+real attribute-swap pairs, in dev, relied on a substring-only match.
+
+**Fix (owner-approved):**
+- One shared rule, `matching.py` (`lt-1`), now drives the generator, the pair checker and both
+  label-word disclosures.
+- **Whole tokens only:** "Red" is not in "Redmi", while "Navy Blue" matches "navy-blue".
+- **Brand phrase excluded:** an occurrence inside the seller's brand phrase ("Red Tape") is not
+  evidence.
+- **Unknown brand:** the case is ambiguous and excluded.
+- **Replacements:** a replacement must not be mentioned anywhere in the text.
+- **Lexical only:** the rule does not prove semantic text support.
+
+**Set versions:** the corruption version is `corrupt-2`, and the set is `le-set-2` (seed
+unchanged, `le-set-1`). It was regenerated once, into a new directory. `le-set-1` is kept
+unchanged, with a `SUPERSEDED.md` note; current code no longer loads it.
+
+### Real preparation run (`le-set-2`, superseding `le-set-1`; seed `le-set-1`; counts only)
+
+`set_sha256` `11a1293bd588c8a2c266a260cf2f28540950793cf50e4de7c6ab37aa67884cda`. Versions:
+adapter `la-1`, label mapping `lm-1`, grouping `lg-1`, split `le-split-1`, corruption
+`corrupt-2`, matching `lt-1`.
+
+**Rows and exclusions:**
+
+| Source | Rows | Exclusions | Selected-field omissions |
+|---|---|---|---|
+| Flipkart | 20,000 | out of scope 18,032; uncertain or multi-category 57; accessory path without an accessory title word 137; laptop from another source 2; duplicate listing variant 14 | `wireless` 2 |
+| Smartphones | 1,020 | column shape failed 288; non-phone or display ≥ 7″ 1 | `processor` 7, `operating_system` 2 |
+| Laptop Price | 920 | column shape failed 17; title rule 2 (otherwise-valid HDD-only and blank-storage rows kept) | `processor` 9 |
+
+**Strata** (eligible → selected; caps are upper bounds):
+
+| Category | Eligible → selected |
+|---|---|
+| Shoes | casual 427 → 40; formal 60 → 40; sports 26 → 20; other footwear 704 → 20 |
+| Headphones (uncapped) | in-ear 34; over-ear 7; unlabelled 9 |
+| Phones | 731 → 120 |
+| Laptops | 901 → 120. The 894 count from M14-0 was provisional: the corrected HDD/blank-storage rule adds 7 rows. |
+| `none` | phone accessories 237 → 40; laptop accessories 236 → 40; headphone accessories 16 (uncapped); shoe accessories 2 (uncapped) |
+
+No stratum had a shortfall against its cap.
+
+**Set and split:**
+- 508 clean items, 120 corrupted copies, 628 raw files, 369 duplicate groups.
+- **Clean dev / test** (approximate hash split): 245 / 263.
+  - headphones 19 / 31;
+  - laptop 59 / 61;
+  - `none` 46 / 52;
+  - phone 64 / 56;
+  - shoes 57 / 63.
+- **Subcategory labels by split:**
+  - casual 22 / 18;
+  - formal 17 / 23;
+  - in-ear 15 / 19;
+  - **over-ear 0 / 7**: no dev over-ear item exists, a consequence of the hash split;
+  - sports, excluded from exact accuracy, 9 / 11.
+- **Corrupted dev / test:** category swap 16 / 24, attribute swap 7 / 13, out-of-set
+  subcategory 3 / 7, instruction injection 20 / 30.
+
+**`corrupt-2` counts:** every requested count was met (generated = requested; no shortfall).
+- category swap 10 per product category;
+- attribute swap: shoes 15 (26 eligible under `lt-1`, down from 40 under `corrupt-1`), headphones
+  5 (39 eligible);
+- out-of-set subcategory 5 + 5;
+- injection 10 per category including `none`.
+
+The `none` pool combines all accessory types. Only 2 shoe accessories exist, and shoe
+accessories are not targeted separately.
+
+**Label word in the item's own text** (`lt-1` mentions; evidence, disclosed). The evaluator's
+title disclosure uses the same rule.
+- title: category shoes 55, headphones 25, laptop 119, phone 1; subcategory casual 3, sports 2;
+- title or description: category shoes 71, headphones 50, laptop 119, phone 1; subcategory
+  casual 10, formal 9, sports 9.
+
+### Deterministic-only dev evaluation on `le-set-2` (no Jev; descriptive, not quality)
+
+- **Label metrics:**
+  - Jev metrics are `null` (no recorded outcomes).
+  - The deterministic baseline makes 0 predictions:
+    - category: 245 eligible, coverage 0/245;
+    - subcategory: 54 eligible (9 `sports` excluded), coverage 0/54.
+  - Its accuracy is `null`: it is not a predictor.
+- **Routes:** `manual_review` 245 of 245.
+  - Reason codes: `m13.missing_required` 700, `m13.missing_expected` 576,
+    `risk.not_assessed` 245, `m13.candidate_unsupported` 103, `m13.incompatible_attribute` 76,
+    `m13.compatibility_unchecked` 46.
+- **Missing required fields** (dev, kept missing, never fabricated):
+  - availability and currency: 100% in every source;
+  - brand: Flipkart 41/122, laptops 59/59, phones 64/64;
+  - category: Flipkart 46/122 (the `none` non-products).
+- **Corruption, deterministic arm:**
+  - **Clean-twin baseline:** every clean twin is already `manual_review` (category 16/16,
+    attribute 7/7, out-of-set 3/3, injection 20/20). Every transition is
+    `manual_review->manual_review`; none is raised or lowered.
+  - **Attributable detection:**
+    - out-of-set subcategory: `m13.incompatible_subcategory` detected 3/3;
+    - attribute swap: `m13.value_conflict` absent 7/7 (M13 does not extract color or material
+      from text);
+    - category swap: `null`, because no deterministic signal is attributable to it.
+  - **Injection:** 20 pairs with evidence preserved, all ceiling-limited, 0 informative:
+    `non_informative_ceiling_limited`. This is not evidence of injection resistance.
+- **Title word disclosure (dev, `lt-1`):** Flipkart 30/76, laptops 59/59, phones 1/64.
+
+### M14-6 limitations
+
+- **Missing required claims dominate routing.** Every listing routes to manual review because
+  availability and currency are never documented and brand is often missing. Route
+  distributions and the injection check are therefore non-informative on this set. Category
+  and subcategory accuracy and attributable detection are unaffected.
+- **Labels:** these remain external source labels, not human-reviewed gold. Shoe and headphone
+  labels are `mapped` by `lm-1`; phone and laptop labels come from dataset membership. Each
+  source has its own format, so per-source figures are the meaningful ones.
+- **Thin cells:**
+  - over-ear has 7 items, all in test;
+  - `on-ear` has no example;
+  - the dev subcategory cells are small (15–22).
+- **Grouping:** model families over-group, which makes the split lumpy. Differently named
+  variants can split apart.
+- **Rights:** upstream rights are unverified for all three sources. Local preparation does not
+  clear future submission of this data to a third-party model (the live run).
+- **Lexical matching:** `lt-1` is lexical. A listing without a brand is never attribute-swapped,
+  and a mention outside the brand phrase can still be incidental.
+- **Row-level data:** none is in git. `data/processed/m14_listing_set/le-set-2/` holds the
+  current set, raw files, manifest and dev report. `le-set-1/` is kept as superseded.
+
 ## Next batch (needs explicit approval)
 
-1. Review and commit M14-4.
-2. Then, each needing approval:
-   - M14-5: persistence (optional);
-   - M14-6: dataset preparation (adapters, mapping, `corrupt-1` generator, frozen split);
-   - a live runner, which is an approval dependency before M14-7;
-   - M14-7: live evaluation.
+1. M14-6 is committed with this record.
+2. A mocked-tested live runner (budget, journal, `le-outcomes-1`) is the approval dependency
+   before M14-7. Submitting this data to Jev needs a separate decision on the rights caveats, a
+   cap, prices and a tripwire.
 
-M14-5 has not started. No live calls are allowed without a separate approval covering the cap,
-prices and tripwire.
+No live call has been made.

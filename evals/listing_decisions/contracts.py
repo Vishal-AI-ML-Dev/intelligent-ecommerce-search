@@ -15,7 +15,7 @@ requirements stay unmet (see `docs/m14-progress.md`, evaluation amendment).
   mapping version. Subcategory labels carry a scoring policy fixed by the mapping, before any
   prediction is read: `exact`, or `excluded_ambiguous_mapping` (only `sports`, whose source label
   may include running shoes while the taxonomy separates `running`).
-* `CorruptionRef`: `label_kind=synthetic_corruption`, the `corrupt-1` rule, its seed, the exact
+* `CorruptionRef`: `label_kind=synthetic_corruption`, the `corrupt-2` rule, its seed, the exact
   raw key it changed and the original raw value. Robustness tests only, never task labels.
 
 `set_sha256` is the SHA-256 of the canonical JSON of the set without that field. It detects
@@ -36,7 +36,7 @@ from evals.contracts.canonical import ContractError
 from evals.listing_decisions.measurability import MEASURED_SUBCATEGORY_LABELS
 
 SET_SCHEMA = "le-1"
-CORRUPTION_RULES_VERSION = "corrupt-1"
+CORRUPTION_RULES_VERSION = "corrupt-2"
 _SHA256 = r"^[0-9a-f]{64}$"
 _ID = r"^[a-z0-9][a-z0-9_.:-]{0,127}$"
 AMBIGUOUS_SPORTS_REASON = (
@@ -131,7 +131,7 @@ class TaskLabel(_Frozen):
 class CorruptionRef(_Frozen):
     label_kind: Literal[LabelKind.SYNTHETIC_CORRUPTION] = LabelKind.SYNTHETIC_CORRUPTION
     rule: CorruptionRule
-    rules_version: Literal["corrupt-1"] = CORRUPTION_RULES_VERSION
+    rules_version: Literal["corrupt-2"] = CORRUPTION_RULES_VERSION
     seed: int = Field(ge=0)
     target_key: str = Field(min_length=1)  # the exact raw key that was changed
     original_value: str | None = None  # the twin's raw value text under target_key

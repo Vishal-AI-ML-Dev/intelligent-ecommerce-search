@@ -22,7 +22,6 @@ counts, support-label counts and a title-word disclosure. No correctness is impl
 route or ambiguity label exists.
 """
 
-import re
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -39,6 +38,7 @@ from ecommerce_search.decision.listing_models import (
 from ecommerce_search.decision.listing_routing import RoutingDecision
 from ecommerce_search.normalization.models import ListingNormalization
 from evals.listing_decisions.contracts import EvalItem, SubcategoryScoring, Task
+from evals.listing_decisions.matching import MATCHING_VERSION, mentions
 
 _PLACES = Decimal("0.0001")
 NO_ELIGIBLE = "no eligible labelled items"
@@ -231,10 +231,6 @@ def _route_counts(decisions: Sequence[RoutingDecision]) -> dict[str, Any]:
     }
 
 
-def _word(label: str) -> re.Pattern[str]:
-    return re.compile(rf"(?<![a-z]){re.escape(label)}", re.IGNORECASE)
-
-
 def descriptive(records: Sequence[ItemRecord]) -> dict[str, Any]:
     """Counts only: no correctness is implied by any number here."""
     jev = [r for r in records if r.outcome is not None]
@@ -262,7 +258,7 @@ def descriptive(records: Sequence[ItemRecord]) -> dict[str, Any]:
         labelled = [
             (r, lab.value) for r, lab in labelled if lab is not None and lab.value != NONE_LABEL
         ]
-        hits = sum(1 for r, value in labelled if _word(value).search(r.state.text.title or ""))
+        hits = sum(1 for r, value in labelled if mentions(r.state.text.title or "", value))
         titles[source] = {"labelled_items": len(labelled), "title_contains_category_word": hits}
     return {
         "note": "descriptive counts; no expected route or ambiguity label exists",
@@ -273,6 +269,37 @@ def descriptive(records: Sequence[ItemRecord]) -> dict[str, Any]:
         "jev_support_labels": dict(sorted(support.items())),
         "title_word_disclosure": {
             "note": "a category word in the seller's own title is evidence, not label leakage",
+            "matching": MATCHING_VERSION,
             "by_source": titles,
         },
+        "missing_required_fields": missing_required(records),
+    }
+
+
+def missing_required(records: Sequence[ItemRecord]) -> dict[str, Any]:
+    """Per source: clean items whose M13 run reports `missing_required`, by field. Missing seller
+    claims are never filled in; each one routes its listing to manual review."""
+    by_source = {}
+    for source, group in _by_source(records).items():
+        fields: Counter[str] = Counter()
+        any_missing = 0
+        for record in group:
+            missing = {
+                f.field
+                for f in record.normalization.findings
+                if f.kind.value == "missing_required" and f.field is not None
+            }
+            any_missing += bool(missing)
+            fields.update(missing)
+        by_source[source] = {
+            "items": len(group),
+            "items_missing_any_required": any_missing,
+            "by_field": {
+                field: ratio(count, len(group), NO_ELIGIBLE)
+                for field, count in sorted(fields.items())
+            },
+        }
+    return {
+        "note": "missing seller claims are kept missing, never fabricated; each routes to review",
+        "by_source": by_source,
     }

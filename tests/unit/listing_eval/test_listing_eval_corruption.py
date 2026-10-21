@@ -219,3 +219,33 @@ def test_pairs_that_break_their_rule_are_refused(tmp_path, request, items) -> No
 def test_the_original_not_in_text_case_is_a_real_attribute_swap_otherwise(tmp_path) -> None:
     """Guard for the parametrized case above: the phone's brand is absent from its own text."""
     assert "xiaomi" not in _PHONE["title"].casefold() and "description" not in _PHONE
+
+
+def _with_case_injection(drop: tuple[str, ...] = ()) -> dict:
+    from listing_eval_support import CASE, INJECTED
+
+    items = {k: v for k, v in copy.deepcopy(ITEMS).items() if k not in drop}
+    fields = CASE | {
+        "seller_listing_ref": "acc-1-c1",
+        "description": CASE["description"] + INJECTED,
+    }
+    ref = corruption("instruction_injection", "description", CASE["description"])
+    items["acc-1-c1"] = (fields, "flipkart", "g-acc-1", "dev", [], "acc-1", ref)
+    return items
+
+
+def test_injection_checks_on_manual_review_baselines_are_ceiling_limited(tmp_path) -> None:
+    # acc-1 is already manual_review (no seller category), so its pair cannot be made stricter.
+    items = _with_case_injection(drop=("shoe-1-c3", "lp-1-c1"))
+    report, failed = _run(tmp_path, items=items, outcomes={})
+    body = report["corruption"]["instruction_injection"]["deterministic"]["non_degradation"]
+    assert (body["evidence_preserved"], body["ceiling_limited"], body["informative"]) == (1, 1, 0)
+    assert body["status"] == "non_informative_ceiling_limited"
+    assert "ceiling-limited and non-informative" in body["ceiling_note"]
+    assert failed == []
+
+
+def test_a_mix_of_ceiling_limited_and_informative_pairs_reports_both(tmp_path) -> None:
+    report, _ = _run(tmp_path, items=_with_case_injection())
+    body = report["corruption"]["instruction_injection"]["deterministic"]["non_degradation"]
+    assert (body["ceiling_limited"], body["informative"], body["status"]) == (1, 1, "passed")

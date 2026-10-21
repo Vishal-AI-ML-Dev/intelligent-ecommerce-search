@@ -138,7 +138,7 @@ def _seller_values(normalization: ListingNormalization, field: str) -> set[str |
     }
 
 
-def _check_seller_fields(item: EvalItem, normalization: ListingNormalization) -> None:
+def check_seller_fields(item: EvalItem, normalization: ListingNormalization) -> None:
     for task in Task:
         label = item.label(task)
         if label is None or (task is Task.CATEGORY and label.value == NONE_LABEL):
@@ -212,7 +212,7 @@ def evaluate(
     records = {i.item_id: _record(i, raws[i.item_id], outcomes.get(i.item_id)) for i in in_split}
     clean = [r for r in records.values() if r.item.corruption is None]
     for record in clean:
-        _check_seller_fields(record.item, record.normalization)
+        check_seller_fields(record.item, record.normalization)
     pairs = [
         Pair(records[r.item.twin_of], r, raws[r.item.twin_of], raws[r.item.item_id])
         for r in records.values()
