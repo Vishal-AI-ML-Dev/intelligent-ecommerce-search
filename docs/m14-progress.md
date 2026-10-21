@@ -1446,6 +1446,72 @@ the $0.10 tripwire, usage, redaction and unknown-cost safeguards are all unchang
 - **Status only:** the quality breach is reported in run status and docs, not in the
   `le-outcomes-1` export.
 
+## `dev-full-1` final-71 continuation under the exception (2026-10-21)
+
+**Approval.** One live invocation under `owner-dev-full-1-final71-exception`, acknowledging 220
+results and 5 invalid. It ran with the reviewed control `916975e`, the existing three-source
+send decision and the unresolved rights caveats. **This is not a rights clearance**, and crash
+recovery was not approved.
+
+**Pre-checks (all passed):**
+- pricing unchanged (re-read on 2026-10-21);
+- 220 results, 5 invalid, 427 attempts, 0 unaccounted, 0 unknown;
+- the set, `jl-1`, `lr-1` and rules bindings match;
+- no uncommitted code.
+
+**Outcome:**
+- **Stop:** the exception stopped the run with `new_invalid_under_exception` at **279 results**,
+  on the 6th invalid response. The approval is over. No resume, renewal, recovery or resend.
+- **Run totals:** 279 dispatched and unique (233 clean, all 46 corrupted); 279 completed; 273
+  successes; 6 `invalid_response`; 0 unknown; **12 unattempted** (all clean).
+- **Attempts:** 544, all HTTP 200, with no refusal.
+- **Diagnostic causes:** 2 not recorded (unknown), 1 `choice_not_top`, **3 `probability_sum`**.
+  All three `probability_sum` cases are at call A, question `subcategory`, on clean Laptop Price
+  listings. That is an observed pattern; the cause is unknown, and the values were not retained.
+- **Threshold reporting:** current rate 6/279 = **2.15 %** (`threshold_breached` true); historical
+  breach true. **Completing or stopping says nothing about quality acceptance.**
+- **Tokens and spend:** 504,130 input / 80,443 output tokens. Known estimated spend
+  **$0.02117346**; **0 unaccounted** attempts. An estimate, not billing data.
+- **Secrets:** the key was found in none of the run's files.
+- **Files:** `outcomes-279.jsonl` and `report-dev-279.json`; the earlier exports are kept as
+  superseded.
+
+**Dev evaluation of the 279 recorded outcomes** (external source labels; 12 clean items
+`not_attempted`, not errors):
+
+| Category | Eligible | Attempted | Predictions | Correct | Wrong | Abstentions | Answered-only | Overall / coverage |
+|---|---|---|---|---|---|---|---|---|
+| Pooled | 245 | 233 | 228 | 228 | 0 | 5 (`invalid_response`) | 1.0000 | 0.9306 / 0.9306 |
+| Flipkart | 122 | 114 | 113 | 113 | 0 | 1 | 1.0000 | 0.9262 / 0.9262 |
+| Laptop Price | 59 | 56 | 52 | 52 | 0 | 4 | 1.0000 | 0.8814 / 0.8814 |
+| Smartphones | 64 | 63 | 63 | 63 | 0 | 0 | 1.0000 | 0.9844 / 0.9844 |
+
+- **Category is not a whole-system 100 %:** 5 clean fallbacks and 12 unattempted items count
+  against overall accuracy. There were no ties and no `none` answered for a product.
+- **Subcategory** (Flipkart; 54 eligible, 9 `sports` excluded):
+  - 49 attempted; 36 correct, 8 wrong, 5 `none` answers (not correct);
+  - answered-only accuracy 0.7347, overall 0.6667, coverage 0.9074;
+  - casual: 15 correct, 1 answered formal, 5 answered `none`; formal: 7 correct, 7 answered
+    casual; in-ear: 14 correct.
+- **Corruption** (Jev arm; completed pairs only):
+  - category swap: 15 of 16 evaluated, `jev.category_disagrees_with_seller` detected **14/15** (1
+    absent);
+  - attribute swap: 7 of 7 evaluated, `jev.claim_contradicted` detected **7/7**, while
+    `m13.value_conflict` was absent 7/7;
+  - out-of-set subcategory: 3 of 3 evaluated, `m13.incompatible_subcategory` detected **3/3**;
+  - injection: 19 of 20 evaluated, all ceiling-limited (`non_informative_ceiling_limited`), which
+    is not evidence of resistance.
+- **Descriptive:** support answers `not_stated` 308, `supported` 230, `contradicted` 4, tie 1. All
+  233 clean Jev routes are `manual_review`.
+
+**What these results do not show:**
+- **Routing:** every listing routes to manual review because of missing required seller claims.
+- **Labels:** external source labels, not human-reviewed gold.
+- **Calibration:** unmeasured.
+- **Quality acceptance:** the invalid-response threshold remains breached.
+- **Completeness:** 279 of 291 dev listings is a partial, development-scoped result. **M14 is not
+  complete.**
+
 ## Next batch (needs explicit approval)
 
 1. The runner is committed with this record.
