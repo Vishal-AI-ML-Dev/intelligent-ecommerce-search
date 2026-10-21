@@ -1512,6 +1512,81 @@ recovery was not approved.
 - **Completeness:** 279 of 291 dev listings is a partial, development-scoped result. **M14 is not
   complete.**
 
+## `dev-complete-1` and the combined dev evaluation (2026-10-21)
+
+**Approval.** One live invocation under `owner-m14-completion-final12`, run with the
+existing three-source upstream-rights caveats acknowledged. **This is not a rights clearance.**
+
+**Pre-checks (all passed):**
+- `https://docs.typesafe.ai/models` read 2026-10-21: $0.042 per million input tokens, output free.
+- `dev-complete-1` did not exist.
+- `dev-full-1` is terminal, unlocked, journal `a195176d…`.
+- The set, `jl-1`, `lr-1` and rules bindings match.
+- The selection is 12 items.
+
+**Run configuration:** `--exclude-dispatched-in dev-full-1 --stop-on-first-invalid --max-items 12
+--max-attempts 23`; allowances 4,000 / 2,000; tripwire $0.01.
+
+**Result:**
+- **Stop:** `first_invalid_response` after **7 of 12** listings. The 7th returned
+  `probability_sum` at call A, question `subcategory`, on a Flipkart listing.
+- **Counts:** 13 HTTP attempts, all 200; 7 results (6 successes, 1 invalid); 0 unknown; 0
+  unaccounted; **5 never sent**.
+- **Tokens and spend:** 12,287 input / 2,000 output tokens; known estimated spend $0.000516054.
+- **Live authorization ends here.** No resume, retry or resend.
+- **Source run:** `dev-full-1` is unchanged (journal hash re-checked).
+- **Secrets:** the key was found in none of the new files.
+
+**Combined evaluation.** `combined-dev-286.jsonl` combines `dev-full-1` and `dev-complete-1`;
+lineage was verified against both journals; report `report-dev-combined-286.json`; no failed
+checks. External source labels; dev only.
+
+- **Coverage:** 286 of 291 dev listings have an outcome (240 clean, 46 corrupted); **5 clean
+  listings were never sent**.
+- **Run quality** (the original rule, unchanged): **7 invalid in 286 results = 2.45 %, breached**.
+  `dev-full-1` 6/279 (breached); `dev-complete-1` 1/7. This is a run quality check, not a quality
+  acceptance.
+- **Invalid-response causes:** 2 not recorded (unknown), 1 `choice_not_top`, **4 `probability_sum`**
+  (three on Laptop Price and one on Flipkart, all at call A, question `subcategory`).
+- **Total known estimated spend** over all M14 live runs: `smoke-1` $0.00006321, `dev-full-1`
+  $0.02117346, `dev-complete-1` $0.000516054. An estimate from returned usage, not billing data.
+
+| Category | Eligible | Attempted | Predictions | Correct | Wrong | Abstentions | Answered-only | Overall / coverage |
+|---|---|---|---|---|---|---|---|---|
+| Pooled | 245 | 240 | 234 | 234 | 0 | 6 (`invalid_response`) | 1.0000 | 0.9551 / 0.9551 |
+| Flipkart | 122 | 119 | 117 | 117 | 0 | 2 | 1.0000 | 0.9590 / 0.9590 |
+| Laptop Price | 59 | 58 | 54 | 54 | 0 | 4 | 1.0000 | 0.9153 / 0.9153 |
+| Smartphones | 64 | 63 | 63 | 63 | 0 | 0 | 1.0000 | 0.9844 / 0.9844 |
+
+- **Per-label recall / F1** (precision 1.0000 for every label):
+  - headphones 0.9474 / 0.9730;
+  - laptop 0.9153 / 0.9558;
+  - `none` 0.9565 / 0.9778;
+  - phone 0.9844 / 0.9921;
+  - shoes 0.9649 / 0.9821.
+- **Subcategory** (Flipkart; 54 eligible, 9 `sports` excluded):
+  - 53 attempted; 52 predictions; 37 correct, 9 wrong, 6 `none` answers (not correct); 1
+    abstention;
+  - answered-only accuracy 0.7115, overall 0.6852, coverage 0.9630;
+  - casual: precision 0.6667, recall 0.7273, F1 0.6957;
+  - formal: precision 0.8750, recall 0.4118, F1 0.5600 (8 of 17 answered casual);
+  - in-ear: precision 1.0000, recall 0.9333, F1 0.9655.
+- **Corruption** (Jev arm; completed pairs only):
+  - category swap: 14 of 15 detected;
+  - attribute swap: 7 of 7 detected by `jev.claim_contradicted`, with `m13.value_conflict` absent
+    7/7;
+  - out-of-set subcategory: 3 of 3 detected by M13;
+  - injection: 19 of 20 evaluated, all ceiling-limited, which is not evidence of resistance.
+- **Routes:** all 240 clean Jev routes are `manual_review`, which is not evidence that a human
+  reviewed anything.
+
+**What these results do not show:**
+- **Labels:** external source labels, not human-reviewed gold.
+- **Calibration:** unmeasured.
+- **Completeness:** 5 dev listings were never sent.
+- **Quality:** the invalid-response criterion failed.
+- **Further runs:** the remaining 5 need a new decision.
+
 ## Remaining-only completion tooling (2026-10-21; built, mocked tests only, uncommitted)
 
 `dev-full-1` stays terminal and untouched. No live call was made.
