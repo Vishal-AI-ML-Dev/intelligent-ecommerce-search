@@ -1189,6 +1189,88 @@ validator can actually tell the causes apart:
 | `pytest tests/unit/listing_decisions tests/unit/listing_eval tests/unit/search/test_jev_provider.py tests/unit/search/test_decision_provider.py tests/unit/search/test_query_understanding_contract.py` (unraisable warnings as errors) | 536 passed, 1 failed. The new descriptive key contained "reject", which the M14-4 no-rejection test forbids; renamed `jev_invalid_response_causes`. Then **537 passed** in 45.60 s. |
 | `ruff check` / `ruff format --check` (providers, evaluator and tests) | **All checks passed**; **41 files already formatted** |
 
+## `dev-full-1` bounded continuation (2026-10-21)
+
+**Approval.** After the diagnostic fix was committed (`9366e0d`), the owner approved continuing
+`dev-full-1` under the existing three-source send decision and the unresolved rights caveats
+(continuation reference `owner-dev-full-1-bounded-resume`). **This is not a rights clearance.**
+
+**Limits:**
+- at most 3 sequential resumes;
+- only the 194 never-dispatched listings;
+- the cumulative 572 attempt cap and the $0.10 tripwire;
+- the existing allowances and the 2 % cumulative threshold;
+- no new run, no resend.
+
+**Gates:**
+- Resume 2 is allowed only at exactly 98 results with `invalid_response_rate`, still 2 invalid
+  and 0 unaccounted.
+- Resume 3 needs the same checks at 99 results.
+- Anything else ends the sequence.
+
+**Pre-resume checks:**
+- `https://docs.typesafe.ai/models` re-read on 2026-10-21: unchanged ($0.042 per million input,
+  output free; `jev-latest` still `jev-1.13.0`).
+- The journal shows 97 results, 188 attempts, 0 unaccounted, 2 invalid, stop
+  `invalid_response_rate`.
+- The frozen `run.json` is not modified. Its recorded price-check date stays 2026-10-21, and
+  this re-check is recorded here only.
+
+**Continuation results (counts only):**
+- **Resumes:**
+  - resume 1 sent 1 listing and stopped at 98 results; the gate passed (2 invalid, 0 unaccounted);
+  - resume 2 sent 1 listing and stopped at 99; the gate passed;
+  - resume 3 continued and stopped with `invalid_response_rate` at **147 results**, after a third
+    invalid response (3/147 = 2.04 %).
+- **The sequence is over:** 3 resumes were used. No retry, resend or new run.
+- **Run totals:** 147 dispatched and unique (125 clean, 22 corrupted); 147 completed; 144
+  successes; 3 `invalid_response` fallbacks; 0 unknown; **144 unattempted**.
+- **Attempts:** 285, all HTTP 200. Largest call 1,472 input / 187 output tokens.
+- **Diagnostic codes:**
+  - the two earlier invalid responses: cause not recorded (unknown);
+  - the new one: `choice_not_top` at call B, question `attribute_support[1]`, on a clean Laptop
+    Price listing, usage complete. Jev's chosen label was not its highest-probability label.
+- **Tokens and spend:** 262,319 input / 41,991 output tokens. Known estimated spend
+  **$0.011017398**; **0 unaccounted** attempts. An estimate, not billing data.
+- **Secrets:** the key was found in none of the run's files.
+- **Files:** export `runs/dev-full-1/outcomes-147.jsonl` and report `runs/dev-full-1/report-dev-147.json`
+  (the 97-item files are kept as superseded).
+
+**Dev evaluation of the 147 recorded outcomes. This is a partial sample** (the first 147 of the
+frozen hash order); the 120 clean items without an outcome are `not_attempted`, not errors.
+
+| Category | Eligible | Attempted | Predictions | Correct | Wrong | Abstentions | Answered-only | Overall / coverage |
+|---|---|---|---|---|---|---|---|---|
+| Pooled | 245 | 125 | 123 | 123 | 0 | 2 (`invalid_response`) | 1.0000 | 0.5020 / 0.5020 |
+| Flipkart | 122 | 67 | 66 | 66 | 0 | 1 | 1.0000 | 0.5410 / 0.5410 |
+| Laptop Price | 59 | 25 | 24 | 24 | 0 | 1 | 1.0000 | 0.4068 / 0.4068 |
+| Smartphones | 64 | 33 | 33 | 33 | 0 | 0 | 1.0000 | 0.5156 / 0.5156 |
+
+- **Category detail:** no ties, and no `none` answered for a product.
+- **Not a whole-system 100 %:** the answered-only 1.0000 covers 123 answers on a partial sample.
+  2 clean listings fell back (`invalid_response`), 120 clean listings were not attempted, and the
+  labels are external source labels. Overall accuracy on the 245 eligible is 0.5020.
+- **Subcategory counting:** the 4 `none` answers count as not correct (17/25 answered-only).
+- **Subcategory** (Flipkart; 54 eligible, 9 `sports` excluded):
+  - 25 attempted; 17 correct, 4 wrong, 4 answered `none` for a labelled product;
+  - answered-only accuracy 0.6800, overall 0.3148, coverage 0.4630;
+  - casual: 8 correct, 1 answered formal, 4 answered `none`; formal: 3 correct, 3 answered
+    casual; in-ear: 6 correct.
+- **Corruption** (Jev arm; only pairs with both outcomes count):
+  - category swap: 5 of 16 evaluated; `jev.category_disagrees_with_seller` detected 5/5;
+  - out-of-set subcategory: 2 of 3 evaluated; `m13.incompatible_subcategory` detected 2/2;
+  - attribute swap: 0 of 7 evaluated;
+  - injection: 7 of 20 evaluated, all ceiling-limited (`non_informative_ceiling_limited`), which
+    is not evidence of resistance.
+- **Descriptive:** support answers `not_stated` 171, `supported` 109, `contradicted` 2. All 125
+  clean Jev routes are `manual_review`.
+
+**What these results do not show:**
+- **Routing:** every listing routes to manual review because of missing required seller claims.
+- **Labels:** external source labels, not human-reviewed gold.
+- **Calibration:** unmeasured, and provider confidence is not gate confidence.
+- **Sample:** a partial, development-scoped sample.
+
 ## Next batch (needs explicit approval)
 
 1. The runner is committed with this record.
