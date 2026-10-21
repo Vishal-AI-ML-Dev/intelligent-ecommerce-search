@@ -108,6 +108,7 @@ StopReason = Literal[
     "interrupted",
     "new_invalid_under_exception",
     "exception_expired",
+    "first_invalid_response",
 ]
 TERMINAL_OR_CAP = frozenset({"attempt_cap", "spend_tripwire", "unknown_cost", "allowance_exceeded"})
 TERMINAL_STOPS = frozenset(
@@ -117,6 +118,7 @@ TERMINAL_STOPS = frozenset(
         "secret_in_output",
         "binding_mismatch",
         "new_invalid_under_exception",  # neither plain resume nor a new exception bypasses it
+        "first_invalid_response",  # the recorded stop-on-first-invalid option
     }
 )
 
@@ -151,6 +153,15 @@ class Allowance(_Model):
     output_tokens_per_call: int = Field(ge=0)
 
 
+class ExcludedRun(_Model):
+    """A run whose dispatched items (results, fallbacks and unknowns alike) this run excludes,
+    bound to that run's journal as it was when the selection was derived."""
+
+    run_id: str = Field(pattern=RUN_ID_PATTERN)
+    journal_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    dispatched: int = Field(ge=0)
+
+
 class RunHeader(_Model):
     schema_version: Literal["le-run-1"] = RUN_SCHEMA
     run_id: str = Field(pattern=RUN_ID_PATTERN)
@@ -169,6 +180,9 @@ class RunHeader(_Model):
     pricing: Pricing | None = None
     max_estimated_usd: Decimal | None = Field(default=None, gt=0)
     send_approval_ref: str | None = None
+    # Remaining-only completion runs (both default off, so older headers are unchanged).
+    excluded_runs: tuple[ExcludedRun, ...] = ()
+    stop_on_first_invalid: bool = False
 
     @model_validator(mode="after")
     def _valid(self) -> "RunHeader":
@@ -623,8 +637,12 @@ def make_header(
     pricing: Pricing | None = None,
     max_estimated_usd: Decimal | None = None,
     send_approval_ref: str | None = None,
+    excluded_runs: tuple[ExcludedRun, ...] = (),
+    excluded_items: frozenset[str] = frozenset(),
+    stop_on_first_invalid: bool = False,
 ) -> RunHeader:
-    items = frozen_items(eval_set, max_items)
+    dev = frozen_items(eval_set, len(eval_set.items))
+    items = tuple(i for i in dev if i not in excluded_items)[:max_items]
     try:
         return RunHeader(
             run_id=run_id,
@@ -642,9 +660,40 @@ def make_header(
             pricing=pricing,
             max_estimated_usd=max_estimated_usd,
             send_approval_ref=send_approval_ref,
+            excluded_runs=excluded_runs,
+            stop_on_first_invalid=stop_on_first_invalid,
         )
     except ValidationError as exc:
         raise RunnerError(f"invalid run header: {exc.errors()[0]['msg']}") from None
+
+
+def exclusions(
+    work_dir: Path, eval_set: EvalSet, run_ids: tuple[str, ...]
+) -> tuple[tuple[ExcludedRun, ...], frozenset[str]]:
+    """Read (never write) each excluded run: its journal hash and every item it dispatched,
+    whatever the outcome. The run must be bound to this set and not be in progress."""
+    bound, items = [], set()
+    for run_id in run_ids:
+        state, digest = _excluded_state(work_dir, eval_set, run_id)
+        bound.append(
+            ExcludedRun(run_id=run_id, journal_sha256=digest, dispatched=len(state.dispatched))
+        )
+        items |= set(state.dispatched)
+    return tuple(bound), frozenset(items)
+
+
+def _excluded_state(work_dir: Path, eval_set: EvalSet, run_id: str) -> tuple[JournalState, str]:
+    run_dir = work_dir / RUNS_DIR / run_id
+    if (run_dir / LOCK_FILE).exists():
+        raise RunnerError(f"excluded run {run_id} is in progress (locked)")
+    try:
+        header = RunHeader.model_validate_json((run_dir / RUN_FILE).read_bytes())
+        data = (run_dir / JOURNAL_FILE).read_bytes()
+    except (OSError, ValidationError) as exc:
+        raise RunnerError(f"cannot read excluded run {run_id} ({type(exc).__name__})") from None
+    if (header.set_version, header.set_sha256) != (eval_set.set_version, eval_set.set_sha256):
+        raise RunnerError(f"excluded run {run_id} is bound to another set")
+    return read_journal(run_dir / JOURNAL_FILE), hashlib.sha256(data).hexdigest()
 
 
 @contextlib.contextmanager
@@ -788,6 +837,8 @@ def _post_stop(
                 return "allowance_exceeded"
     if outcome.fallback_reason in STOPPING_FALLBACKS:
         return outcome.fallback_reason
+    if header.stop_on_first_invalid and outcome.fallback_reason == "invalid_response":
+        return "first_invalid_response"  # recorded option: no 20-result minimum applies
     exception = state.active_exception
     if exception is not None and state.invalid_responses > exception.acknowledged_invalid:
         return "new_invalid_under_exception"  # the next new invalid response, at any rate
@@ -816,6 +867,12 @@ def run(
     for item_id in header.items:
         if eval_set.item(item_id).split is not Split.DEV:
             raise RunnerError("runs are dev-only")
+    for excluded in header.excluded_runs:  # the source journal must be exactly as bound
+        state, digest = _excluded_state(work_dir, eval_set, excluded.run_id)
+        if digest != excluded.journal_sha256:
+            raise RunnerError(f"excluded run {excluded.run_id}'s journal changed since selection")
+        if set(header.items) & set(state.dispatched):
+            raise RunnerError(f"an item was already dispatched in {excluded.run_id}")
     run_dir = work_dir / RUNS_DIR / header.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     with _lock(run_dir):

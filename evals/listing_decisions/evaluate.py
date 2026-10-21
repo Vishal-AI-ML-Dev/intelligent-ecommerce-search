@@ -22,6 +22,7 @@ the report records. The report has no timestamps: the same inputs give the same 
 
 import json
 from collections.abc import Sequence
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Literal
 
@@ -70,17 +71,33 @@ class _Frozen(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
 
+class SourceRun(_Frozen):
+    """One run a combined outcomes file was built from (see `combine`)."""
+
+    run_id: str
+    journal_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mode: Literal["dry_run", "live"]
+    results: int = Field(ge=0)
+
+
+class SourceRef(_Frozen):
+    run_id: str
+    journal_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class OutcomesHeader(_Frozen):
     schema_version: Literal["le-outcomes-1"] = OUTCOMES_SCHEMA
     set_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     provider: Literal["jev"]
     question_set_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
     synthetic: bool  # true unless the outcomes are real recorded Jev output
+    sources: tuple[SourceRun, ...] = ()  # combined files only; older files have none
 
 
 class OutcomeRecord(_Frozen):
     item_id: str
     outcome: ListingDecisionOutcome
+    source_run: SourceRef | None = None  # lineage, combined files only
 
 
 def load_raw(raw_dir: Path, item: EvalItem) -> RawListing:
@@ -100,7 +117,7 @@ def load_raw(raw_dir: Path, item: EvalItem) -> RawListing:
 
 
 def load_outcomes(
-    path: Path, eval_set: EvalSet
+    path: Path, eval_set: EvalSet, lineage: dict[str, list[str]] | None = None
 ) -> tuple[OutcomesHeader, dict[str, ListingDecisionOutcome]]:
     try:
         lines = path.read_bytes().decode("utf-8").splitlines()
@@ -117,6 +134,7 @@ def load_outcomes(
         raise EvalSetError("the outcomes were recorded for another set")
     if header.question_set_digest != question_set_digest():
         raise EvalSetError("the outcomes were recorded for another jl-1 question set")
+    _check_lineage(header, records)
     known = {i.item_id for i in eval_set.items}
     outcomes: dict[str, ListingDecisionOutcome] = {}
     for record in records:
@@ -127,7 +145,66 @@ def load_outcomes(
         if record.outcome.provider != "jev":
             raise EvalSetError(f"{record.item_id}: a recorded outcome must come from jev")
         outcomes[record.item_id] = record.outcome
+        if lineage is not None and record.source_run is not None:
+            lineage.setdefault(record.source_run.run_id, []).append(record.item_id)
     return header, outcomes
+
+
+def _check_lineage(header: OutcomesHeader, records: Sequence[OutcomeRecord]) -> None:
+    """A combined file names a listed source run on every record, with matching counts."""
+    labelled = [r.source_run is not None for r in records]
+    if not header.sources:
+        if any(labelled):
+            raise EvalSetError("records carry lineage the header does not list")
+        return
+    if not all(labelled):
+        raise EvalSetError("a combined file names the source run of every record")
+    listed = {(s.run_id, s.journal_sha256): s.results for s in header.sources}
+    counts: dict[tuple[str, str], int] = {}
+    for r in records:
+        key = (r.source_run.run_id, r.source_run.journal_sha256)  # type: ignore[union-attr]
+        if key not in listed:
+            raise EvalSetError("a record names a source run the header does not list")
+        counts[key] = counts.get(key, 0) + 1
+    if counts != {k: v for k, v in listed.items() if v}:
+        raise EvalSetError("record counts differ from the listed source runs")
+
+
+def run_quality(
+    outcomes: dict[str, ListingDecisionOutcome], header: OutcomesHeader | None, lineage: dict
+) -> dict[str, Any]:
+    """The runner's original invalid-response criterion, applied unchanged to every recorded
+    outcome of the evaluated split (fallbacks included)."""
+    from evals.listing_decisions.runner import (
+        INVALID_RESPONSE_MAX_RATE,
+        INVALID_RESPONSE_MIN_RESULTS,
+    )
+
+    def block(values: list[ListingDecisionOutcome]) -> dict[str, Any]:
+        invalid = sum(1 for o in values if o.fallback_reason == "invalid_response")
+        n = len(values)
+        return {
+            "results": n,
+            "invalid_responses": invalid,
+            "rate": None if n == 0 else str(Decimal(invalid) / Decimal(n)),
+            "breached": n >= INVALID_RESPONSE_MIN_RESULTS
+            and Decimal(invalid) / Decimal(n) > INVALID_RESPONSE_MAX_RATE,
+        }
+
+    report = {
+        "criterion": (
+            f"invalid_response rate above {INVALID_RESPONSE_MAX_RATE} once at least "
+            f"{INVALID_RESPONSE_MIN_RESULTS} results exist (the runner rule, unchanged)"
+        ),
+        "note": "a run quality check; it is not a quality acceptance",
+        **block(list(outcomes.values())),
+    }
+    if lineage:
+        report["by_source_run"] = {
+            run_id: block([outcomes[i] for i in items if i in outcomes])
+            for run_id, items in sorted(lineage.items())
+        }
+    return report
 
 
 def _seller_values(normalization: ListingNormalization, field: str) -> set[str | None]:
@@ -198,12 +275,14 @@ def evaluate(
     *,
     split: Split = Split.DEV,
     allow_test_split: bool = False,
+    lineage_verified: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     """The report and its failed checks (empty when every check passed)."""
     if split is Split.TEST and not allow_test_split:
         raise EvalSetError("the test split is evaluated only with an explicit allow_test_split")
+    lineage: dict[str, list[str]] = {}
     header, outcomes = (
-        (None, {}) if outcomes_path is None else load_outcomes(outcomes_path, eval_set)
+        (None, {}) if outcomes_path is None else load_outcomes(outcomes_path, eval_set, lineage)
     )
     in_split = [i for i in eval_set.items if i.split is split]
     if not in_split:
@@ -256,7 +335,16 @@ def evaluate(
             "records": len(outcomes),
             "in_split": sum(1 for i in in_split if i.item_id in outcomes),
             "outside_split": sum(1 for k in outcomes if k not in records),
+            "sources": [s.model_dump(mode="json") for s in header.sources],
+            "lineage": {"present": bool(header.sources), "verified": lineage_verified},
         },
+        "run_quality": None
+        if header is None
+        else run_quality(
+            {k: v for k, v in outcomes.items() if k in records},
+            header,
+            {r: [i for i in items if i in records] for r, items in lineage.items()},
+        ),
         "measurability": registry(),
         "label_metrics": label_metrics,
         "descriptive": descriptive(clean),

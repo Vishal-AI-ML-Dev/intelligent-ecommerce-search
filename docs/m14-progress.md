@@ -1512,6 +1512,109 @@ recovery was not approved.
 - **Completeness:** 279 of 291 dev listings is a partial, development-scoped result. **M14 is not
   complete.**
 
+## Remaining-only completion tooling (2026-10-21; built, mocked tests only, uncommitted)
+
+`dev-full-1` stays terminal and untouched. No live call was made.
+
+**Remaining-only selection.** `run --exclude-dispatched-in dev-full-1` derives the items:
+- **The list:** the frozen dev order minus **every** item dispatched in that run (results,
+  fallbacks and unknowns alike).
+- **Binding:** the new run's frozen `run.json` (git-ignored) records the exact selection and
+  `excluded_runs` (run id, journal SHA-256 and dispatched count).
+- **Refusals:** the source run must be bound to the same set and not be locked. At run time the
+  runner refuses if the source journal changed since selection, or if any selected item was
+  dispatched there.
+- **Read-only:** source runs are only ever read.
+- **Read-only check on the real runs:** 12 items selected (23 planned calls); `dev-full-1` excluded
+  with its 279 dispatched items and journal hash; its files are byte-identical before and after;
+  its frozen header still matches.
+
+**`--stop-on-first-invalid`.** A recorded header option, default off. A run with it stops with
+`first_invalid_response`, which is terminal, on its first invalid response. The 20-result minimum
+does not apply to this stop. Default behaviour, validation and tolerances are unchanged.
+
+**`combine`.** It builds one `le-outcomes-1` file from the runs' **journals**, never from export
+files.
+- **Refusals:** differently bound runs (set, `jl-1`, `lr-1`, M13 rules, model, allowances), locked
+  runs, and any item dispatched in more than one run, whatever its outcome. Duplicates are refused,
+  never chosen between.
+- **Lineage:** every record carries `source_run` (run id and journal SHA-256), and the header lists
+  every source run with its result count. All results are kept, fallbacks included.
+- **Legacy files:** single-run files without lineage remain valid.
+- **Verification:** `evaluate --verify-lineage` re-checks every record against its source journal.
+  An edited outcome, a relabelled or dropped record, or a wrong journal hash is refused. A partly
+  labelled file is refused when read.
+
+**Combined quality.** The evaluator report's new `run_quality` block applies the runner's original
+rule (`invalid_response` above 2 % once at least 20 results exist) to every recorded outcome of
+the evaluated split, with a per-source-run breakdown. It is a run quality check, not a quality
+acceptance. With 6 invalid responses already recorded, the combined rate cannot fall back to 2 %
+or below: at best 6/291 = 2.06 %.
+
+**Files:**
+- `evals/listing_decisions/runner.py`: `ExcludedRun`, `exclusions`, the header fields, run-time
+  source checks, `first_invalid_response`;
+- `evals/listing_decisions/combine.py` (new);
+- `evals/listing_decisions/evaluate.py`: optional lineage fields, `run_quality`;
+- `evals/listing_decisions/cli.py`: `--exclude-dispatched-in`, `--stop-on-first-invalid`,
+  `combine`, `--verify-lineage`;
+- `tests/unit/listing_eval/test_listing_eval_completion.py` (new, 19 tests).
+
+**Commands and results (2026-10-21, `uv run --offline`):**
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/listing_eval` (after the runner, evaluator and CLI changes, before new tests) | **214 passed** (existing behaviour unchanged) |
+| `pytest tests/unit/listing_eval/test_listing_eval_completion.py` (first run) | 14 passed, 5 failed. `combine` validated its header with a Python list where the strict model expects a tuple; it now validates through JSON, as the evaluator reads the file. One test's forged header gave a dry run an allowance without prices, which the header contract rejects; it now varies the model instead. |
+| Same | **19 passed** |
+| `ruff check` / `ruff format --check` (evaluator and tests) | 1 import-order finding, fixed; then **All checks passed**; **28 files already formatted** |
+| `pytest tests/unit/listing_eval tests/unit/listing_decisions` (unraisable warnings as errors) | **439 passed** in 29.11 s |
+| Review fix: `verify_lineage` now refuses an empty or unreadable file, and `combine` refuses a journal item that is not a dev item of the set, cleanly (`EvalSetError` instead of a raw exception); 4 tests added. Then `ruff check` / `ruff format --check`, `pytest tests/unit/listing_eval` (unraisable warnings as errors) | **All checks passed**; **28 files already formatted**; completion tests **23 passed**; listing_eval suite **237 passed** in 25.56 s |
+
+## M14 acceptance checklist (2026-10-21)
+
+**Approved M14 requirements:**
+- MASTER_PLAN Milestone 14: "Implement bounded category, subcategory, attribute-validation,
+  ambiguity, and review-routing decisions. Do not allow invented attributes. Evaluate on
+  human-reviewed data. Stop."
+- Dataset registry: "Listing decision set | listing → decision | M14 | human".
+- Spec §8: human review is required for decision-evaluation labels.
+- Spec §13.4, which applies to listing intelligence as a whole: "done only when raw data is
+  preserved, normalization and contradiction detection work, decisions are bounded, uncertainty
+  reaches human review, and evaluation is human-reviewed."
+
+| Requirement | Status |
+|---|---|
+| Bounded category decisions | **Met** (implemented, closed labels, tested). Measured on external labels only. |
+| Bounded subcategory decisions | **Met** for implementation. Measured on external labels for Flipkart only; phone and laptop subcategories **unmeasured**. |
+| Bounded attribute-validation decisions | **Met** for implementation. Text-support accuracy **unmeasured**; synthetic corruption detection only. |
+| Bounded ambiguity decisions | **Met** for implementation (ties and `none` escalate). Accuracy **unmeasured** (no labels). |
+| Bounded review-routing decisions (`lr-1`) | **Met** for implementation. Route correctness **unmeasured**. Every route is `manual_review` because of missing seller claims; **routing to `manual_review` is not evidence that any human reviewed anything.** |
+| No invented attributes | **Met** (schema-enforced and tested). |
+| Evaluate on human-reviewed data | **Failed / outstanding.** External source labels were used under a scoped amendment that does not satisfy the requirement. |
+| Full dev-set evaluation (external labels) | **Outstanding:** 279/291. The completion tooling is built but not run. |
+| Invalid-response run criterion (2 %) | **Failed:** 2.15 % now; at least 2.06 % even if all 12 remaining succeed. |
+| Gate confidence and calibration (spec §8) | **Unmeasured** (`gate_confidence` is `None`). |
+| Decision metrics (accuracy, P/R/F1, confusion, coverage) | **Partly met** on external labels. Calibration and Brier **unmeasured**; latency per decision not summarized (**outstanding**). Cost reported as an estimate. |
+| Routing metrics (automation, unsafe auto-accept, unnecessary review) | **Unmeasured.** |
+| Prompt-injection safety | **Met** for the mocked offline tests only. Live injection checks are non-informative (ceiling-limited). **Mocked tests are not a general security certification.** |
+| Test-split evaluation | **Outstanding** (never run; needs approval). |
+| Upstream data rights | **Outstanding:** unresolved. The live sends were owner decisions, not clearance. |
+
+**Later-milestone or shared dependencies**, not treated as mandatory M14 work without a decision:
+- **Endpoints:** MASTER_PLAN says "Deferred endpoints are created only in their milestone. The
+  paths below are indicative, not final": `POST /listings/analyze (M13-M14)`,
+  `GET /reviews/pending (M14/M21)`, `POST /reviews/{review_id}/decision (M14/M21)`. Not built;
+  the scope split between M14 and M21 is **undecided**.
+- **Inferred-decisions storage (spec FR-LST-1):** the M13 status note says "the inferred,
+  risk-signal and human-outcome layers for listings are later milestones". M14-5 persistence is
+  **deferred, not completed**.
+- **Risk triage** (M15) and the human review workflow (M21, "Corrective Action and HITL
+  Workflow"): later milestones. `auto_accept` stays unreachable until risk exists.
+
+None of these requirements is redefined or waived. **Finishing the remaining 12 items would not
+complete M14.**
+
 ## Next batch (needs explicit approval)
 
 1. The runner is committed with this record.

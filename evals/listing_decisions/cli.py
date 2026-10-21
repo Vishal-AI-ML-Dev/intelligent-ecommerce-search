@@ -24,6 +24,12 @@
 * `export --set-dir DIR --run-id ID --out FILE`: write `le-outcomes-1` from the journal.
 * `status --set-dir DIR --run-id ID`: print the run's accounting (known spend and
   unaccounted attempts reported separately).
+* `run ... --exclude-dispatched-in RUN [--stop-on-first-invalid]`: a remaining-only run whose
+  items are the frozen dev order minus everything RUN dispatched, bound to RUN's journal
+  hash; the option stops it terminally on its first invalid response.
+* `combine --set-dir DIR --run A --run B --out FILE`: combine the runs' journalled outcomes
+  with lineage, refusing differently bound runs and any item dispatched twice.
+  `evaluate --verify-lineage` re-checks such a file against the journals.
 
 There is no labelling command. Only `run --live` makes a provider call.
 """
@@ -36,6 +42,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from evals.listing_decisions.combine import combine, verify_lineage
 from evals.listing_decisions.contracts import EvalSetError, Split, load_set
 from evals.listing_decisions.evaluate import evaluate, render
 from evals.listing_decisions.prepare import DEFAULT_SEED, prepare
@@ -49,6 +56,7 @@ from evals.listing_decisions.runner import (
     RunHeader,
     RunMode,
     dry_run_factory,
+    exclusions,
     export_outcomes,
     live_factory,
     make_header,
@@ -68,6 +76,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--split", choices=[s.value for s in Split], default=Split.DEV.value)
     run.add_argument("--allow-test-split", action="store_true")
+    run.add_argument("--verify-lineage", action="store_true")
     build = commands.add_parser("prepare")
     build.add_argument("--flipkart-csv", type=Path, required=True)
     build.add_argument("--smartphones-csv", type=Path, required=True)
@@ -93,6 +102,12 @@ def _parser() -> argparse.ArgumentParser:
     runner.add_argument("--continuation-exception-ref")
     runner.add_argument("--ack-results", type=int)
     runner.add_argument("--ack-invalid", type=int)
+    runner.add_argument("--exclude-dispatched-in", action="append", default=[])
+    runner.add_argument("--stop-on-first-invalid", action="store_true")
+    joined = commands.add_parser("combine")
+    joined.add_argument("--set-dir", type=Path, required=True)
+    joined.add_argument("--run", action="append", required=True)
+    joined.add_argument("--out", type=Path, required=True)
     for name in ("export", "status"):
         sub = commands.add_parser(name)
         sub.add_argument("--set-dir", type=Path, required=True)
@@ -134,6 +149,9 @@ def _run(args: argparse.Namespace) -> int:
 
     try:
         eval_set = load_set(args.set_dir / "set.json")
+        excluded_runs, excluded_items = exclusions(
+            args.set_dir, eval_set, tuple(args.exclude_dispatched_in)
+        )
         header = make_header(
             eval_set,
             run_id=args.run_id,
@@ -142,6 +160,9 @@ def _run(args: argparse.Namespace) -> int:
             max_attempts=args.max_attempts,
             smoke=args.smoke,
             send_approval_ref=args.send_approval_ref,
+            excluded_runs=excluded_runs,
+            excluded_items=excluded_items,
+            stop_on_first_invalid=args.stop_on_first_invalid,
             **_priced(args),
         )
         exception = None
@@ -218,13 +239,28 @@ def main(argv: list[str] | None = None) -> int:
         return _run(args)
     if args.command in ("export", "status"):
         return _export_or_status(args)
+    if args.command == "combine":
+        try:
+            eval_set = load_set(args.set_dir / "set.json")
+            counts = combine(args.set_dir, eval_set, tuple(args.run), args.out)
+        except (EvalSetError, FileExistsError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(counts, sort_keys=True))
+        return 0
     try:
+        eval_set = load_set(args.set)
+        if args.verify_lineage:
+            if args.outcomes is None:
+                raise EvalSetError("--verify-lineage needs --outcomes")
+            verify_lineage(args.raw_dir.parent, eval_set, args.outcomes)
         report, failed = evaluate(
-            load_set(args.set),
+            eval_set,
             args.raw_dir,
             args.outcomes,
             split=Split(args.split),
             allow_test_split=args.allow_test_split,
+            lineage_verified=args.verify_lineage,
         )
         with args.out.open("xb") as handle:
             handle.write(render(report))
