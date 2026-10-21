@@ -1,8 +1,8 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. M14-2 (Jev listing provider) is implemented with mocked tests only and is
-uncommitted (2026-10-21).** M14-1 is committed as `be2cdf3`. M14 is not complete. No routing,
-dataset preparation, live call or evaluation exists. M14-3 has not started.
+Status: **in progress. M14-3 (routing policy `lr-1`) is implemented and uncommitted
+(2026-10-21).** M14-1 is committed as `be2cdf3` and M14-2 as `d77a099`. M14 is not complete. No
+dataset preparation, live call or evaluation exists. M14-4 has not started.
 
 ## Batches
 
@@ -10,8 +10,9 @@ dataset preparation, live call or evaluation exists. M14-3 has not started.
 |---|---|---|
 | M14-0 | External dataset coverage probes and source selection (scratch only, no repo edits) | Done (previous session) |
 | M14-1 | Offline contracts, `jl-1` questions/state builder, provider Protocol, deterministic baseline | Done, committed `be2cdf3` |
-| M14-2 | Jev listing provider adapter (mocked transport only) | **Implemented, mocked tests pass, uncommitted** |
-| M14-3 and later | Routing, data preparation, evaluation | Not started; each needs approval |
+| M14-2 | Jev listing provider adapter (mocked transport only) | Done, committed `d77a099` |
+| M14-3 | Deterministic routing policy `lr-1` (owner-approved rules, Option A) | **Implemented, tests pass, uncommitted** |
+| M14-4 and later | Evaluation tooling, data preparation, evaluation | Not started; each needs approval |
 
 ## Approved scope (owner, 2026-10-21)
 
@@ -317,8 +318,152 @@ proposal, and the M11 tests. Nothing builds the provider from settings, and noth
 - **Not built:** prompt-injection resistance is not demonstrated, and no routing, persistence or
   evaluation exists.
 
+## M14-3 approved routing rules: `lr-1` (owner, 2026-10-21, Option A)
+
+No approved rule table existed before this batch. The repository specification only limits
+automated outcomes to three routes (spec §6.6 FR-LST-4, §8) and says "low-risk, high-confidence
+cases may be auto-accepted". The M14 plan left open whether `auto_accept` is reachable. The owner
+approved the following rules:
+
+1. **`auto_accept` is unreachable in `lr-1`.** Risk triage does not exist yet (M15), and no
+   confidence threshold is justified (`gate_confidence` is always `None`). A clean listing gets
+   `accept_with_warning` with reason `risk.not_assessed`. That route is **a technical routing
+   result, not permission to publish, and not a claim that the listing is safe.**
+2. **The final route is the strictest of:**
+   - the `accept_with_warning` baseline;
+   - the deterministic findings;
+   - the Jev escalations.
+
+   Jev never lowers a route, and never downgrades `manual_review`. No confidence or probability
+   is read.
+3. **Jev failure or invalid response:** the deterministic route is kept, and the stable reason
+   `jev.fallback.<reason>` is added. Under Option A the route is already at least
+   `accept_with_warning`.
+4. **Jev disabled** (the deterministic provider): deterministic routing only.
+5. **No rejection route exists.** Final rejection is a human decision only.
+
+Route order: `auto_accept` < `accept_with_warning` < `manual_review`.
+
+| Signal | Reason code | Route |
+|---|---|---|
+| Always (risk not assessed) | `risk.not_assessed` | `accept_with_warning` |
+| M13 `value_conflict`, `cross_field_contradiction`, `incompatible_attribute`, `incompatible_subcategory`, `brand_category_mismatch`, `missing_required` | `m13.<kind>` (subject: field) | `manual_review` |
+| M13 `unsupported_attribute`, `compatibility_unchecked`, `missing_expected`, `empty_value` | `m13.<kind>` (subject: field) | `accept_with_warning` |
+| M13 candidate `invalid` | `m13.candidate_invalid` (subject: field) | `manual_review` |
+| M13 candidate `uncertain` / `unsupported` | `m13.candidate_uncertain` / `m13.candidate_unsupported` (subject: field) | `accept_with_warning` |
+| Eligible claim omitted because of the `jl-1` question cap | `jl1.question_cap` (subject: question id) | `accept_with_warning` |
+| Jev category label differs from the seller's normalized category | `jev.category_disagrees_with_seller` | `manual_review` |
+| Jev category and subcategory labels are incompatible | `jev.incompatible_category_subcategory` | `manual_review` |
+| A claim answered `contradicted` (unique top label) | `jev.claim_contradicted` (subject: question id) | `manual_review` |
+| Jev tie on category / subcategory | `jev.category_tie` / `jev.subcategory_tie` | `accept_with_warning` |
+| Jev `none` on category / subcategory | `jev.category_none` / `jev.subcategory_none` | `accept_with_warning` |
+| Tie on a support answer | `jev.claim_tie` (subject: question id) | `accept_with_warning` |
+| `supported` or `not_stated` | (none) | no escalation |
+| Jev fallback | `jev.fallback.<JevFallbackReason>` | `accept_with_warning` |
+
+**Pinned `lr-1` policy digest:** `7d67e7115531516cfcef159b3b904084e066130d77e7ff309ae0f273c6764a14`.
+
+## M14-3 implementation (2026-10-21)
+
+| File | Change |
+|---|---|
+| `src/ecommerce_search/decision/listing_routing.py` | New. It holds:<br>• `Route` (three values, no rejection) and `RoutingReason`;<br>• `RoutingDecision`, which records the route, the deterministic route, the reasons, the provider, the fallback reason and the policy version and digest;<br>• `route_listing(normalization, state, outcome)`, `policy_as_dict` and `policy_digest`. |
+| `tests/unit/listing_decisions/test_listing_routing.py` | New: 65 tests |
+| `docs/m14-progress.md` | The approved rules above, this record, and M14-2's commit status corrected to `d77a099` |
+
+Nothing else changed: no contracts, provider, settings, `decision/__init__.py`, persistence, CLI
+or evaluation code.
+
+- **Reason codes are data-free.**
+  - Each reason carries its code, its own route and a subject.
+  - The subject is a canonical field name, a question id, or nothing. It is never seller text or
+    a raw key.
+  - Reasons are deduplicated and kept in canonical `(code, subject)` order.
+- **The decision contract checks itself.** `RoutingDecision` rejects any decision where:
+  - the route is `auto_accept`;
+  - the route is not the strictest of its reasons;
+  - the route is lower than the deterministic route;
+  - `risk.not_assessed` is missing;
+  - the reasons are out of order;
+  - a fallback reason appears without a Jev provider.
+- **Inputs are bound before routing.** `route_listing` raises `RoutingInputMismatch` and produces
+  no route when:
+  - the normalization does not match the state's M13 reference (output hash, rules, taxonomy,
+    candidate count);
+  - or the outcome does not answer the state (`validate_outcome`).
+
+  A mismatched input is never turned into a route.
+- **Every M13 kind is mapped.** Import fails if an M13 finding kind or candidate outcome is
+  unmapped.
+
+### Commands and results (2026-10-21, `uv run --offline`)
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/listing_decisions/test_listing_routing.py` | **65 passed** in 1.32 s. Before this run, three fixture assumptions were checked against M13 output and corrected in the tests (a `-5` price is `unsupported`, not `invalid`; an empty `operating_system` on headphones also yields an incompatibility; a qualifier such as "up to" makes a text candidate `uncertain`). |
+| `ruff format` (the 2 new files) | 2 files left unchanged |
+| `ruff check` (the 2 new files) | 2 × S311 (seeded `random.Random` in the property tests); suppressed with the repository's existing `# noqa: S311 - seeded test data, not security` convention; then **All checks passed** |
+| `ruff format --check` (the 2 new files) | **2 files already formatted** |
+| `pytest tests/unit/listing_decisions tests/unit/search/test_jev_provider.py tests/unit/search/test_decision_provider.py` | **277 passed** in 18.64 s |
+| Review fix: the confidence property test varied only the category's confidence. It now varies confidence and probability mass on every proposal (category, subcategory and each support answer), built through validation. Then `ruff check` / `ruff format --check` and `pytest tests/unit/listing_decisions/test_listing_routing.py` | **All checks passed**; **2 files already formatted**; **65 passed** in 1.67 s |
+
+**Not run (as instructed):**
+- the full unit suite and `tests/unit/test_unit_isolation.py`;
+- integration tests;
+- any live or Jev call;
+- any database operation.
+
+### What the tests cover
+
+- **The approved rules:**
+  - the pinned `lr-1` digest;
+  - exactly three routes, none of them a rejection;
+  - the M13 and Jev signal tables, asserted literally.
+- **The baseline:** a clean listing gets `accept_with_warning` with only `risk.not_assessed`,
+  with or without fully agreeing Jev.
+- **Each signal class on real M13 output:**
+  - manual-review findings and warning-level findings;
+  - `invalid`, `unsupported` and `uncertain` candidates;
+  - claims omitted because of the question cap.
+- **Each Jev escalation:**
+  - category disagreement, an incompatible pair, a contradicted claim;
+  - category and subcategory ties and `none` answers;
+  - support ties, including a tie that involves `contradicted`;
+  - `not_stated`, which does not escalate.
+- **Fallback:** every `JevFallbackReason`, on a clean and a manual-review listing, keeps the
+  deterministic route and adds its reason.
+- **Disabled Jev:** deterministic routing only.
+- **Input binding:** mismatched inputs are rejected.
+- **The decision contract:** inconsistent decisions are rejected, including `auto_accept`, a
+  lowered route and `reject`.
+- **Determinism:** reasons are in canonical order, and routing the same inputs repeatedly, or
+  rebuilding them, gives the same decision.
+- **Seeded property tests:**
+  - 300 random Jev outcomes on each of 4 fixtures: the route is never `auto_accept` and never
+    lower than the deterministic route, and no deterministic reason is dropped;
+  - every category × subcategory × support label (5 × 13 × 3) on a one-claim listing;
+  - confidence never changes the route.
+- **Offline:** importing `listing_routing` loads no SDK, HTTP, database, FastAPI or settings
+  module.
+
+### M14-3 limitations
+
+- **No listing can reach `auto_accept`**, by design (Option A). The automation rate is therefore
+  zero. That is expected, not a finding.
+- **The rule table is owner-approved, not measured.** Routing accuracy, unsafe auto-accept rate
+  and unnecessary review rate stay unmeasured: there are no expected-route labels (see the
+  evaluation amendment).
+- **The seller-disagreement check is narrow:**
+  - it compares the Jev category with the seller's normalized `seller_field` category only;
+  - a seller subcategory that differs from Jev's is not an escalation in the approved table;
+  - an absent seller category is handled by the M13 `missing_required` finding instead.
+- **No integration:** routing is not persisted, not wired to any CLI or endpoint, and not used by
+  `decide_listing`.
+
 ## Next batch (needs explicit approval)
 
-M14-3 is not started. Its scope (routing, data preparation or evaluation) needs explicit owner
-approval. No live calls are allowed without a separate approval covering the cap, prices and
-tripwire.
+1. Review and commit M14-3.
+2. M14-4: evaluation tooling.
+
+M14-4 has not started. No live calls are allowed without a separate approval covering the cap,
+prices and tripwire.
