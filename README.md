@@ -83,8 +83,23 @@ Development is organized milestone by milestone. See
   - Unchanged: V3 as the baseline, `fp-1`, the V0–V3 endpoints and every default. The
     confidence gate is off.
   - See `docs/m12-diagnostic-tooling.md` and `docs/v4-jev-routing-m12.md`.
-- M13–M27: not started. This includes Buyer RAG, Return Intelligence, human review (HITL), the
-  dual frontend and marketplace integration. M27 is optional.
+- M13 (listing normalization): **complete for the approved scope, on synthetic inputs and
+  scratch databases only** (M13-4 closure, 2026-10-21). Rules version `listing-norm-1` is
+  released (rules digest `3b97986a…08711db`). Verification caveat: the full unit suite had 2
+  failures in M10 runner tests that passed on a targeted rerun with a static working tree;
+  their cause is not proven.
+  - Built: a strict raw-listing intake contract, a pure deterministic normalizer (attribute
+    candidates with exact source evidence; conflict, contradiction, compatibility, missing,
+    empty and unsupported findings; no winner chosen, nothing invented), append-only versioned
+    storage (migration `0005`) and a command line (`normalize`, `submit`, `show`). No HTTP
+    endpoint (owner decision).
+  - Not claimed: accuracy on real seller listings, any search improvement, production
+    readiness. The development database has not been migrated to `0005`.
+  - See "Listing normalization (Milestone 13)" below and `docs/listing-normalization-m13.md`.
+- M14–M26: not started. This includes Jev listing decisions, policy-risk triage, Buyer RAG,
+  Return Intelligence, human review (HITL) and the dual frontend.
+- M27 (authorized marketplace integration): excluded from the current scope. The original
+  milestone definition in `docs/MASTER_PLAN.md` is unchanged.
 
 Milestone 1 (Foundation): typed settings, FastAPI app with `GET /health`,
 PostgreSQL 16 + pgvector via Docker Compose, SQLAlchemy 2 (sync) with psycopg 3,
@@ -620,6 +635,35 @@ Disclosures:
 
 Details: [`docs/golden-dataset-m9.md`](docs/golden-dataset-m9.md) (strict track) and
 [`docs/weak-label-development-m9.md`](docs/weak-label-development-m9.md) (machine-only track).
+
+## Listing normalization (Milestone 13)
+
+Deterministic, offline normalization of one raw seller listing under the versioned rules
+`listing-norm-1`, with optional append-only storage. It is separate from the catalog: nothing
+reads or writes the catalog, search or embedding tables, and search behaviour is unchanged.
+
+```bash
+# offline: no database, settings, network or model
+uv run python -m ecommerce_search.normalization normalize --file listing.json
+# store (needs a database migrated to head 0005; there is no default database)
+uv run python -m ecommerce_search.normalization submit --database <db> --file listing.json
+# read-only: one stored version as recorded, checked against its own hashes
+uv run python -m ecommerce_search.normalization show --database <db> --seller S --ref R [--version N]
+```
+
+- A file holds exactly one JSON object on one line. A single final LF or CRLF is not part of
+  the listing; every other byte is preserved and hashed (`raw_sha256`).
+- Resubmitting the latest raw input is idempotent; A→B→A keeps three versions. Re-normalizing
+  under the same rules version must reproduce the recorded output, otherwise nothing is
+  written.
+- Migration `0005` adds four append-only tables. Alembic head is now `0005`, so
+  `alembic upgrade head` (including the compose `migrate` service) adds them to whichever
+  database it targets. Downgrading `0005` drops listing history.
+- Verified on synthetic listings and disposable scratch databases only; no accuracy on real
+  listings or search improvement is claimed.
+
+Details and limitations: [`docs/listing-normalization-m13.md`](docs/listing-normalization-m13.md);
+batch record: [`docs/m13-progress.md`](docs/m13-progress.md).
 
 ## `GET /health`
 

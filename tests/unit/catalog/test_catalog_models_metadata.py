@@ -24,6 +24,12 @@ EXPECTED_TABLES = {
     "product_search_documents",
     # Milestone 4 adds exactly one derived table: the dense embedding index.
     "product_embeddings",
+    # Milestone 13 adds exactly four append-only seller-listing history tables (no JSON, no
+    # vector or search column, no non-constraint index; unrelated to the catalog tables).
+    "listing_versions",
+    "listing_normalization_runs",
+    "listing_candidates",
+    "listing_findings",
 }
 SEARCH_TABLE = "product_search_documents"
 EMBEDDING_TABLE = "product_embeddings"

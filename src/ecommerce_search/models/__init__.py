@@ -11,6 +11,12 @@ from ecommerce_search.models.catalog import (
     ShoeSpec,
 )
 from ecommerce_search.models.embeddings import ProductEmbedding
+from ecommerce_search.models.listings import (
+    ListingCandidate,
+    ListingFinding,
+    ListingNormalizationRun,
+    ListingVersion,
+)
 from ecommerce_search.models.search import ProductSearchDocument
 
 __all__ = [
@@ -18,6 +24,10 @@ __all__ = [
     "CatalogReview",
     "HeadphoneSpec",
     "LaptopSpec",
+    "ListingCandidate",
+    "ListingFinding",
+    "ListingNormalizationRun",
+    "ListingVersion",
     "PhoneSpec",
     "Product",
     "ProductEmbedding",

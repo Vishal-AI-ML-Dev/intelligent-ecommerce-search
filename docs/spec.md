@@ -368,6 +368,17 @@ measured against human-reviewed evaluation data.
   claim, suspicious review, policy mismatch, adult content, unsafe product,
   unsupported medical claim) are triage signals, not legal conclusions.
 
+**Implementation status (Milestone 13, 2026-10-21).** The requirement text above is unchanged.
+FR-LST-1 is implemented for the raw and normalized layers (exact raw bytes in append-only
+listing versions; normalization runs stored separately under rules version `listing-norm-1`);
+the inferred, risk-signal and human-outcome layers for listings are later milestones. FR-LST-2
+is implemented for brand aliases (the M2 table, unextended), brand casing, whitespace, units,
+storage terms and numeric formats; model and series names keep their text apart from
+whitespace collapsing. FR-LST-3 is implemented narrowly: structured seller fields plus RAM and
+storage patterns in title/description, which yield unverified candidates. FR-LST-4 and
+FR-LST-5 are not started (M14, M15). Verified on synthetic listings and scratch databases only;
+see `docs/listing-normalization-m13.md`.
+
 ### 6.7 Annotation tool requirements
 
 The annotation tool is implemented in Milestone 9 (search annotation) and in

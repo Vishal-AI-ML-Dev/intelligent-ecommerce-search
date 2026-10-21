@@ -221,6 +221,25 @@ the counts); file reports and databases below revision `0004` state that it is n
   model version and confidence.
 - Nothing overwrites raw seller data.
 
+**Milestone 13 (seller listings).** Implemented for listings as follows; details in
+`docs/listing-normalization-m13.md`.
+
+- Raw: the exact listing bytes are stored in append-only `listing_versions` with a
+  database-checked `raw_sha256`. Intake rejects invalid input with a named reason and never
+  repairs it. Through the command line, a single final LF or CRLF in the file is framing, not
+  part of the listing; every other byte is preserved and hashed.
+- Normalized: deterministic and versioned (`listing-norm-1`, rules digest
+  `3b97986a…08711db`). Each run records its rules version, rules digest, taxonomy version and
+  output hash. Same raw input + same rules version must reproduce the same output, otherwise
+  nothing is written.
+- No value is invented: missing, empty, unsupported, uncertain and invalid values stay
+  explicit, conflicts are reported without choosing a winner, and title/description
+  extraction yields unverified candidates only. Seller `rating`/`review_count` are kept in the
+  raw input and flagged unsupported, never treated as catalog facts.
+- Inferred values: none in M13 (no model is used).
+- Tested on synthetic listings and scratch databases only; no accuracy on real seller
+  listings is measured or claimed.
+
 ## 5. Human review
 
 - At least 30 representative products are prepared for **real human
@@ -332,6 +351,14 @@ Catalog version, dataset version, golden-set version and normalization-rule
 version are recorded in every experiment. Changing any of them requires
 regenerating dependent artifacts (such as embeddings) and rerunning
 evaluation.
+
+**Milestone 13 clarification for listing normalization.** The listing rules version is
+`listing-norm-1` (released at M13 closure, 2026-10-21). Its `rules_digest()` covers rule and configuration
+tables and an M2 parser fingerprint, not M13 code, which is guarded by behaviour-regression
+tests on fixed probes. After release, any change in normalization behaviour needs a new rules
+version; the store refuses to record changed output under a rules version it has already
+stored for a listing version. Listing normalization does not feed the catalog, so it
+currently has no dependent search artifacts.
 
 **Milestone 4 clarification for embeddings.** Experiments always record the exact dataset
 identity (dataset id, dataset version, checksum, record count, transform, taxonomy and rules

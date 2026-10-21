@@ -272,6 +272,14 @@ Raw listing
 - No automatic path produces a rejection. Rejection happens only through human
   review.
 
+**Implemented in Milestone 13 (first two stages only):** raw listing → deterministic
+normalization (`listing-norm-1`) → attribute candidates and findings, in
+`src/ecommerce_search/normalization/`, with append-only storage of the exact raw bytes, listing
+versions and normalization runs (migration `0005`) and a command line (`normalize`, `submit`,
+`show`). Jev decisions, the confidence/risk gate, routing and the normalized catalog record are
+not implemented; M13 output does not feed the catalog or search. Details:
+`docs/listing-normalization-m13.md`.
+
 ## 5. Data model
 
 The concrete schema is implemented in Milestone 2. This section fixes the
@@ -376,6 +384,14 @@ Milestone 2 implements the raw layer (`raw_catalog_records`), the normalized lay
 and the spec tables) and the human-outcome layer for the catalog review sample
 (`catalog_reviews`, append-only via triggers). The inferred and risk-signal layers are not
 implemented yet.
+
+Milestone 13 finalizes the listing raw and normalized layers, both **append-only**:
+`listing_versions` keeps each raw seller listing as exact bytes with a database-checked SHA-256
+(a changed input is a new version, never an overwrite), and `listing_normalization_runs`,
+`listing_candidates` and `listing_findings` keep each normalization under its rules version.
+"Regenerated when rules change" is realized as a new run under a new rules version beside the
+old one; existing runs are never updated, and re-normalizing under the same rules version must
+reproduce the recorded output exactly.
 
 ### 5.4 Query understanding
 
@@ -520,7 +536,7 @@ setting selects it.
 | `GET /search/hybrid?q=...`, `POST /search/hybrid` | 5 (V1 hybrid lexical + dense + RRF implemented; `rrf_k` provisional); 6 adds the informational `query_understanding` block |
 | `GET /search/filtered?q=...`, `POST /search/filtered` | 7 (V2 filtered hybrid implemented; filters from the M6 parse under `fp-1`) |
 | `GET /search/reranked?q=...`, `POST /search/reranked` | 8 (V3 implemented: V2 candidates + head-only cross-encoder reranking; provisional model pin) |
-| `POST /listings/analyze`, `POST /listings/normalize` | 13–14 (provisional) |
+| `POST /listings/analyze`, `POST /listings/normalize` | 13–14 (provisional). Not built in M13: owner decision D1 made M13 command-line only (`python -m ecommerce_search.normalization`) |
 | `GET /reviews/pending`, `POST /reviews/{review_id}/decision` | Listing milestones (provisional) |
 
 The listing endpoint milestone mapping is provisional. `docs/MASTER_PLAN.md` §23 gives
