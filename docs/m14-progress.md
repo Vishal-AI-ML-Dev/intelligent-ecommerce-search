@@ -1271,6 +1271,44 @@ frozen hash order); the 120 clean items without an outcome are `not_attempted`, 
 - **Calibration:** unmeasured, and provider confidence is not gate confidence.
 - **Sample:** a partial, development-scoped sample.
 
+## `choice_not_top` investigation (2026-10-21; offline, no call, validation unchanged)
+
+**What the provider documents.**
+- `choice` is "the name of the choice with the highest probability among the question's
+  criteria" (`https://docs.typesafe.ai/api`, and the installed SDK's `ChoiceAnswer` schema).
+- It is "the option with the highest probability" (`https://docs.typesafe.ai/primitives/choice`).
+- Confidence uses "the probability of the selected option" (`https://docs.typesafe.ai/confidence`).
+- The sum is "approximately 1" in the API reference and SDK, but "1" on the primitive page.
+- Tie-breaking, rounding and precision are **not documented**.
+
+**What that means for the validation:**
+- **Documented contract:** requiring the choice to be among the top labels follows what the
+  provider documents.
+- **Project-defined:** the 1e-9 tie tolerance and the 1e-3 sum tolerance, both marked provisional.
+- **Unsupported:** any assumption about the precision of returned probabilities.
+
+**Reproducers** (synthetic, mocked, in `test_jev_listing_provider.py`):
+- an exact tie or a gap of 5e-10 is accepted, with no label set;
+- gaps of 2e-9, 3e-8 and 0.3 give `choice_not_top`;
+- the code is attributed correctly at call A (`category`) and call B (`attribute_support[n]`);
+- the record keeps no probability or gap value.
+
+**Uncertainty.** The historical `dev-full-1` rejection has a known code but no retained values.
+Either a genuine contract violation, or numeric noise above 1e-9 in a near-tie, would explain it.
+Monotonic rounding alone cannot. The two older invalid responses stay unknown.
+
+**Decision (owner, 2026-10-21):**
+- retain the validation, the tolerances and the 2 % threshold;
+- no gap bucket and no argmax substitution.
+
+**Draft questions for the provider** (not sent):
+1. Is `choice` always exactly the label with the highest *returned* probability, or can it differ
+   from it within numeric precision?
+2. What numeric precision do the returned `probabilities` have (for example 32-bit floats, or
+   rounding before serialization)?
+3. How is `choice` selected when two or more labels share the highest probability?
+4. Are the returned probabilities normalized after `choice` is selected?
+
 ## Next batch (needs explicit approval)
 
 1. The runner is committed with this record.

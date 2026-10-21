@@ -762,3 +762,71 @@ def test_outcomes_recorded_before_the_fix_keep_an_unknown_cause() -> None:
         None,
         None,
     )
+
+
+# --- choice_not_top reproducers (offline investigation; validation unchanged) ------------------
+
+
+def _support_with(probabilities: dict, choice: str) -> dict:
+    answers = {qid: _answer(SUPPORT_LABELS, "supported") for qid in ASKED}
+    answers[ASKED[1]] = {
+        "type": "choice",
+        "choice": choice,
+        "confidence": 0.5,
+        "probabilities": probabilities,
+    }
+    return {"claims": _ok(_claims_body(answers), "c")}
+
+
+@pytest.mark.parametrize(
+    ("gap", "expected"),
+    [
+        (0.0, None),  # an exact tie: both labels are top, no rejection, no label
+        (5e-10, None),  # within the project's tie tolerance (1e-9)
+        (2e-9, "choice_not_top"),  # beyond it, at float-noise scale
+        (3e-8, "choice_not_top"),  # about the precision of a 32-bit float near 0.45
+        (0.3, "choice_not_top"),  # a clear violation of the documented contract
+    ],
+    ids=["exact-tie", "within-tolerance", "just-beyond", "float32-scale", "clear-violation"],
+)
+def test_choice_not_top_at_call_b_depends_only_on_the_gap_to_the_top(gap, expected) -> None:
+    top = 0.45 + gap / 2  # the third label keeps about 0.1, so every probability is in range
+    probabilities = {"supported": top, "not_stated": top - gap, "contradicted": 1 - 2 * top + gap}
+    outcome = _decide(Server(**_support_with(probabilities, "not_stated")))
+    if expected is None:
+        assert outcome.fallback_reason is None
+        support = {p.ordinal: p for p in outcome.attribute_support}
+        assert support[STATE.attribute_questions[1].claim.ordinal].label is None  # a tie
+    else:
+        _assert_fallback(outcome, "invalid_response")
+        assert (outcome.rejection, outcome.rejection_call, outcome.rejection_question) == (
+            expected,
+            "B",
+            ASKED[1],
+        )
+
+
+def test_choice_not_top_at_call_a_names_the_category_question() -> None:
+    probabilities = _probabilities(CATEGORY_LABELS, {"laptop": 0.6, "phone": 0.3})
+    outcome = _decide(
+        Server(
+            text=_ok(
+                _text_body(category=_answer(CATEGORY_LABELS, "phone", probabilities=probabilities)),
+                "t",
+            )
+        )
+    )
+    assert (outcome.rejection, outcome.rejection_call, outcome.rejection_question) == (
+        "choice_not_top",
+        "A",
+        "category",
+    )
+
+
+def test_a_choice_not_top_record_keeps_no_probability_or_gap_value() -> None:
+    probabilities = {"supported": 0.61, "not_stated": 0.29, "contradicted": 0.1}
+    outcome = _decide(Server(**_support_with(probabilities, "not_stated")))
+    dumped = outcome.model_dump_json()
+    assert outcome.rejection == "choice_not_top"
+    for value in ("0.61", "0.29", "0.32"):  # the probabilities and their gap
+        assert value not in dumped
