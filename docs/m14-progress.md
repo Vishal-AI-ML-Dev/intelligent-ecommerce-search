@@ -1881,13 +1881,13 @@ the 2 % rule are unchanged; nothing is normalized or argmax-substituted.
 | 7 | Inferred decisions stored separately (FR-LST-1, inferred layer) | `0006` + store + CLI, `a725bfc`; 20 scratch-DB integration tests | **Met** for storage | apply `0006` to a real database only on owner decision |
 | 8 | Evaluate on human-reviewed data ("Listing decision set … human"; spec §8; §13.4) | the path `lh-1` is built and the `hr-dev-1` selection frozen; **0 human reviews** | **NOT MET** | the owner assigns real reviewers, they answer the packet, `import --reviewer-is-human`, then `score` |
 | 9 | Decision metrics (accuracy, P/R/F1, confusion, schema validity, abstention, coverage) | `report-dev-combined-286.json` on **external source labels**: category overall 0.9551; Flipkart subcategory overall 0.6852; schema validity 279/286 | **Partly met:** computed on non-human labels; phone and laptop subcategory and claim-support accuracy unmeasured | re-score on human labels (8) |
-| 10 | Calibration / Brier "where appropriate" | `gate_confidence` is always NULL; no calibration | **Not met / undecided** whether "appropriate" before human labels | owner decision; needs human labels |
+| 10 | Calibration ("calibration, with Brier score where appropriate") | `gate_confidence` is always NULL; no calibration. "Where appropriate" qualifies Brier only, so calibration is **mandatory**. | **NOT MET** | needs human-reviewed labels (8) |
 | 11 | Latency | per-listing latency summary above (n = 286) | **Met** (descriptive, in-process timing) | none |
 | 12 | Cost per 1,000 decisions | about $0.0758 estimated from journal token counts | **Met as an estimate** (no invoice) | optional invoice check |
-| 13 | Comparison: deterministic, optional general LLM, Jev, deterministic plus confidence-gated Jev | deterministic vs Jev reported; the general LLM is optional; the gated arm is impossible without calibration | **Partly met** | the gated arm depends on 10 |
+| 13 | Comparison: deterministic, optional general LLM, Jev, deterministic plus confidence-gated Jev | deterministic vs Jev reported. Only the general LLM is optional, so the gated arm is **mandatory**; spec §8 takes thresholds "from human-reviewed data". | **NOT MET** (gated arm missing) | needs 8 and 10 |
 | 14 | Routing metrics: automation, review, unsafe auto-accept, unnecessary review | automation 0 %, review 100 %, unsafe auto-accept 0 (unreachable) | **Partly met:** unnecessary review is unmeasured | needs the human `needs_review` labels (8) |
-| 15 | Uncertainty reaches human review (§13.4) | every uncertain case routes to `manual_review`; storage is ready; no review queue | **Partly met:** routed, but no human workflow consumes it (M21 or undecided) | owner decides the M14/M21 split |
-| 16 | Run-quality criterion (invalid responses at most 2 % at 20+ results; runner rule) | combined 7/286 = 2.45 %, breached; `dev-full-1` 6/279 breached | **FAILED** | the owner accepts the failure as recorded, or approves a provider clarification (send the draft) and a new run; tolerances are never loosened |
+| 15 | Uncertainty reaches human review (§13.4) | every uncertain case routes to `manual_review` and is stored; the operational queue belongs to M21 (the M14 wording does not require it) | **Met for M14 scope** | none in M14 |
+| 16 | Run-quality criterion (owner-approved runner rule: `invalid_response` above 2 % once 20 results exist) | combined 7/286 = 2.45 %, breached; `dev-full-1` 6/279 breached | **FAILED** (as written; not waived) | none possible without an authorized new run; tolerances are never loosened |
 | 17 | Complete dev coverage | 286/291; 5 never sent (`dev-complete-1` stopped on its first invalid response) | **Not met** | the owner decides whether to send the 5 |
 | 18 | Test-split evaluation | never run | **Not met** | needs an owner send approval after the human labels |
 | 19 | Upstream data rights for the sent sources | recorded caveats; owner send decisions are not clearance | **Unresolved** | owner / rights decision |
@@ -1895,31 +1895,56 @@ the 2 % rule are unchanged; nothing is normalized or argmax-substituted.
 
 ### Not mandatory for M14 without an owner decision
 
-- **Endpoints:** `POST /listings/analyze (M13-M14)`, `GET /reviews/pending (M14/M21)`,
-  `POST /reviews/{review_id}/decision (M14/M21)`. MASTER_PLAN marks the paths "indicative, not
-  final"; the split is **undecided**. Not built.
+- **Endpoints and review queue:** assigned to **M21** (owner, 2026-10-21). The approved M14
+  wording does not require them, and MASTER_PLAN marks the paths "indicative, not final". Not
+  built.
 - **Risk signals** (FR-LST-5): M15. Human outcomes and the review workflow: M21.
   `auto_accept` stays unreachable until risk exists.
 
-**Verdict: M14 is BLOCKED.** Requirements 8 and 16 to 18 are unmet, and 10, 13, 14 and 15 are
-only partly met. The direct blocker is 8: no human-reviewed evaluation exists. None of these
+**Verdict: M14 is BLOCKED.** Requirements 8, 10, 13, 16, 17 and 18 are unmet, and 9 and 14
+are only partly met. The direct blocker is 8: no human-reviewed evaluation exists. None of these
 requirements is redefined, waived, or met by routing to `manual_review`.
 
-## Human decisions needed (one list)
+## Final closure attempt (2026-10-21)
 
-1. **Human review:**
-   - assign real reviewers (`ann-N` handles mapped outside the repository) for packet
-     `hr-dev-1` (60 items);
-   - decide whether one reviewer suffices or two are needed for agreement;
-   - confirm or replace the selection size and seed.
-2. **Run-quality failure (2.45 % > 2 %):** accept it as recorded for M14, or pursue it, which
-   means approving the provider clarification request to be sent.
-3. **The 5 unsent dev listings:** leave them unsent, or approve a separate bounded send.
-4. **Test split:** whether and when to approve a test-split send, after the human labels.
-5. **Calibration and the confidence-gated arm:** confirm they are deferred, or required for M14.
-6. **M14/M21 boundary:** the endpoints `POST /listings/analyze`, `GET /reviews/pending` and
-   `POST /reviews/{review_id}/decision`, and the review queue that consumes `manual_review`.
-7. **Upstream data rights** for Flipkart, Laptop Price and Smartphones.
-8. **Database:** whether and when to apply migration `0006` (and `0005`) to the development
-   database.
-9. **Pushing** the unpushed commits.
+The owner instructed closure using the completed `hr-dev-1` human responses. **No responses
+exist:**
+- `review/hr-dev-1/` holds only `selection.json` and `packet.jsonl`;
+- there is no answers file and no `labels-ann-*` or `seal-ann-*`;
+- searches of the repository and the user's Downloads, Desktop and Documents folders found
+  nothing.
+
+Missing rows: **all 60 packet items, `h-001` through `h-060`**, from any reviewer. Nothing was
+imported, generated, inferred or scored, and no human-labelled metric exists.
+
+**External actions:**
+- No external action was taken: no send of the 5 unsent dev listings, the test split or the
+  provider clarification, and no push.
+- Upstream data rights are **not cleared**. The recorded caveats are not clearance.
+- Migrations `0005`/`0006` were not applied to the development database.
+
+**Remaining blockers:**
+- 8: no human-reviewed evaluation;
+- 10: calibration;
+- 13: the confidence-gated arm;
+- 14: the unnecessary-review rate;
+- 16: the 2 % criterion, failed;
+- 17: 5 dev listings unsent;
+- 18: no test split;
+- 19: rights not cleared.
+
+17 and 18 need rights clearance plus a separate live-call authorization.
+
+## Human inputs still required
+
+1. Completed `hr-dev-1` answers from a real human reviewer for all 60 packet items
+   (`h-001` to `h-060`), imported with `--reviewer-is-human`.
+2. Explicit upstream data-rights clearance, then a separate live-call authorization, before
+   the 5 unsent dev listings, the test split or the provider clarification are sent.
+3. Authorization to push, if wanted.
+
+Resolved (owner, 2026-10-21):
+- the 2 % criterion stands as written and has failed;
+- calibration and the confidence-gated arm are mandatory, per the MASTER_PLAN wording;
+- the endpoints and the review queue belong to M21;
+- `0005`/`0006` are not applied to the development database.
