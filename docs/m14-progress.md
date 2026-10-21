@@ -1,13 +1,14 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. The live runner is built and tested with mocked and dry-run
-transports only, and is committed with this record (2026-10-21).**
-- **Not run live:** the runner has never made a Jev call. Sending dataset content to Jev
-  needs a separate send approval.
-- **Committed:** M14-1 to M14-4 (`be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`) and M14-6
-  (`fe72bd4`, set `le-set-2`).
+Status: **in progress. One owner-approved live smoke run (`smoke-1`, one dev listing, two
+HTTP calls) has been made (2026-10-21).**
+- **No other live call:** a larger dev run needs its own send approval.
+- **Committed:**
+  - M14-1 to M14-4: `be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`;
+  - M14-6: `fe72bd4` (set `le-set-2`);
+  - the runner: `0a5576b`, plus the price fix `6896fa4`.
 - **M14-5:** deferred, not completed.
-- M14 is not complete. No Jev call or test-split evaluation has been made.
+- M14 is not complete. No test-split evaluation has been made.
 
 ## Batches
 
@@ -20,7 +21,7 @@ transports only, and is committed with this record (2026-10-21).**
 | M14-4 | Offline evaluator: `le-1` contract, measurability, metrics, corruption checks, `evaluate` CLI | Done, committed `4fe0201` |
 | M14-5 | Persistence (migration `0006`, store, `decide`/`show`) | **Deferred, not completed or skipped** (owner, 2026-10-21). Persistence and FR-LST-1's inferred-decisions layer remain outstanding until a consumer exists (`POST /listings/analyze` or the M21 review queue). |
 | M14-6 | External dataset preparation: adapters, label mapping, grouping, selection, `corrupt-2` with matching `lt-1`, `prepare` CLI, local set `le-set-2` | **Implemented, tests pass** (committed with this record) |
-| Live runner | Capped, journalled runner (`le-run-1`) plus the provider usage fix | **Built; mocked and dry-run tests pass; committed with this record.** Never run live. |
+| Live runner | Capped, journalled runner (`le-run-1`) plus the provider usage fix | Done (`0a5576b`, price fix `6896fa4`). Used live once, for `smoke-1` only (below). |
 | M14-7 | Live evaluation | Not started; needs a separate send approval (rights, prices, caps) |
 
 ## Approved scope (owner, 2026-10-21)
@@ -991,10 +992,56 @@ The `jl-1` digest, state hashes and every M12 file are unchanged.
 - **Rights:** a live run submits third-party data. Rights remain unresolved, and the runner does
   not clear them.
 
+## Live smoke `smoke-1` (2026-10-21; owner-approved send, one listing)
+
+**Approval.** The owner explicitly approved sending one selected Flipkart listing to Jev for
+this single smoke run (`send_approval_ref` `owner-explicit-flipkart-smoke-1`), acknowledging the
+recorded unresolved upstream-rights caveat. **This is not a rights clearance.**
+
+**Run configuration:**
+- set `le-set-2` (`11a1293b…4cda`);
+- item: the first item of the frozen dev order (Flipkart, dev, clean, label category `none`,
+  mapped). Its id stays in the git-ignored run directory;
+- `--live --smoke --max-items 1 --max-attempts 2`;
+- allowances: 4,000 input and 2,000 output tokens per call;
+- prices: $0.042 per million input tokens and $0 for output, from `https://docs.typesafe.ai/models`
+  (read 2026-10-21; no page date);
+- tripwire: `max_estimated_usd` 0.01 (not a billing cap).
+
+**Results (counts only; no listing text recorded or printed):**
+- **HTTP attempts:** 2. Call A: HTTP 200, 923 input / 176 output tokens. Call B: HTTP 200, 582
+  input / 50 output tokens. No retry, refusal or stop.
+- **Outcome:** a success (no fallback), from `jev-1.13.0` as pinned, `usage=complete`, latency
+  1,312.5 ms. 1 of 1 listing has a result, 0 are unknown, and the run is complete.
+- **Answers:**
+  - category: `none`, the unique top label (provider confidence 0.99);
+  - subcategory: `none` (provider confidence 0.54, top probability 0.58);
+  - `attribute_support[1]` (a colour claim): `not_stated` (provider confidence 1.0).
+
+  These are provider confidences, not gate confidence (`None`).
+- **Tokens and spend:** 1,505 input / 226 output. Known estimated spend **$0.00006321**; 0
+  unaccounted attempts. This is an estimate from returned usage and the recorded prices, not
+  billing data.
+- **Route:** `manual_review`, from `m13.missing_required`, `jev.category_none` and
+  `jev.subcategory_none`.
+- **Secrets:** the key was found in none of the run's files (`run.json`, `journal.jsonl`,
+  `outcomes.jsonl` and the report).
+
+**Dev evaluation with the smoke export** (`runs/smoke-1/report-dev-smoke.json`). **This is a
+one-item smoke, not a set evaluation.**
+- **Category:** 1 attempted of 245 eligible, and it was correct (gold `none`). Answered-only
+  accuracy is 1/1, but overall accuracy (1/245) and coverage (1/245) are reported only to show the
+  denominators.
+- **Missing outcomes are not model errors:** the 244 items without an outcome are
+  `not_attempted`, not wrong.
+- **Subcategory:** 0 of 54 attempted. The smoke item has no subcategory label.
+- **Corruption:** no Jev pair was evaluated (0 of 46 pairs have both outcomes).
+- **Calibration:** no accuracy, calibration or quality conclusion follows from one item.
+
 ## Next batch (needs explicit approval)
 
 1. The runner is committed with this record.
-2. Approving a live smoke run is a **separate send decision**. It needs:
+2. *(Done for `smoke-1` only, above.)* Any further live run is a **separate send decision**. It needs:
    - the rights caveats;
    - the prices, with their date and source;
    - the token allowances;
