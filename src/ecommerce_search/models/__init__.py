@@ -11,6 +11,12 @@ from ecommerce_search.models.catalog import (
     ShoeSpec,
 )
 from ecommerce_search.models.embeddings import ProductEmbedding
+from ecommerce_search.models.listing_decisions import (
+    ListingDecisionProbability,
+    ListingDecisionProposal,
+    ListingDecisionReason,
+    ListingDecisionRun,
+)
 from ecommerce_search.models.listings import (
     ListingCandidate,
     ListingFinding,
@@ -25,6 +31,10 @@ __all__ = [
     "HeadphoneSpec",
     "LaptopSpec",
     "ListingCandidate",
+    "ListingDecisionProbability",
+    "ListingDecisionProposal",
+    "ListingDecisionReason",
+    "ListingDecisionRun",
     "ListingFinding",
     "ListingNormalizationRun",
     "ListingVersion",

@@ -96,8 +96,13 @@ Development is organized milestone by milestone. See
   - Not claimed: accuracy on real seller listings, any search improvement, production
     readiness. The development database has not been migrated to `0005`.
   - See "Listing normalization (Milestone 13)" below and `docs/listing-normalization-m13.md`.
-- M14–M26: not started. This includes Jev listing decisions, policy-risk triage, Buyer RAG,
-  Return Intelligence, human review (HITL) and the dual frontend.
+- M14 (listing decisions): **in progress, not complete.** Built: bounded `jl-1` Jev listing
+  proposals, deterministic routing `lr-1` (no rejection route; `auto_accept` unreachable), an
+  offline evaluator and a guarded live runner, and append-only decision storage (migration
+  `0006`) with a `decide` / `show` command line. A dev-split evaluation on external source
+  labels ran; the milestone's human-reviewed evaluation has not. See `docs/m14-progress.md`.
+- M15–M26: not started. This includes policy-risk triage, Buyer RAG, Return Intelligence,
+  human review (HITL) and the dual frontend.
 - M27 (authorized marketplace integration): excluded from the current scope. The original
   milestone definition in `docs/MASTER_PLAN.md` is unchanged.
 
@@ -645,7 +650,7 @@ reads or writes the catalog, search or embedding tables, and search behaviour is
 ```bash
 # offline: no database, settings, network or model
 uv run python -m ecommerce_search.normalization normalize --file listing.json
-# store (needs a database migrated to head 0005; there is no default database)
+# store (needs a database migrated to head; there is no default database)
 uv run python -m ecommerce_search.normalization submit --database <db> --file listing.json
 # read-only: one stored version as recorded, checked against its own hashes
 uv run python -m ecommerce_search.normalization show --database <db> --seller S --ref R [--version N]
@@ -656,14 +661,38 @@ uv run python -m ecommerce_search.normalization show --database <db> --seller S 
 - Resubmitting the latest raw input is idempotent; A→B→A keeps three versions. Re-normalizing
   under the same rules version must reproduce the recorded output, otherwise nothing is
   written.
-- Migration `0005` adds four append-only tables. Alembic head is now `0005`, so
-  `alembic upgrade head` (including the compose `migrate` service) adds them to whichever
-  database it targets. Downgrading `0005` drops listing history.
+- Migration `0005` adds four append-only tables, so `alembic upgrade head` (including the
+  compose `migrate` service) adds them to whichever database it targets. Downgrading `0005`
+  drops listing history.
 - Verified on synthetic listings and disposable scratch databases only; no accuracy on real
   listings or search improvement is claimed.
 
 Details and limitations: [`docs/listing-normalization-m13.md`](docs/listing-normalization-m13.md);
 batch record: [`docs/m13-progress.md`](docs/m13-progress.md).
+
+## Listing decisions (Milestone 14, in progress)
+
+Inferred decisions for a stored listing version, kept apart from the seller data: one decision
+run per `decide`, linked to the exact stored M13 normalization run, with the provider's
+proposals and probabilities as returned, the `lr-1` route and its reasons.
+
+```bash
+# default provider: the local deterministic baseline (no model, no network)
+uv run python -m ecommerce_search.decision.listing_cli decide --database <db> --seller S --ref R [--version N]
+# Jev: sends the listing's title, description and claims to the remote service
+uv run python -m ecommerce_search.decision.listing_cli decide --database <db> --seller S --ref R   --provider jev --send-listing-to-jev
+# read-only: the version's decisions as recorded, checked against their own hashes
+uv run python -m ecommerce_search.decision.listing_cli show --database <db> --seller S --ref R [--version N]
+```
+
+- Migration `0006` adds four append-only tables (`listing_decision_runs`, `_proposals`,
+  `_probabilities`, `_reasons`); Alembic head is now `0006`. Downgrading `0006` drops the
+  decision history and keeps the M13 history.
+- A route is an automated routing result: `manual_review` means a human should look, not that
+  one did. No route rejects a listing. `gate_confidence` is always empty (no calibration).
+- Every `decide` appends; a Jev failure or invalid response is recorded as a fallback.
+- Verified on synthetic listings and disposable scratch databases with in-process fake
+  providers only; the development database has not been migrated to `0006`.
 
 ## `GET /health`
 

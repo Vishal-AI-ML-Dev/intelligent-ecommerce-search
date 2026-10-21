@@ -20,7 +20,7 @@ Status: **in progress. Two owner-approved live runs have been made (2026-10-21):
 | M14-2 | Jev listing provider adapter (mocked transport only) | Done, committed `d77a099` |
 | M14-3 | Deterministic routing policy `lr-1` (owner-approved rules, Option A) | Done, committed `5a9cc2f` |
 | M14-4 | Offline evaluator: `le-1` contract, measurability, metrics, corruption checks, `evaluate` CLI | Done, committed `4fe0201` |
-| M14-5 | Persistence (migration `0006`, store, `decide`/`show`) | **Deferred, not completed or skipped** (owner, 2026-10-21). Persistence and FR-LST-1's inferred-decisions layer remain outstanding until a consumer exists (`POST /listings/analyze` or the M21 review queue). |
+| M14-5 | Persistence (migration `0006`, store, `decide`/`show`) | First deferred (owner, 2026-10-21); **implemented 2026-10-21** under the owner's closure instruction, on scratch databases with fake providers only (below). |
 | M14-6 | External dataset preparation: adapters, label mapping, grouping, selection, `corrupt-2` with matching `lt-1`, `prepare` CLI, local set `le-set-2` | **Implemented, tests pass** (committed with this record) |
 | Live runner | Capped, journalled runner (`le-run-1`) plus the provider usage fix | Done (`0a5576b`, price fix `6896fa4`). Used live once, for `smoke-1` only (below). |
 | M14-7 | Live evaluation | Not started; needs a separate send approval (rights, prices, caps) |
@@ -652,6 +652,99 @@ M14-5 is **deferred, not completed and not skipped**. Neither M14-6 nor a future
 runner needs database persistence: the set is frozen files, and outcomes are `le-outcomes-1`
 files the evaluator binds. Persistence (`0006`, a store, `decide`/`show`) and FR-LST-1's
 inferred-decisions layer remain **outstanding**, and M14 is not complete on that point.
+
+## M14-5 implementation: decision persistence (2026-10-21)
+
+Built under the owner's end-to-end closure instruction. Migrations were applied **only to
+disposable `ecommerce_search_test_*` scratch databases**; the development database was not
+migrated. No provider was called: Jev outcomes in tests come from in-process fakes.
+
+**Schema (migration `0006`, literal DDL like `0005`).** Four append-only tables, separate from
+the M13 seller data:
+- `listing_decision_runs`: one row per recorded decision. It holds:
+  - a foreign key to the exact `listing_normalization_runs` row, plus a copy of its
+    `output_sha256`;
+  - `jl-1` version and digest, `state_sha256`;
+  - provider, model, response model, request id, latency, tokens and usage;
+  - fallback reason and rejection code, call and question exactly as returned;
+  - `lr-1` version and digest, route and deterministic route;
+  - row counts, plus hashes of the canonical outcome and routing decision.
+- `listing_decision_proposals`: proposals in outcome order (category, subcategory, then claims
+  by ordinal), with raw choice and provider confidence.
+- `listing_decision_probabilities`: every returned probability, one row per label, with its
+  position in the label set and `is_top`.
+- `listing_decision_reasons`: routing reasons in canonical order.
+
+**Named CHECKs:**
+- `gate_confidence IS NULL`;
+- routes are only the three `Route` values, and there is no rejection;
+- `lr-1` never stores `auto_accept`;
+- a deterministic row carries no telemetry or proposal;
+- a Jev row records model and latency;
+- a fallback has no proposals;
+- a rejection code is allowlisted, only with `invalid_response`.
+
+UPDATE, DELETE and TRUNCATE are blocked by `0005`'s `listing_history_append_only()`. Downgrading
+`0006` drops only the four tables and keeps that function and all M13 history. No JSON columns:
+the existing schema test forbids them, so probabilities are rows.
+
+**Store (`decision/listing_store.py`).** `decide_and_store` works in this order:
+1. It reads the stored version (READ ONLY, M13 integrity check).
+2. It re-normalizes the exact stored bytes. It refuses, before any provider call and writing
+   nothing, unless the current rules' stored run has the same output hash and rules digest.
+3. It requires the decision tables (also before the provider call, so an unmigrated database
+   never costs a paid call).
+4. It calls the provider once with no transaction open, validates and routes.
+5. It writes all rows in one transaction.
+
+Every call appends. Identical outcomes are still recorded, and a fallback is recorded as
+returned. `read_decisions` reads as recorded (READ ONLY). `verify_decision` checks:
+- the counts and ordinals;
+- the proposal order;
+- that the outcome and decision hashes are reproduced from the rows;
+- the link to the normalization run.
+
+**CLI (`python -m ecommerce_search.decision.listing_cli`).**
+- **`decide`:** `--database` is required. `--provider deterministic` is the default;
+  `--provider jev` also needs `--send-listing-to-jev` and an enabled Jev configuration, or
+  nothing is sent.
+- **`show`:** read-only and verified. It labels routes as automated results, not human reviews.
+
+**Commands and results (2026-10-21, `uv run --offline`, scratch databases only):**
+
+| Command | Result |
+|---|---|
+| `pytest tests/integration/test_migrations.py::test_head_adds_only_the_m3_and_m4_derived_tables` (before any M14-5 edit) | **1 failed**: **pre-existing since M13** (`0005` added the listing tables; the expected list was not updated). Now `test_head_adds_only_the_derived_and_listing_tables`, listing the M13 and M14 tables. |
+| `pytest tests/integration/test_listing_decision_persistence.py tests/integration/test_migrations.py` (first run) | 16 failed, 10 passed: the test's fake built a strict outcome from a list. It now validates through JSON. Then **20 passed** for the new file. |
+| `pytest` of the migrations, catalog schema, dense and search migrations, M13 and M14 persistence (first full run) | 2 failed: the head-table list lacked the new table. `test_model_and_migration_constraint_definitions_are_identical` found a real bug: the ORM `usage` CHECK was built from `Literal | None` and listed the wrong values. Fixed; the test now compares through `0006`. Before that, the same schema suite had shown that JSONB broke the no-JSON convention, which led to the probabilities table. |
+| Same six integration files | **114 passed** in 96.02 s |
+| `pytest tests/unit/listing_decisions tests/unit/normalization tests/unit/listing_eval` (unraisable warnings as errors) | **815 passed** in 28.97 s |
+| `pytest tests/unit/listing_decisions/test_listing_decision_store_records.py` | **13 passed** |
+| `ruff check` / `ruff format --check` (decision, models, migrations, integration tests, listing-decision unit tests) | **All checks passed**; **63 files already formatted** |
+| After the CLI's Jev-configuration error handling: `pytest` of the new integration and unit files | **35 passed** |
+| `alembic heads` | `0006 (head)` |
+
+**Integration tests cover:**
+- exact read-back of a Jev decision, including a tie in label order and omitted probabilities;
+- the link to the M13 run, with M13 rows unchanged;
+- appends, never replacements;
+- the fallback with its rejection code;
+- per-version scoping;
+- refusal without an exact stored normalization;
+- append-only triggers;
+- database CHECK and FK enforcement;
+- tamper detection on read, through the store and the CLI;
+- CLI decide/show, Jev confirmation and disabled Jev;
+- refusal at `0005` with no provider call;
+- downgrade keeping the M13 history and its trigger functions;
+- no catalog or search table touched.
+
+**Limitations:**
+- No HTTP endpoint and no review queue (M21 or undecided).
+- A paid Jev outcome whose write then fails is not stored. The provider call happens outside the
+  transaction by design.
+- No real listing has been stored or decided.
+- `decide` decides the version under the current rules only.
 
 ## M14-6 implementation: external dataset preparation (2026-10-21)
 
@@ -1681,9 +1774,8 @@ or below: at best 6/291 = 2.06 %.
   paths below are indicative, not final": `POST /listings/analyze (M13-M14)`,
   `GET /reviews/pending (M14/M21)`, `POST /reviews/{review_id}/decision (M14/M21)`. Not built;
   the scope split between M14 and M21 is **undecided**.
-- **Inferred-decisions storage (spec FR-LST-1):** the M13 status note says "the inferred,
-  risk-signal and human-outcome layers for listings are later milestones". M14-5 persistence is
-  **deferred, not completed**.
+- **Inferred-decisions storage (spec FR-LST-1):** M14-5 persistence is now implemented (see
+  "M14-5 implementation"); human-outcome layers remain later work.
 - **Risk triage** (M15) and the human review workflow (M21, "Corrective Action and HITL
   Workflow"): later milestones. `auto_accept` stays unreachable until risk exists.
 
