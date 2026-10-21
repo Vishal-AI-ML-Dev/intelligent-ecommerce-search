@@ -654,3 +654,54 @@ def test_the_cli_runs_dry_exports_and_reports_status(work, tmp_path, capsys) -> 
     assert main(["status", *base]) == 0
     assert main(["export", *base, "--out", str(tmp_path / "o.jsonl")]) == 0
     assert main(["run", *base, "--max-items", "4", "--live"]) == 2  # no prices or approval
+
+
+# --- pricing validation -------------------------------------------------------------------------
+
+
+def _price(input_price, output_price):
+    return rn.Pricing(
+        input_usd_per_million=input_price,
+        output_usd_per_million=output_price,
+        checked_on="2026-10-21",
+        source="synthetic test price",
+    )
+
+
+def test_a_free_output_price_is_accepted_and_input_must_cost_something() -> None:
+    from pydantic import ValidationError
+
+    assert _price("0.042", "0").output_usd_per_million == 0
+    for input_price, output_price in [
+        ("0", "0"),
+        ("-0.042", "0"),
+        ("0.042", "-1"),
+        ("NaN", "0"),
+        ("0.042", "NaN"),
+        ("Infinity", "0"),
+        ("0.042", "Infinity"),
+        ("-Infinity", "0"),
+    ]:
+        with pytest.raises(ValidationError):
+            _price(input_price, output_price)
+
+
+def test_free_output_still_enforces_the_output_allowance(work) -> None:
+    work_dir, eval_set = work
+    priced = _priced(output_allowance=0) | {"pricing": _price("0.042", "0")}
+    summary = rn.run(work_dir, eval_set, _header(eval_set, **priced), rn.dry_run_factory())
+    assert summary.stop == "allowance_exceeded"  # 1 output token per call > 0 allowed
+
+
+def test_free_output_still_reserves_and_counts_input_spend(work) -> None:
+    work_dir, eval_set = work
+    priced = _priced(max_usd="0.0001") | {"pricing": _price("0.042", "0")}
+    header = _header(eval_set, **priced)
+    # 1000 input tokens x $0.042 per million = $0.000042 reserved per call; output adds nothing.
+    assert header.reservation_usd(1) == Decimal("0.000042")
+    summary = rn.run(work_dir, eval_set, header, rn.dry_run_factory())
+    assert summary.stop == "spend_tripwire"
+    assert summary.known_spend_usd == Decimal(summary.known_input_tokens) * Decimal("0.042") / (
+        Decimal(1_000_000)
+    )
+    assert summary.unaccounted_attempts == 0

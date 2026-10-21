@@ -127,8 +127,11 @@ class _Model(BaseModel):
 
 
 class Pricing(_Model):
-    input_usd_per_million: Decimal = Field(gt=0)
-    output_usd_per_million: Decimal = Field(gt=0)
+    """Recorded prices. Input must cost something; output may be free (0), as the provider
+    documents for `jev-1.13.0`. Negative, NaN and infinite prices are refused."""
+
+    input_usd_per_million: Decimal = Field(gt=0, allow_inf_nan=False)
+    output_usd_per_million: Decimal = Field(ge=0, allow_inf_nan=False)
     checked_on: date
     source: str = Field(min_length=1)  # where the prices were read (page or invoice)
 
