@@ -1,8 +1,9 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. M14-3 (routing policy `lr-1`) is implemented and uncommitted
-(2026-10-21).** M14-1 is committed as `be2cdf3` and M14-2 as `d77a099`. M14 is not complete. No
-dataset preparation, live call or evaluation exists. M14-4 has not started.
+Status: **in progress. M14-4 (offline evaluation tooling) is implemented and uncommitted
+(2026-10-21).** M14-1 is committed as `be2cdf3`, M14-2 as `d77a099` and M14-3 as `5a9cc2f`. M14
+is not complete. No dataset preparation, runner, live call or real evaluation exists. M14-5 has
+not started.
 
 ## Batches
 
@@ -11,8 +12,9 @@ dataset preparation, live call or evaluation exists. M14-4 has not started.
 | M14-0 | External dataset coverage probes and source selection (scratch only, no repo edits) | Done (previous session) |
 | M14-1 | Offline contracts, `jl-1` questions/state builder, provider Protocol, deterministic baseline | Done, committed `be2cdf3` |
 | M14-2 | Jev listing provider adapter (mocked transport only) | Done, committed `d77a099` |
-| M14-3 | Deterministic routing policy `lr-1` (owner-approved rules, Option A) | **Implemented, tests pass, uncommitted** |
-| M14-4 and later | Evaluation tooling, data preparation, evaluation | Not started; each needs approval |
+| M14-3 | Deterministic routing policy `lr-1` (owner-approved rules, Option A) | Done, committed `5a9cc2f` |
+| M14-4 | Offline evaluator: `le-1` contract, measurability, metrics, corruption checks, `evaluate` CLI | **Implemented, synthetic-fixture tests pass, uncommitted** |
+| M14-5 and later | Persistence (optional), dataset preparation, live runner, live evaluation | Not started; each needs approval |
 
 ## Approved scope (owner, 2026-10-21)
 
@@ -460,10 +462,189 @@ or evaluation code.
 - **No integration:** routing is not persisted, not wired to any CLI or endpoint, and not used by
   `decide_listing`.
 
+## M14-4 implementation: offline evaluator (2026-10-21)
+
+### Owner decisions applied
+
+1. **Seller fields:** the source or mapped category, and any available subcategory, are the
+   seller fields M13 reads. On clean items the evaluator checks that each normalized seller
+   value equals its label. A category label of `none` (a non-product) is not checked. Tests check
+   that `jl-1` model inputs contain neither these seller fields nor any label, origin field or
+   mapping version, unless the word occurs in the seller's own title or description.
+2. **`sports` vs `running`, fixed before any prediction is read:**
+   - Each subcategory label carries its scoring policy, set by the mapping:
+     `exact` or `excluded_ambiguous_mapping`.
+   - Only `sports` may be excluded.
+   - An excluded label never enters any denominator, whatever is predicted, and the excluded
+     count is reported. A test shows the subcategory metrics are identical for `sports`,
+     `running`, `casual` and `none` predictions on the excluded item.
+   - **No coarse sports/running metric is reported:** the taxonomy defines no such group. It
+     appears in the registry as unmeasured.
+3. **Offline evaluator only. No runner.** A live runner remains a separate approval dependency
+   before M14-7.
+4. **No probability diagnostics or Brier scores.**
+5. **Dev split by default.** Evaluating the test split needs `allow_test_split` / `--allow-test-split`,
+   and the report records it. Only synthetic fixtures were evaluated in this batch.
+
+### Files
+
+| File | Contents |
+|---|---|
+| `evals/listing_decisions/contracts.py` | The `le-1` set contract (detailed below), plus `set_sha256`, `load_set` and `dump_set` |
+| `evals/listing_decisions/measurability.py` | The `le-measure-1` registry: measured cells, and unmeasured cells with their reasons |
+| `evals/listing_decisions/metrics.py` | Label-based task metrics, a separate deterministic-baseline section, and descriptive counts |
+| `evals/listing_decisions/corruption.py` | Pair verification, route transitions, attributable detection and the injection non-degradation check |
+| `evals/listing_decisions/evaluate.py` | The offline evaluator (report `le-report-1`): raw-hash and outcome binding, seller-field check, split policy, deterministic report bytes |
+| `evals/listing_decisions/cli.py`, `__main__.py`, `__init__.py` | `python -m evals.listing_decisions evaluate` |
+| `tests/unit/listing_eval/` | Synthetic fixtures (`listing_eval_support.py`, `conftest.py` with a network guard) and four test modules: 69 tests |
+| `docs/m14-progress.md` | This record; M14-3's commit status corrected to `5a9cc2f` |
+
+**What the `le-1` contract holds:**
+- **Source provenance:** the file SHA-256s, the declared licence and who declared it, and the
+  rights caveat.
+- **Label kinds:** `source`, `mapped` or `synthetic_corruption`. There is **no human-reviewed
+  kind**.
+- **Measurability limits:** a `running`, laptop or phone subcategory label is refused.
+- **Splits and twins:** a group never crosses splits, and a corrupted item and its twin share
+  source, group and split.
+
+No product code, settings, migration, dataset generator or runner was added or changed.
+
+### Metrics
+
+- **Label-based metrics** cover Jev against external labels, on clean items of the evaluated
+  split, per source and pooled. The pooled figure carries a warning that sources differ in
+  format.
+  - **Counts:** `eligible`, `attempted`, `not_attempted`, abstentions (`tie` and `fallback` by
+    reason), `predictions`, `correct`, `wrong` and `predicted_none`.
+  - **Ratios:**
+    - `overall_accuracy` = correct / eligible;
+    - `answered_accuracy` = correct / predictions;
+    - `coverage` = predictions / eligible.
+
+    Each ratio records its numerator and denominator. A zero denominator gives `null` with a
+    reason.
+  - **Per label:** precision, recall and F1, each `null` with a reason when undefined, plus a
+    confusion matrix.
+- **Deterministic baseline:** reported separately. It shows 0 predictions and coverage 0 of
+  eligible, and its accuracy is `null`, with the reason that it makes no proposal and is not an
+  equivalent predictor.
+- **Descriptive counts:** reported apart from the label-based metrics, with no correctness
+  implied:
+  - route and reason-code counts per arm;
+  - Jev tie, `none` and fallback counts;
+  - support-label counts;
+  - the number of titles containing their category word (disclosed as evidence, not leakage).
+- **Unmeasured:** every unmeasured task-quality metric is `null` with its reason, never zero:
+  - route correctness, unsafe auto-accept rate and unnecessary review rate;
+  - ambiguity;
+  - attribute text support;
+  - calibration;
+  - laptop, phone and running subcategories;
+  - a coarse sports/running metric.
+
+### Corruption checks (`corrupt-1` pairs; robustness only)
+
+**Pair verification:**
+- Each pair is checked structurally first. Seller identity keys aside, the corrupted listing may
+  differ from its twin only under `target_key`.
+- The twin's value there must equal `original_value`, and the rule's own condition must hold:
+  - `category_swap` changes the category;
+  - `out_of_set_subcategory` sets a value outside the taxonomy;
+  - `attribute_swap` changes a product attribute whose original value appears in the twin's
+    text;
+  - `instruction_injection` appends to the description.
+- A pair that fails is refused, never reinterpreted.
+
+**Reported per rule and arm, each separately:**
+- clean→corrupt route transitions;
+- `raised`, `unchanged` and `lowered` counts, recorded for every rule;
+- `clean_manual_review`;
+- attributable detection.
+
+**Attributable detection:**
+- **What counts:** the corrupt decision must carry the rule's exact code, with a subject tied to
+  the changed key, and the clean twin's decision must not.
+- **Per-rule codes:**
+  - `category_swap`: Jev arm only, `jev.category_disagrees_with_seller`. There is no
+    deterministic signal, so that arm reports detection as `null` with a reason.
+  - `attribute_swap`: `m13.value_conflict` on the key's fields; on the Jev arm also
+    `jev.claim_contradicted` on the claims read from that key. If no such claim was asked, the
+    pair is `not_assessable`.
+  - `out_of_set_subcategory`: `m13.incompatible_subcategory`, `m13.candidate_unsupported` or
+    `m13.candidate_invalid` on `subcategory`.
+- **What never counts:** a reason the twin already had (counted as `present_in_clean_twin`), and
+  any other manual-review reason.
+
+**`instruction_injection` is a non-degradation check only.** It is not evidence that the injection
+was detected or resisted, and its detection is `null` with that reason.
+- It is checked only for pairs whose M13 evidence is preserved: every candidate and finding is
+  unchanged apart from the description's own seller-field candidate.
+- For those pairs a lowered route fails the check (`failed_checks`, CLI exit 1).
+- Pairs whose injected text adds evidence are counted as `evidence_not_preserved` and not
+  checked. The fixture includes one: an injected "64GB RAM" claim creates a `value_conflict`.
+- A lowered route for any other rule is recorded, not failed.
+
+### Binding
+
+- Every raw file must match its SHA-256 name and item.
+- The set must match its `set_sha256`.
+- A recorded outcome (`le-outcomes-1`) must name a known item, at most once, and come from
+  `jev`. It must be recorded for this set and this `jl-1` digest, and must answer exactly the
+  recomputed state (`state_sha256`, question set version and asked ordinals, via
+  `validate_outcome`).
+- Any mismatch refuses the whole evaluation (CLI exit 2, nothing written).
+- Reports contain no timestamps, so the same inputs give byte-identical reports (tested across
+  two fixture directories).
+
+### Commands and results (2026-10-21, `uv run --offline`)
+
+| Command | Result |
+|---|---|
+| `ruff format evals/listing_decisions` | 5 files reformatted |
+| `ruff check evals/listing_decisions` | **All checks passed** |
+| `pytest tests/unit/listing_eval` (first full run) | **52 passed** (contracts, metrics, corruption). Before the run, fixture assumptions were checked against real M13 output: brands were added, because a missing brand gives `missing_required`, which made every clean route `manual_review`. Two corruption tests were also corrected for fixture mistakes: an "original not in text" case that was not reachable, and a lowered injection route caused by the fixture. |
+| `pytest tests/unit/listing_eval` (after adding the end-to-end and CLI tests, and pinning refusal messages) | **69 passed** in 2.50 s |
+| `ruff format` (package and tests) | 2 files reformatted |
+| `ruff check` (package and tests) | 5 × I001: `evals` is sorted as third-party under the project config; fixed with `ruff check --fix` |
+| `ruff check` / `ruff format --check` (package and tests) | **All checks passed**; **14 files already formatted** |
+| `pytest tests/unit/listing_eval tests/unit/listing_decisions` | **240 passed** in 6.23 s |
+| After removing an unused test helper: `ruff check` / `ruff format --check tests/unit/listing_eval`, `pytest tests/unit/listing_eval` | **All checks passed**; **6 files already formatted**; **69 passed** in 2.58 s |
+| Review fix: removed an assertion in the leakage test that checked nothing (and its now-unused import). Then `ruff check` / `ruff format --check` (package and tests), `pytest tests/unit/listing_eval/test_listing_eval_contracts.py` | **All checks passed**; **14 files already formatted**; **25 passed** in 0.26 s |
+
+**Not run (as instructed):**
+- the full unit suite and `tests/unit/test_unit_isolation.py`;
+- integration tests;
+- any live or Jev call, download or database operation.
+
+### M14-4 limitations
+
+- **Synthetic fixtures only:**
+  - No external data has been prepared; that is M14-6.
+  - No report over real data exists, so no metric value exists yet.
+  - The fixture counts prove only the arithmetic.
+- **No runner:** recorded Jev outcomes can only come from a future, separately approved runner.
+- **`set_sha256` detects accidental edits only;** it is not a signature.
+- **Seller-field check:** it relies on M13's normalized seller category. A source category M13
+  cannot normalize would be refused, not repaired.
+- **Attributable detection is narrow by design:**
+  - `category_swap` has no deterministic signal;
+  - `attribute_swap` on a field M13 does not extract from text has no deterministic signal;
+  - a swapped claim that was not asked is `not_assessable`.
+- **The injection check is non-degradation only.** It covers only pairs whose evidence is
+  preserved, and makes no claim of detection or robustness.
+- **Unchanged from the evaluation amendment:** the label basis remains external source labels.
+  The human-reviewed requirements, route correctness, ambiguity and calibration stay unmet or
+  unmeasured.
+
 ## Next batch (needs explicit approval)
 
-1. Review and commit M14-3.
-2. M14-4: evaluation tooling.
+1. Review and commit M14-4.
+2. Then, each needing approval:
+   - M14-5: persistence (optional);
+   - M14-6: dataset preparation (adapters, mapping, `corrupt-1` generator, frozen split);
+   - a live runner, which is an approval dependency before M14-7;
+   - M14-7: live evaluation.
 
-M14-4 has not started. No live calls are allowed without a separate approval covering the cap,
+M14-5 has not started. No live calls are allowed without a separate approval covering the cap,
 prices and tripwire.
