@@ -528,3 +528,78 @@ def test_the_deadline_bounds_both_calls_together() -> None:
     assert time.perf_counter() - started < 2.0
     _assert_fallback(outcome, "deadline_exceeded")
     assert outcome.request_id == "req-text" and len(server.requests) == 2
+
+
+# --- token accounting across both calls (runner fix) -------------------------------------------
+
+
+def test_successful_outcomes_report_complete_usage() -> None:
+    outcome = _decide(Server())
+    assert (outcome.usage, outcome.input_tokens, outcome.output_tokens) == ("complete", 500, 1)
+    single = _decide(Server(text=_ok(_text_body(), "t")), state=state_of(NO_CLAIMS))
+    assert (single.usage, single.input_tokens, single.output_tokens) == ("complete", 300, 0)
+
+
+def test_a_failed_call_b_keeps_call_a_usage_as_partial() -> None:
+    outcome = _decide(Server(claims=httpx2.Response(503, json={"error": "x"})))
+    _assert_fallback(outcome, "server_error")
+    assert (outcome.usage, outcome.input_tokens, outcome.output_tokens) == ("partial", 300, 0)
+    assert outcome.request_id == "req-text"
+
+
+def test_a_failed_call_a_has_no_usage() -> None:
+    outcome = _decide(Server(text=httpx2.Response(500, json={"error": "x"})))
+    _assert_fallback(outcome, "server_error")
+    assert (outcome.usage, outcome.input_tokens, outcome.output_tokens) == ("none", None, None)
+
+
+def test_invalid_usage_on_call_b_is_not_counted() -> None:
+    bad = _claims_body(usage={"input_tokens": -1, "output_tokens": 0})
+    outcome = _decide(Server(claims=_ok(bad, "req-claims")))
+    _assert_fallback(outcome, "invalid_response")
+    assert (outcome.usage, outcome.input_tokens, outcome.output_tokens) == ("partial", 300, 0)
+
+
+def test_two_completed_calls_count_fully_even_when_the_answers_are_rejected() -> None:
+    bad = _claims_body({qid: _answer(SUPPORT_LABELS, "supported") for qid in ASKED[1:]})
+    outcome = _decide(Server(claims=_ok(bad, "req-claims")))
+    _assert_fallback(outcome, "invalid_response")
+    assert (outcome.usage, outcome.input_tokens, outcome.output_tokens) == ("complete", 500, 1)
+
+
+def test_a_call_b_response_without_usage_falls_back_and_keeps_call_a_usage() -> None:
+    # The SDK itself rejects a response with no `usage`, so the listing falls back; call A's
+    # usage is still kept and the total is partial.
+    body = {k: v for k, v in _claims_body().items() if k != "usage"}
+    outcome = _decide(Server(claims=_ok(body, "req-claims")))
+    _assert_fallback(outcome, "invalid_response")
+    assert (outcome.usage, outcome.input_tokens, outcome.output_tokens) == ("partial", 300, 0)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"usage": "none", "input_tokens": 1, "output_tokens": 0},
+        {"usage": "partial", "input_tokens": None, "output_tokens": None},
+        {"usage": "complete", "input_tokens": 1, "output_tokens": None},
+    ],
+    ids=["none-with-tokens", "partial-without-tokens", "complete-missing-a-count"],
+)
+def test_the_usage_marker_must_agree_with_the_token_counts(fields) -> None:
+    from pydantic import ValidationError
+
+    from ecommerce_search.decision.listing_models import ListingDecisionOutcome
+
+    with pytest.raises(ValidationError):
+        ListingDecisionOutcome(
+            provider="jev",
+            state_sha256=STATE.state_sha256(),
+            model=MODEL,
+            latency_ms=1.0,
+            fallback_reason="timeout",
+            **fields,
+        )
+    with pytest.raises(ValidationError):
+        ListingDecisionOutcome(
+            provider="deterministic", state_sha256=STATE.state_sha256(), usage="none"
+        )

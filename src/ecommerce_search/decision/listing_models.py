@@ -294,6 +294,11 @@ class ListingDecisionOutcome(_Frozen):
     request_id: str | None = None
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
+    # Token accounting over the listing's planned calls (M14 runner fix): `complete` when every
+    # planned call returned both counts; `partial` when only some did (the tokens are the sum
+    # of those calls, and the other calls, for example a failed call B, are unaccounted);
+    # `none` when no call did. None for outcomes recorded before this field existed.
+    usage: Literal["complete", "partial", "none"] | None = None
     fallback_reason: JevFallbackReason | None = None
     category: CategoryProposal | None = None
     subcategory: SubcategoryProposal | None = None
@@ -313,6 +318,7 @@ class ListingDecisionOutcome(_Frozen):
                 self.request_id,
                 self.input_tokens,
                 self.output_tokens,
+                self.usage,
                 self.fallback_reason,
             )
             if has_any or any(v is not None for v in telemetry):
@@ -326,6 +332,11 @@ class ListingDecisionOutcome(_Frozen):
             raise ValueError("a fallback outcome carries no proposal")
         if self.fallback_reason is None and None in (self.category, self.subcategory):
             raise ValueError("a successful outcome needs the category and subcategory proposals")
+        counted = (self.input_tokens, self.output_tokens)
+        if self.usage == "none" and counted != (None, None):
+            raise ValueError("usage none carries no token counts")
+        if self.usage in ("complete", "partial") and None in counted:
+            raise ValueError("complete or partial usage carries both token counts")
         return self
 
 

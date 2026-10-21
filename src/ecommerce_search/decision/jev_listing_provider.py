@@ -28,7 +28,9 @@ calibrated, gated, applied or routed here.
 The event loop, client, deadline, admission (`max_in_flight`), retry policy and error mapping are
 the M11 provider's (`JevDecisionProvider`), reused through its `_send`. `deadline_seconds` bounds
 the whole `decide()` call: call B gets only what is left after call A. Telemetry: tokens are
-summed over the calls made; `request_id` holds the calls' request ids joined by "," in call order,
+summed over the calls that returned usage, with `usage` saying whether that covers every planned
+call (`complete`), only some (`partial`, for example call A of a listing whose call B failed) or
+none; `request_id` holds the calls' request ids joined by "," in call order,
 because the M14-1 contract has a single field.
 """
 
@@ -70,7 +72,9 @@ class JevListingDecisionProvider:
     """Bounded Jev proposals for one listing state; the M13 record is never changed here."""
 
     def __init__(self, config: JevConfig, *, transport: Any = None) -> None:
-        # `transport` is an httpx2 transport for mocked tests only; it never carries settings.
+        # `transport` is an httpx2 transport: a mock in tests, or the M14 runner's journaling
+        # wrapper (which wraps the real transport only in an approved live run). It never
+        # carries settings.
         self._jev = JevDecisionProvider(config, transport=transport)
         self._model = config.model
 
@@ -99,12 +103,13 @@ class JevListingDecisionProvider:
                 response = self._jev._send(inputs[input_id], _sdk_questions(group), started)
                 responses.append(response)
                 answers.update(self._answers(response, group))
-            outcome = self._proposals(state, answers, responses, started)
+            outcome = self._proposals(state, answers, responses, started, len(calls))
         except _CallFallback as failed:
             ids = [*_request_ids(responses), failed.request_id]
-            return self._fallback(state, failed.reason, started, ids)
+            return self._fallback(state, failed.reason, started, ids, responses, len(calls))
         except _InvalidResponse as invalid:
-            return self._fallback(state, invalid.reason, started, _request_ids(responses))
+            ids = _request_ids(responses)
+            return self._fallback(state, invalid.reason, started, ids, responses, len(calls))
         return outcome
 
     def _answers(self, response: Any, group: Sequence[QuestionSpec]) -> dict[str, dict[str, Any]]:
@@ -125,8 +130,10 @@ class JevListingDecisionProvider:
         answers: Mapping[str, dict[str, Any]],
         responses: Sequence[Any],
         started: float,
+        planned: int,
     ) -> ListingDecisionOutcome:
         latency_ms = _elapsed_ms(started)
+        usage, input_tokens, output_tokens = _usage(responses, planned)
         try:
             outcome = ListingDecisionOutcome(
                 provider="jev",
@@ -135,8 +142,9 @@ class JevListingDecisionProvider:
                 response_model=self._model,  # every response was checked against it
                 latency_ms=latency_ms,
                 request_id=_joined(_request_ids(responses)),
-                input_tokens=_token_total(responses, 0),
-                output_tokens=_token_total(responses, 1),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                usage=usage,
                 category=CategoryProposal(
                     label=_label(answers[CATEGORY_QUESTION], NONE_LABEL),
                     **answers[CATEGORY_QUESTION],
@@ -166,13 +174,21 @@ class JevListingDecisionProvider:
         reason: JevFallbackReason,
         started: float,
         request_ids: Sequence[object],
+        responses: Sequence[Any],
+        planned: int,
     ) -> ListingDecisionOutcome:
+        # Usage of the calls that did complete is kept, so a failed call B never hides call A's
+        # tokens; the failed call itself stays unaccounted (`partial`).
+        usage, input_tokens, output_tokens = _usage(responses, planned)
         return ListingDecisionOutcome(
             provider="jev",
             state_sha256=state.state_sha256(),
             model=self._model,
             latency_ms=_elapsed_ms(started),
             request_id=_joined(request_ids),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            usage=usage,
             fallback_reason=reason,
         )
 
@@ -213,10 +229,21 @@ def _token_counts(response: Any) -> tuple[int | None, int | None]:
     return counts
 
 
-def _token_total(responses: Sequence[Any], index: int) -> int | None:
-    """The sum over every call, or None unless every call reports the count."""
-    counts = [_token_counts(r)[index] for r in responses]
-    return None if None in counts else sum(counts)
+def _usage(responses: Sequence[Any], planned: int) -> tuple[str, int | None, int | None]:
+    """(usage, input tokens, output tokens) over the responses received for `planned` calls.
+    Only responses reporting both counts as valid integers count; the tokens are their sums."""
+    known = []
+    for response in responses:
+        try:
+            counts = _token_counts(response)
+        except _InvalidResponse:
+            continue
+        if None not in counts:
+            known.append(counts)
+    if not known:
+        return "none", None, None
+    usage = "complete" if len(known) == planned else "partial"
+    return usage, sum(c[0] for c in known), sum(c[1] for c in known)
 
 
 def _log_outcome(outcome: ListingDecisionOutcome) -> None:
@@ -239,12 +266,13 @@ def _log_outcome(outcome: ListingDecisionOutcome) -> None:
     }
     logger.info(
         "jev_listing_decision model=%s latency_ms=%.1f request_id=%s input_tokens=%s "
-        "output_tokens=%s fallback_reason=%s state_sha256=%s proposals=%s",
+        "output_tokens=%s usage=%s fallback_reason=%s state_sha256=%s proposals=%s",
         outcome.model,
         outcome.latency_ms,
         outcome.request_id,
         outcome.input_tokens,
         outcome.output_tokens,
+        outcome.usage,
         outcome.fallback_reason,
         outcome.state_sha256,
         proposals,

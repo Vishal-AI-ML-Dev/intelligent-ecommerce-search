@@ -1,12 +1,13 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. M14-6 (external dataset preparation) is implemented. The current local
-set is `le-set-2`, regenerated once after a review fix, with a deterministic-only dev
-evaluation (2026-10-21).**
-- M14-1 to M14-4 are committed (`be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`).
-- M14-5 is **deferred, not completed**.
-- M14 is not complete.
-- No runner, Jev call or test-split evaluation exists.
+Status: **in progress. The live runner is built and tested with mocked and dry-run
+transports only, and is committed with this record (2026-10-21).**
+- **Not run live:** the runner has never made a Jev call. Sending dataset content to Jev
+  needs a separate send approval.
+- **Committed:** M14-1 to M14-4 (`be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`) and M14-6
+  (`fe72bd4`, set `le-set-2`).
+- **M14-5:** deferred, not completed.
+- M14 is not complete. No Jev call or test-split evaluation has been made.
 
 ## Batches
 
@@ -19,7 +20,8 @@ evaluation (2026-10-21).**
 | M14-4 | Offline evaluator: `le-1` contract, measurability, metrics, corruption checks, `evaluate` CLI | Done, committed `4fe0201` |
 | M14-5 | Persistence (migration `0006`, store, `decide`/`show`) | **Deferred, not completed or skipped** (owner, 2026-10-21). Persistence and FR-LST-1's inferred-decisions layer remain outstanding until a consumer exists (`POST /listings/analyze` or the M21 review queue). |
 | M14-6 | External dataset preparation: adapters, label mapping, grouping, selection, `corrupt-2` with matching `lt-1`, `prepare` CLI, local set `le-set-2` | **Implemented, tests pass** (committed with this record) |
-| Live runner, M14-7 | Mocked-tested live runner; live evaluation | Not started; each needs approval (the runner before M14-7) |
+| Live runner | Capped, journalled runner (`le-run-1`) plus the provider usage fix | **Built; mocked and dry-run tests pass; committed with this record.** Never run live. |
+| M14-7 | Live evaluation | Not started; needs a separate send approval (rights, prices, caps) |
 
 ## Approved scope (owner, 2026-10-21)
 
@@ -863,11 +865,142 @@ title disclosure uses the same rule.
 - **Row-level data:** none is in git. `data/processed/m14_listing_set/le-set-2/` holds the
   current set, raw files, manifest and dev report. `le-set-1/` is kept as superseded.
 
+## Live runner (2026-10-21; built, not run live)
+
+**Approval scope:** the owner approved *building* the runner, with mocked and dry-run tests
+only. That approval does **not** cover sending dataset content to Jev. Upstream rights remain
+unverified and are not cleared.
+
+### Files
+
+| File | Change |
+|---|---|
+| `evals/listing_decisions/runner.py` | New: `le-run-1` header and binding, journal events and replay, attempt hooks, caps, tripwire, stops, resume rules, dry and live provider factories, `export_outcomes` |
+| `evals/listing_decisions/run_transport.py` | New: `JournalingTransport` (journals and caps every HTTP attempt) and `SyntheticTransport` (offline dry-run answers). Imported only when a provider is built. |
+| `evals/listing_decisions/cli.py` | `run`, `export` and `status` commands |
+| `src/ecommerce_search/decision/listing_models.py` | `ListingDecisionOutcome.usage`: `complete` / `partial` / `none` / `None`, checked against the token counts; always `None` for the deterministic baseline |
+| `src/ecommerce_search/decision/jev_listing_provider.py` | Usage fix: tokens are summed over the calls that returned valid counts, and fallbacks keep them. When call B fails after call A, the outcome keeps call A's tokens with `usage=partial`. The `transport` comment was updated. |
+| `tests/unit/listing_decisions/test_jev_listing_provider.py` | 9 mocked usage regression tests |
+| `tests/unit/listing_eval/test_listing_eval_runner.py` | New: 28 dry-run and mocked runner tests |
+
+The `jl-1` digest, state hashes and every M12 file are unchanged.
+
+### Behaviour
+
+- **Binding.** `runs/<run-id>/run.json` is written once and fixes:
+  - the mode;
+  - set `le-set-2` and its `set_sha256`;
+  - the `jl-1`, `lr-1` and M13 rules digests;
+  - the model;
+  - the frozen ordered item list: dev items in `sha256(set_sha256:item_id)` order, cut to
+    `--max-items`;
+  - `max_attempts`, the token allowances, the prices (with date and source), `max_estimated_usd`
+    and `send_approval_ref`.
+
+  A changed value is refused, and an exclusive lock prevents two invocations at once. There is no
+  test-split option.
+- **Journal** (append-only, fsynced per line):
+  - `dispatch` is written before the provider call;
+  - `attempt`, carrying call `A` or `B` and the global attempt number, is written by the
+    transport **before** each HTTP request;
+  - `attempt_result` follows, with status, request id, usage, or the exception type;
+  - then `result`, `stop`, `resume_approved` and `complete`.
+
+  Replay checks that dispatches and attempts are sequential and unique.
+- **No resend.** A dispatched listing is never dispatched again. The transport refuses a second
+  attempt of the same call for one listing, and SDK retries are set to 0.
+- **Attempt cap.** `max_attempts` (at most 2 per item) caps actual HTTP attempts, failed ones
+  included, at the transport. A listing is not started unless every call it may make fits.
+- **Per-request checks** (review fix). Before **every** HTTP request, the attempt hook checks:
+  - an open dispatch;
+  - no repeat of the call;
+  - the attempt cap;
+  - the remaining spend reservation for that one call;
+  - for call B only, that call A's usage is recorded, complete and within both allowances.
+
+  A failed check journals a `refused` event with a stable reason (`attempt_cap`,
+  `spend_tripwire`, `unknown_cost`, `allowance_exceeded`, `repeated_call`, `no_dispatch`),
+  and **nothing is sent**. The transport raises it as an httpx `TransportError`, so the
+  provider returns a normal fallback that keeps call A's usage (`partial`). The runner
+  records that result and stops with the refusal reason.
+- **Redaction.** A request id containing the key is journalled as `[redacted]`.
+- **Spend.**
+  - Known spend comes from journalled usage and the recorded prices.
+  - Before each listing, the known spend plus a reservation of `planned_calls x (input allowance x
+    input price + output allowance x output price)` must fit under `max_estimated_usd`. This is a
+    **tripwire, not a billing cap**: no enforceable provider-side ceiling is known.
+  - A call whose usage exceeds an allowance is recorded and stops the run (`allowance_exceeded`,
+    terminal).
+- **Unknown cost.**
+  - An attempt without recorded usage is unaccounted cost: an error response, a transport
+    failure, a deadline cancellation, or a crash after the attempt line.
+  - It stops the run (`unknown_cost`). The run can then never continue: `--resume-approved` does
+    not override it.
+  - `status` reports known spend and unaccounted attempts separately. No bound is substituted.
+  - A listing that crashed before any attempt has no unknown cost. It stays unknown, is never
+    resent, and the run resumes only with `--resume-approved`.
+- **Other stops:**
+  - `model_mismatch`, `auth_error`, `request_rejected`, `saturated`, `provider_closed`,
+    `invalid_response_rate`, `unexpected_exception` and `interrupted` need `--resume-approved`;
+  - `binding_mismatch` (the outcome does not answer the state) and `secret_in_output` are
+    terminal, and their result is never written.
+- **Dry run (default).** The real provider runs over `SyntheticTransport`, which has no inner
+  transport and opens no socket. It never loads settings or a key (a placeholder key is used).
+  Its exports are marked `synthetic`.
+- **Live** (`--live`) needs allowances, prices with date and source, `max_estimated_usd`, a
+  `send_approval_ref` and the approved model `jev-1.13.0`. `--smoke` limits a run to 5 items. The
+  key comes from settings as a `SecretStr`, and a serialized result containing it is dropped.
+- **Export** writes `le-outcomes-1` from journalled results (fallbacks included). Unknown and
+  unattempted items are counted, not exported. The evaluator accepts it (tested).
+
+### Commands and results (2026-10-21, `uv run --offline`)
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/listing_decisions tests/unit/listing_eval` (after the usage field and provider fix) | **326 passed** |
+| `pytest tests/unit/listing_decisions/test_jev_listing_provider.py` (with the new usage tests) | 53 passed, 1 failed. My test assumed a call-B response with no `usage` would succeed; the SDK rejects it as an invalid response. Corrected to the real behaviour: a fallback, call A kept, `usage=partial`. Then **54 passed**. |
+| `pytest tests/unit/listing_eval/test_listing_eval_runner.py` (first run) | 14 passed, 14 failed. Test setup only: the module's loopback-only guard ran before the package conftest's strict guard, and then captured the already-refused `connect`. Fixed by depending on the conftest fixture and delegating to `_socket.socket.connect`. |
+| Same | **28 passed**; also **28 passed** with unraisable and resource warnings as errors |
+| `ruff check` (package, provider and tests) | 1 × S106 (a fake key literal in a test), moved to a named constant with a `noqa` |
+| `ruff check` / `ruff format --check` (same scope) | **All checks passed**; **41 files already formatted** |
+| `pytest tests/unit/listing_eval tests/unit/listing_decisions tests/unit/search/test_jev_provider.py tests/unit/search/test_decision_provider.py` | **469 passed** in 34.45 s |
+| Review probe: a plain exception raised by a transport escapes `decide()` unchanged (the M11 provider re-raises non-SDK errors), which would lose call A's usage | Refusals are therefore raised as `CallRefused(httpx2.TransportError)` |
+| `pytest tests/unit/listing_eval/test_listing_eval_runner.py` (after the per-request checks; the hook test was updated to the new reason codes) | 27 passed, 1 failed (the old hook test, expected), then **36 passed** with the new tests. The new tests show call B is not sent after a call-A allowance overrun, missing call-A usage, an exhausted attempt cap, or an insufficient remaining spend reservation. `live_factory` wiring over a mocked transport is covered: journal order, usage, no retry, the key sent only in the `Authorization` header, a redacted request id, and a dropped result. |
+| `ruff check` / `ruff format --check` (scope above), then the same regression `pytest` with unraisable warnings as errors | **All checks passed**; **41 files already formatted**; **477 passed** in 36.84 s |
+
+**Not run:**
+- any live or smoke run;
+- any Jev call or test-split evaluation;
+- the full suite and `test_unit_isolation.py`;
+- any upload, download, install or database operation.
+
+### Runner limitations
+
+- **Never run against the real API.**
+  - Usage is read from response bodies in the shape the SDK documents, not from observed live
+    responses.
+  - The real `AsyncHTTPTransport` path is not exercised in tests.
+- **Billing can still differ from the estimate.** Failed, cancelled or timed-out requests may be
+  billed, and the runner cannot know. It stops instead and reports them as unaccounted.
+- **Refused call B is reported as `transport_error`.** When call B is refused, the listing's
+  outcome fallback reason is `transport_error`; the exact reason is in the journal's `refused`
+  event and the stop reason. An overrun by call B itself, or by a single-call listing, is
+  detected after that call; no request follows it.
+- **No continuation after unknown cost.** A run with unaccounted cost is closed for good.
+  Continuing needs a new decision, for example a reconciliation step, which is not built.
+- **Rights:** a live run submits third-party data. Rights remain unresolved, and the runner does
+  not clear them.
+
 ## Next batch (needs explicit approval)
 
-1. M14-6 is committed with this record.
-2. A mocked-tested live runner (budget, journal, `le-outcomes-1`) is the approval dependency
-   before M14-7. Submitting this data to Jev needs a separate decision on the rights caveats, a
-   cap, prices and a tripwire.
+1. The runner is committed with this record.
+2. Approving a live smoke run is a **separate send decision**. It needs:
+   - the rights caveats;
+   - the prices, with their date and source;
+   - the token allowances;
+   - `max_estimated_usd`;
+   - the smoke size (≤ 5);
+   - the send-approval reference.
+3. M14-7 (live evaluation) follows only after that.
 
 No live call has been made.
