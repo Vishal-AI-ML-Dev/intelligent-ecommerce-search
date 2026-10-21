@@ -16,7 +16,11 @@
   `--output-tokens-per-call`, `--price-input-usd-per-million`, `--price-output-usd-per-million`,
   `--price-checked-on`, `--price-source`, `--max-estimated-usd` and `--send-approval-ref`, and a
   separate owner send approval. `--smoke` limits a run to 5 items. `--resume-approved`
-  continues a blocked run, never one with unknown cost.
+  continues a blocked run, never one with unknown cost. `--continuation-exception-ref REF
+  --ack-results N --ack-invalid K` (with `--resume-approved`) records a manual exception to an
+  `invalid_response_rate` stop whose counts match exactly; the run then stops on the next new
+  invalid response. It is not a quality acceptance. An exception left by a crash expires; any
+  continuation after `exception_expired` needs a separate owner recovery approval.
 * `export --set-dir DIR --run-id ID --out FILE`: write `le-outcomes-1` from the journal.
 * `status --set-dir DIR --run-id ID`: print the run's accounting (known spend and
   unaccounted attempts reported separately).
@@ -40,6 +44,7 @@ from evals.listing_decisions.runner import (
     RUN_FILE,
     RUNS_DIR,
     Allowance,
+    ContinuationRequest,
     Pricing,
     RunHeader,
     RunMode,
@@ -85,6 +90,9 @@ def _parser() -> argparse.ArgumentParser:
     runner.add_argument("--price-source")
     runner.add_argument("--max-estimated-usd", type=Decimal)
     runner.add_argument("--send-approval-ref")
+    runner.add_argument("--continuation-exception-ref")
+    runner.add_argument("--ack-results", type=int)
+    runner.add_argument("--ack-invalid", type=int)
     for name in ("export", "status"):
         sub = commands.add_parser(name)
         sub.add_argument("--set-dir", type=Path, required=True)
@@ -136,6 +144,18 @@ def _run(args: argparse.Namespace) -> int:
             send_approval_ref=args.send_approval_ref,
             **_priced(args),
         )
+        exception = None
+        flags = (args.continuation_exception_ref, args.ack_results, args.ack_invalid)
+        if any(v is not None for v in flags):
+            if None in flags:
+                raise EvalSetError(
+                    "--continuation-exception-ref, --ack-results and --ack-invalid go together"
+                )
+            exception = ContinuationRequest(
+                approval_ref=args.continuation_exception_ref,
+                acknowledged_results=args.ack_results,
+                acknowledged_invalid=args.ack_invalid,
+            )
         secret = None
         if header.mode is RunMode.LIVE:
             from ecommerce_search.config import get_settings
@@ -150,6 +170,7 @@ def _run(args: argparse.Namespace) -> int:
             factory,
             resume_approved=args.resume_approved,
             secret=secret,
+            exception=exception,
         )
     except (EvalSetError, ValidationError) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -744,3 +744,247 @@ def test_the_invalid_response_rate_is_cumulative_over_the_whole_run(work, result
     newest = state.results[f"i{results - 1}"]
     stop = rn._post_stop(header, state, f"i{results - 1}", newest)
     assert (stop == "invalid_response_rate") is stops
+
+
+# --- acknowledged-failures continuation exception (mocked; no live call) ------------------------
+
+
+def _big_set(root, count: int):
+    """`count` dev phone listings with no asked claim (one call each); returns the work dir, the
+    set and the listing number at each position of the frozen dispatch order."""
+    from listing_eval_support import label
+
+    items = {}
+    for n in range(count):
+        fields = {
+            "seller_id": "fixture-seller",
+            "seller_listing_ref": f"big-{n}",
+            "title": f"Phone Model {n}",
+            "category": "phone",
+        }
+        items[f"sp:big-{n:03d}"] = (
+            fields,
+            "smartphones",
+            f"g-big-{n}",
+            "dev",
+            [label("category", "phone", "source", origin_field="dataset_membership")],
+            None,
+            None,
+        )
+    set_path, _ = write_fixture(root, items)
+    eval_set = load_set(set_path)
+    order = [int(i.split("-")[-1]) for i in rn.frozen_items(eval_set, count)]
+    return root, eval_set, order
+
+
+def _scripted(invalid_numbers: set[int]):
+    """The real provider over a mocked transport. Listings whose number is in `invalid_numbers`
+    get a category choice that is not the top label (`choice_not_top`); all others a valid
+    answer. Usage is always known."""
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.content)
+        n = int(body["state"]["title"].rsplit(" ", 1)[-1])
+        reply = _synthetic_reply(request)
+        if n in invalid_numbers:
+            payload = json.loads(reply.content)
+            labels = list(body["questions"]["category"]["criteria"])
+            payload["answers"]["category"]["choice"] = labels[1]  # not the top label
+            reply = httpx2.Response(200, json=payload, headers={"x-typesafe-request-id": "m"})
+        return reply
+
+    return _mock_factory(handler)
+
+
+def _at(order, *positions) -> set[int]:
+    return {order[p - 1] for p in positions}  # 1-based dispatch positions
+
+
+def _exception(results: int, invalid: int, ref: str = "test-exception"):
+    return rn.ContinuationRequest(
+        approval_ref=ref, acknowledged_results=results, acknowledged_invalid=invalid
+    )
+
+
+def _stopped_at_rate(tmp_path, count: int, invalid_positions):
+    work_dir, eval_set, order = _big_set(tmp_path / "big", count)
+    header = _header(eval_set, max_items=count)
+    factory = _scripted(_at(order, *invalid_positions))
+    summary = rn.run(work_dir, eval_set, header, factory)
+    assert summary.stop == "invalid_response_rate"
+    return work_dir, eval_set, header, factory, order, summary
+
+
+def _resume(work_dir, eval_set, header, factory, results, invalid):
+    return rn.run(
+        work_dir,
+        eval_set,
+        header,
+        factory,
+        resume_approved=True,
+        exception=_exception(results, invalid),
+    )
+
+
+def test_an_exception_continues_past_acknowledged_failures_and_keeps_reporting_them(tmp_path):
+    work_dir, eval_set, header, factory, _, first = _stopped_at_rate(tmp_path, 30, (3, 5))
+    assert (first.results, first.invalid_responses) == (20, 2)  # 2/20 > 2 % at 20 results
+    run_json = (work_dir / rn.RUNS_DIR / "r1" / rn.RUN_FILE).read_bytes()
+    summary = _resume(work_dir, eval_set, header, factory, 20, 2)
+    assert summary.complete and summary.results == 30 and summary.stop is None
+    assert summary.invalid_responses == 2
+    assert summary.invalid_rate == str(Decimal(2) / Decimal(30))
+    assert summary.threshold_breached and summary.threshold_ever_breached  # not a quality pass
+    assert summary.continuation_exceptions == (
+        {
+            "event": "continuation_exception",
+            "approval_ref": "test-exception",
+            "acknowledged_stop": "invalid_response_rate",
+            "acknowledged_results": 20,
+            "acknowledged_invalid": 2,
+        },
+    )
+    assert summary.active_exception is None  # completion ends it
+    events = _events(work_dir)
+    i = events.index("continuation_exception")
+    assert events[i - 1] == "resume_approved" and events[i + 1] == "dispatch"  # written first
+    assert (work_dir / rn.RUNS_DIR / "r1" / rn.RUN_FILE).read_bytes() == run_json
+    dispatched = [e["item_id"] for e in _journal(work_dir) if e["event"] == "dispatch"]
+    assert dispatched == list(header.items) and len(set(dispatched)) == 30  # no resend
+
+
+def test_the_next_new_invalid_response_stops_immediately_and_cannot_be_bypassed(tmp_path):
+    work_dir, eval_set, header, factory, _, _ = _stopped_at_rate(tmp_path, 30, (3, 5, 24))
+    summary = _resume(work_dir, eval_set, header, factory, 20, 2)
+    assert summary.stop == "new_invalid_under_exception" and summary.results == 24
+    assert summary.invalid_responses == 3 and summary.active_exception is None
+    with pytest.raises(rn.RunnerError, match="terminally"):
+        rn.run(work_dir, eval_set, header, factory, resume_approved=True)
+    with pytest.raises(rn.RunnerError, match="terminally"):
+        _resume(work_dir, eval_set, header, factory, 24, 3)
+
+
+def test_the_next_invalid_stops_even_after_the_rate_recovers_below_the_threshold(tmp_path):
+    work_dir, eval_set, header, factory, _, first = _stopped_at_rate(tmp_path, 110, (2, 100))
+    assert (first.results, first.invalid_responses) == (20, 1)
+    summary = _resume(work_dir, eval_set, header, factory, 20, 1)
+    # At 100 results the count is 2/100 = 2 %, which the rate rule alone would accept.
+    assert summary.stop == "new_invalid_under_exception" and summary.results == 100
+    assert not summary.threshold_breached and summary.threshold_ever_breached
+
+
+def test_the_current_rate_can_fall_below_the_threshold_while_the_breach_stays_recorded(tmp_path):
+    work_dir, eval_set, header, factory, _, _ = _stopped_at_rate(tmp_path, 60, (2,))
+    summary = _resume(work_dir, eval_set, header, factory, 20, 1)
+    assert summary.complete and summary.invalid_rate == str(Decimal(1) / Decimal(60))
+    assert not summary.threshold_breached and summary.threshold_ever_breached
+    replayed = rn.read_journal(work_dir / rn.RUNS_DIR / "r1" / rn.JOURNAL_FILE)
+    assert replayed.threshold_ever_breached and len(replayed.exceptions) == 1  # replay agrees
+
+
+@pytest.mark.parametrize("ack", [(19, 2), (20, 1), (20, 3), (21, 2)])
+def test_stale_acknowledgements_are_refused_without_writing(tmp_path, ack):
+    work_dir, eval_set, header, factory, _, _ = _stopped_at_rate(tmp_path, 30, (3, 5))
+    path = work_dir / rn.RUNS_DIR / "r1" / rn.JOURNAL_FILE
+    before = path.read_bytes()
+    with pytest.raises(rn.RunnerError, match="stale acknowledgement"):
+        _resume(work_dir, eval_set, header, factory, *ack)
+    assert path.read_bytes() == before
+
+
+def test_an_exception_needs_resume_approval_and_an_invalid_response_rate_stop(work) -> None:
+    work_dir, eval_set = work
+    header = _header(eval_set, max_attempts=3)
+    rn.run(work_dir, eval_set, header, rn.dry_run_factory())  # stops on attempt_cap
+    results = len(rn.read_journal(work_dir / rn.RUNS_DIR / "r1" / rn.JOURNAL_FILE).results)
+    with pytest.raises(rn.RunnerError, match="needs resume_approved"):
+        rn.run(work_dir, eval_set, header, rn.dry_run_factory(), exception=_exception(results, 0))
+    with pytest.raises(rn.RunnerError, match="only to an invalid_response_rate stop"):
+        _resume(work_dir, eval_set, header, rn.dry_run_factory(), results, 0)
+
+
+def test_an_exception_never_overrides_unknown_cost(work) -> None:
+    work_dir, eval_set = work
+    header = _header(eval_set)
+    rn.run(work_dir, eval_set, header, _mock_factory(_fail_call_b))  # unknown_cost
+    with pytest.raises(rn.RunnerError, match="unresolved unknown cost"):
+        _resume(work_dir, eval_set, header, rn.dry_run_factory(), 1, 0)
+
+
+def test_caps_and_the_spend_tripwire_still_stop_a_run_under_an_exception(tmp_path) -> None:
+    work_dir, eval_set, order = _big_set(tmp_path / "capped", 30)
+    header = _header(eval_set, max_items=30, max_attempts=25)
+    factory = _scripted(_at(order, 3, 5))
+    assert rn.run(work_dir, eval_set, header, factory).stop == "invalid_response_rate"
+    summary = _resume(work_dir, eval_set, header, factory, 20, 2)
+    assert summary.stop == "attempt_cap" and summary.attempts == 25  # cumulative over the run
+    work_dir, eval_set, order = _big_set(tmp_path / "priced", 30)
+    # One call reserves 1000 x $2 + 10 x $8 per million = $0.00208; known spend is cumulative.
+    header = _header(eval_set, max_items=30, **_priced(max_usd="0.012"))
+    factory = _scripted(_at(order, 3, 5))
+    assert rn.run(work_dir, eval_set, header, factory).stop == "invalid_response_rate"
+    summary = _resume(work_dir, eval_set, header, factory, 20, 2)
+    assert summary.stop == "spend_tripwire" and summary.results < 30
+
+
+def test_a_crash_under_an_exception_never_renews_it_or_resends(tmp_path) -> None:
+    work_dir, eval_set, header, factory, _, _ = _stopped_at_rate(tmp_path, 30, (3, 5))
+
+    def crashing(journal):
+        provider = factory(journal)
+
+        class Crash:
+            calls = 0
+
+            def decide(self, state):
+                Crash.calls += 1
+                if Crash.calls == 2:
+                    raise RuntimeError("simulated crash")
+                return provider.decide(state)
+
+            def close(self):
+                provider.close()
+
+        return Crash()
+
+    with pytest.raises(RuntimeError):
+        _resume(work_dir, eval_set, header, crashing, 20, 2)
+    # Simulate a hard kill: drop the stop line, leaving the exception apparently active.
+    path = work_dir / rn.RUNS_DIR / "r1" / rn.JOURNAL_FILE
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert json.loads(lines[-1])["event"] == "stop"
+    path.write_text("\n".join(lines[:-1]) + "\n", encoding="utf-8")
+    assert rn.read_journal(path).active_exception is not None
+    killed = path.read_bytes()
+    with pytest.raises(rn.RunnerError, match="blocked"):
+        rn.run(work_dir, eval_set, header, factory)  # expired in memory, so it is blocked
+    with pytest.raises(rn.RunnerError, match="only to an invalid_response_rate stop"):
+        _resume(work_dir, eval_set, header, factory, 21, 2)  # cannot renew from the expiry
+    assert path.read_bytes() == killed  # refused invocations write nothing
+    # Recovery needs its own explicit resume approval; the expiry authorizes nothing by itself.
+    summary = rn.run(work_dir, eval_set, header, factory, resume_approved=True)
+    events = _journal(work_dir)
+    expiry = events.index({"event": "stop", "reason": "exception_expired"})
+    assert events[expiry + 1] == {"event": "resume_approved"}  # journalled only on proceeding
+    assert summary.stop == "invalid_response_rate"  # the old exception was not inherited
+    assert summary.active_exception is None and len(summary.continuation_exceptions) == 1
+    dispatched = [e["item_id"] for e in _journal(work_dir) if e["event"] == "dispatch"]
+    assert len(dispatched) == len(set(dispatched))  # the crashed listing is never resent
+
+
+def test_exception_runs_export_unchanged_outcomes_accepted_by_the_evaluator(tmp_path) -> None:
+    work_dir, eval_set, header, factory, _, _ = _stopped_at_rate(tmp_path, 30, (3, 5))
+    _resume(work_dir, eval_set, header, factory, 20, 2)
+    out = tmp_path / "o.jsonl"
+    assert rn.export_outcomes(work_dir, "r1", out)["exported"] == 30
+    report, failed = evaluate(eval_set, work_dir / "raw", out)
+    assert failed == [] and report["outcomes"]["records"] == 30
+    assert report["descriptive"]["jev_invalid_response_causes"] == {"choice_not_top": 2}
+
+
+def test_the_cli_requires_all_three_exception_flags(work) -> None:
+    from evals.listing_decisions.cli import main
+
+    work_dir, _ = work
+    base = ["run", "--set-dir", str(work_dir), "--run-id", "c", "--max-items", "2"]
+    assert main([*base, "--resume-approved", "--ack-results", "1"]) == 2

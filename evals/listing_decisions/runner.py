@@ -106,10 +106,18 @@ StopReason = Literal[
     "secret_in_output",
     "unexpected_exception",
     "interrupted",
+    "new_invalid_under_exception",
+    "exception_expired",
 ]
 TERMINAL_OR_CAP = frozenset({"attempt_cap", "spend_tripwire", "unknown_cost", "allowance_exceeded"})
 TERMINAL_STOPS = frozenset(
-    {"unknown_cost", "allowance_exceeded", "secret_in_output", "binding_mismatch"}
+    {
+        "unknown_cost",
+        "allowance_exceeded",
+        "secret_in_output",
+        "binding_mismatch",
+        "new_invalid_under_exception",  # neither plain resume nor a new exception bypasses it
+    }
 )
 
 
@@ -261,6 +269,20 @@ class CompleteEvent(_Model):
     event: Literal["complete"] = "complete"
 
 
+class ContinuationExceptionEvent(_Model):
+    """An owner-approved manual exception to the invalid-response rate stop. It is not a change
+    to the quality criterion. While active, the run does not stop solely because the
+    acknowledged invalid responses keep the cumulative rate above the threshold, and it stops
+    on the next new invalid response, whatever the rate. Any later stop, completion or
+    restart ends it; it is never renewed or reused."""
+
+    event: Literal["continuation_exception"] = "continuation_exception"
+    approval_ref: str = Field(min_length=1)
+    acknowledged_stop: Literal["invalid_response_rate"] = "invalid_response_rate"
+    acknowledged_results: int = Field(ge=0)
+    acknowledged_invalid: int = Field(ge=0)
+
+
 JournalEvent = Annotated[
     DispatchEvent
     | AttemptEvent
@@ -269,6 +291,7 @@ JournalEvent = Annotated[
     | ResultEvent
     | StopEvent
     | ResumeApprovedEvent
+    | ContinuationExceptionEvent
     | CompleteEvent,
     Field(discriminator="event"),
 ]
@@ -285,6 +308,30 @@ class JournalState:
     stop: str | None = None
     acknowledged_unknown: set[str] = field(default_factory=set)
     complete: bool = False
+    exceptions: list[ContinuationExceptionEvent] = field(default_factory=list)
+    active_exception: ContinuationExceptionEvent | None = None
+    threshold_ever_breached: bool = False
+
+    @property
+    def invalid_responses(self) -> int:
+        return sum(1 for o in self.results.values() if o.fallback_reason == "invalid_response")
+
+    @property
+    def threshold_breached(self) -> bool:
+        """The original rule on the current cumulative counts (never reset)."""
+        n = len(self.results)
+        return (
+            n >= INVALID_RESPONSE_MIN_RESULTS
+            and Decimal(self.invalid_responses) / Decimal(n) > INVALID_RESPONSE_MAX_RATE
+        )
+
+    def record_result(self, item_id: str, outcome: ListingDecisionOutcome) -> None:
+        self.results[item_id] = outcome
+        self.threshold_ever_breached |= self.threshold_breached
+
+    def record_stop(self, reason: str) -> None:
+        self.stop = reason
+        self.active_exception = None  # any stop ends an exception: never reused
 
     @property
     def unknown_items(self) -> list[str]:
@@ -345,14 +392,18 @@ def read_journal(path: Path) -> JournalState:
         elif isinstance(event, ResultEvent):
             if event.item_id not in state.dispatched or event.item_id in state.results:
                 raise RunnerError("journal result without its dispatch")
-            state.results[event.item_id] = event.outcome
+            state.record_result(event.item_id, event.outcome)
         elif isinstance(event, StopEvent):
-            state.stop = event.reason
+            state.record_stop(event.reason)
         elif isinstance(event, ResumeApprovedEvent):
             state.stop = None
             state.acknowledged_unknown.update(state.unknown_items)
+        elif isinstance(event, ContinuationExceptionEvent):
+            state.exceptions.append(event)
+            state.active_exception = event
         else:
             state.complete = True
+            state.active_exception = None
     return state
 
 
@@ -388,14 +439,18 @@ class Journal:
         elif isinstance(event, RefusedEvent):
             s.refusals.append(event)
         elif isinstance(event, ResultEvent):
-            s.results[event.item_id] = event.outcome
+            s.record_result(event.item_id, event.outcome)
         elif isinstance(event, StopEvent):
-            s.stop = event.reason
+            s.record_stop(event.reason)
         elif isinstance(event, ResumeApprovedEvent):
             s.stop = None
             s.acknowledged_unknown.update(s.unknown_items)
+        elif isinstance(event, ContinuationExceptionEvent):
+            s.exceptions.append(event)
+            s.active_exception = event
         elif isinstance(event, CompleteEvent):
             s.complete = True
+            s.active_exception = None
 
     # AttemptHooks
     def before(self, call: str) -> int:
@@ -631,6 +686,13 @@ class RunSummary:
     known_spend_usd: Decimal | None
     stop: str | None
     complete: bool
+    # Quality is reported, never implied: completion is not acceptance.
+    invalid_responses: int = 0
+    invalid_rate: str | None = None
+    threshold_breached: bool = False
+    threshold_ever_breached: bool = False
+    continuation_exceptions: tuple[dict, ...] = ()
+    active_exception: str | None = None
 
 
 def summarize(header: RunHeader, state: JournalState) -> RunSummary:
@@ -646,6 +708,18 @@ def summarize(header: RunHeader, state: JournalState) -> RunSummary:
         known_spend_usd=state.known_spend(header.pricing),
         stop=state.stop,
         complete=state.complete,
+        invalid_responses=state.invalid_responses,
+        invalid_rate=(
+            str(Decimal(state.invalid_responses) / Decimal(len(state.results)))
+            if state.results
+            else None
+        ),
+        threshold_breached=state.threshold_breached,
+        threshold_ever_breached=state.threshold_ever_breached,
+        continuation_exceptions=tuple(e.model_dump() for e in state.exceptions),
+        active_exception=(
+            None if state.active_exception is None else state.active_exception.approval_ref
+        ),
     )
 
 
@@ -660,6 +734,36 @@ def _refusal(state: JournalState, resume_approved: bool) -> str | None:
     unacknowledged = set(state.unknown_items) - state.acknowledged_unknown
     if (state.stop is not None or unacknowledged) and not resume_approved:
         return "the run is blocked; review the journal and pass resume_approved to continue"
+    return None
+
+
+@dataclass(frozen=True)
+class ContinuationRequest:
+    """What the operator acknowledges: the approval reference and the exact current counts."""
+
+    approval_ref: str
+    acknowledged_results: int
+    acknowledged_invalid: int
+
+
+def _exception_refusal(state: JournalState, request: ContinuationRequest) -> str | None:
+    if not request.approval_ref.strip():
+        return "a continuation exception needs an approval reference"
+    if state.stop != "invalid_response_rate":
+        return (
+            f"a continuation exception applies only to an invalid_response_rate stop "
+            f"(latest stop: {state.stop})"
+        )
+    if state.unknown_items or state.unaccounted_attempts:
+        return "a continuation exception needs no unknown items and no unaccounted attempts"
+    if (len(state.results), state.invalid_responses) != (
+        request.acknowledged_results,
+        request.acknowledged_invalid,
+    ):
+        return (
+            f"stale acknowledgement: the journal has {len(state.results)} results and "
+            f"{state.invalid_responses} invalid responses"
+        )
     return None
 
 
@@ -684,12 +788,12 @@ def _post_stop(
                 return "allowance_exceeded"
     if outcome.fallback_reason in STOPPING_FALLBACKS:
         return outcome.fallback_reason
-    results = list(state.results.values())
-    invalid = sum(1 for o in results if o.fallback_reason == "invalid_response")
-    if (
-        len(results) >= INVALID_RESPONSE_MIN_RESULTS
-        and Decimal(invalid) / Decimal(len(results)) > INVALID_RESPONSE_MAX_RATE
-    ):
+    exception = state.active_exception
+    if exception is not None and state.invalid_responses > exception.acknowledged_invalid:
+        return "new_invalid_under_exception"  # the next new invalid response, at any rate
+    if state.threshold_breached:
+        if exception is not None and state.invalid_responses == exception.acknowledged_invalid:
+            return None  # only acknowledged failures keep the rate high (still reported)
         return "invalid_response_rate"
     return None
 
@@ -702,8 +806,11 @@ def run(
     *,
     resume_approved: bool = False,
     secret: str | None = None,
+    exception: ContinuationRequest | None = None,
 ) -> RunSummary:
     """Dispatch the run's remaining items once each, stopping on the first stop condition."""
+    if exception is not None and not resume_approved:
+        raise RunnerError("a continuation exception also needs resume_approved")
     if eval_set.set_sha256 != header.set_sha256 or eval_set.set_version != header.set_version:
         raise RunnerError("the set does not match the run header")
     for item_id in header.items:
@@ -715,12 +822,30 @@ def run(
         _bind(run_dir, header)
         journal_path = run_dir / JOURNAL_FILE
         state = read_journal(journal_path)
+        journal = Journal(journal_path, header, state, secret)
+        # An exception left active by an invocation that did not stop is never inherited. It is
+        # expired in memory first; every check below runs before anything is written, and the
+        # expiry is journalled only if this invocation is allowed to proceed.
+        expired = state.active_exception is not None
+        if expired:
+            state.record_stop("exception_expired")
         refusal = _refusal(state, resume_approved)
+        if refusal is None and exception is not None:
+            refusal = _exception_refusal(state, exception)
         if refusal is not None:
             raise RunnerError(refusal)
-        journal = Journal(journal_path, header, state, secret)
+        if expired:
+            journal.append(StopEvent(reason="exception_expired"))
         if resume_approved and (state.stop is not None or state.unknown_items):
             journal.append(ResumeApprovedEvent())
+        if exception is not None:  # fsynced before any new dispatch
+            journal.append(
+                ContinuationExceptionEvent(
+                    approval_ref=exception.approval_ref,
+                    acknowledged_results=exception.acknowledged_results,
+                    acknowledged_invalid=exception.acknowledged_invalid,
+                )
+            )
         if state.complete:
             return summarize(header, state)
         provider = factory(journal)

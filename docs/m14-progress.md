@@ -1380,6 +1380,72 @@ frozen order. The 60 clean items without an outcome are `not_attempted`, not err
 - **Calibration:** unmeasured.
 - **Sample:** a partial, development-scoped sample.
 
+## Acknowledged-failures continuation exception (2026-10-21; built, mocked tests only, uncommitted)
+
+**What it is.** A manual, owner-approved exception to an `invalid_response_rate` stop. **It is
+not a change to the quality criterion, and completing a run under it is not a quality pass.**
+Response validation, the probability tolerances, the 2 % rule (threshold, denominator,
+cumulative counters), the frozen `run.json`, the selection order, no-resend, the 572-attempt cap,
+the $0.10 tripwire, usage, redaction and unknown-cost safeguards are all unchanged.
+
+**How it works** (`runner.py`, `cli.py`):
+- **Requesting it:** `--continuation-exception-ref REF --ack-results N --ack-invalid K`, together
+  with `--resume-approved`.
+- **Preconditions,** checked under the exclusive run lock; on failure the runner refuses and
+  writes nothing:
+  - the latest stop is exactly `invalid_response_rate`;
+  - the journal's result and invalid counts equal N and K exactly;
+  - there are no unknown items, no unaccounted attempts and no terminal stop.
+- **Recording:** `resume_approved` and then a `continuation_exception` event (reference and
+  acknowledged counts) are fsynced before any new dispatch.
+- **While active:**
+  - the run does not stop *solely* because the acknowledged invalid responses keep the
+    cumulative rate above 2 %;
+  - the **next new invalid response** stops it immediately with `new_invalid_under_exception`,
+    whatever the rate. That stop is terminal: neither plain resume nor a new exception passes it;
+  - every other stop still applies.
+- **Never reused:** any stop or completion ends the exception. An exception left active by a
+  crashed or killed invocation is expired at the next start. It is expired in memory first; every
+  check runs before anything is written, and the `exception_expired` stop is journalled only if
+  that invocation is allowed to proceed. A refused invocation writes nothing. A new exception
+  cannot follow the expiry directly, so a restart can never inherit it.
+- **Crash recovery needs its own explicit approval.** `exception_expired` authorizes nothing by
+  itself.
+  - **The approval:** any continuation after it needs a **separate owner recovery approval**,
+    recorded as its own reference in these docs. The approval that granted the expired exception
+    does not cover it.
+  - **What that approval allows:** a plain `--resume-approved`, which sends the next
+    never-dispatched listing without any exception. The 2 % rule then stops the run again.
+  - **After that:** only a further, separately approved exception, with the new exact counts, can
+    continue.
+- **Reporting:** `status` and the run summary report `invalid_responses`, `invalid_rate`,
+  `threshold_breached` (current), `threshold_ever_breached` (historical) and the exception
+  history. The export format is unchanged.
+
+**Binding:** the exception lives only in the journal. Read-only checks on `dev-full-1` found:
+- the frozen header still matches;
+- the journal replays (220 results, 5 invalid, rate 2.27 %, breached now and historically, no
+  exceptions yet);
+- an acknowledgement of 220 / 5 passes the preconditions, and a stale one is refused.
+
+**Commands and results (2026-10-21, `uv run --offline`):**
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/listing_eval` (after the runner change, before new tests) | **200 passed** (existing behaviour unchanged) |
+| `pytest tests/unit/listing_eval/test_listing_eval_runner.py` with 14 new exception tests | **59 passed** |
+| `ruff check` / `ruff format --check` (evaluator and its tests) | **All checks passed**; **26 files already formatted** |
+| `pytest tests/unit/listing_eval tests/unit/listing_decisions` (unraisable warnings as errors) | **420 passed** in 18.55 s |
+| Review fix: the expiry was journalled before the checks. It is now expired in memory, checked, then written only on proceeding. Then `pytest tests/unit/listing_eval/test_listing_eval_runner.py`, `ruff check` / `ruff format --check` | **All checks passed**; **3 files already formatted**; `pytest tests/unit/listing_eval` (unraisable warnings as errors) **214 passed** in 14.94 s |
+
+**Limitations:**
+- **After `new_invalid_under_exception`:** it is terminal. Continuing after it would need a
+  separate code-level decision.
+- **After a crash under an exception:** recovery needs the separate recovery approval described
+  above. One more listing is then sent before the rate rule stops the run again.
+- **Status only:** the quality breach is reported in run status and docs, not in the
+  `le-outcomes-1` export.
+
 ## Next batch (needs explicit approval)
 
 1. The runner is committed with this record.
