@@ -1,15 +1,24 @@
 # Milestone 14 — Jev Listing Decisions: progress record
 
-Status: **in progress. Two owner-approved live runs have been made (2026-10-21):**
-- **`smoke-1`:** 1 listing.
-- **`dev-full-1`:** stopped by its `invalid_response_rate` rule after 97 of 291 dev listings.
-  Resuming it needs a new owner decision.
-- **Committed:**
-  - M14-1 to M14-4: `be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`;
-  - M14-6: `fe72bd4` (set `le-set-2`);
-  - the runner: `0a5576b`, plus the price fix `6896fa4`.
-- **M14-5:** deferred, not completed.
-- M14 is not complete. No test-split evaluation has been made.
+Status: **BLOCKED (2026-10-21).** The implementation is in place. The mandatory criteria still
+unmet are in "M14 acceptance matrix" at the end of this record. The main ones:
+- no human-reviewed evaluation exists;
+- the run-quality criterion (invalid responses at most 2 %) failed;
+- the test split was never evaluated.
+
+**Committed (all unpushed):**
+- M14-1 to M14-4: `be2cdf3`, `d77a099`, `5a9cc2f`, `4fe0201`;
+- M14-6: `fe72bd4`;
+- runner and tooling: `0a5576b`, `6896fa4`, `9366e0d`, `27cb3d7`, `916975e`, `3e3e9c7`;
+- M14-5 persistence: `a725bfc`;
+- documentation and run records in between.
+
+**Live runs (owner-approved):**
+- `smoke-1`: 1 listing;
+- `dev-full-1`: terminal at 279 of 291;
+- `dev-complete-1`: stopped on its first invalid response after 7 of 12.
+
+The combined dev evaluation covers 286 of 291 dev listings; 5 were never sent.
 
 ## Batches
 
@@ -23,7 +32,8 @@ Status: **in progress. Two owner-approved live runs have been made (2026-10-21):
 | M14-5 | Persistence (migration `0006`, store, `decide`/`show`) | First deferred (owner, 2026-10-21); **implemented 2026-10-21** under the owner's closure instruction, on scratch databases with fake providers only (below). |
 | M14-6 | External dataset preparation: adapters, label mapping, grouping, selection, `corrupt-2` with matching `lt-1`, `prepare` CLI, local set `le-set-2` | **Implemented, tests pass** (committed with this record) |
 | Live runner | Capped, journalled runner (`le-run-1`) plus the provider usage fix | Done (`0a5576b`, price fix `6896fa4`). Used live once, for `smoke-1` only (below). |
-| M14-7 | Live evaluation | Not started; needs a separate send approval (rights, prices, caps) |
+| M14-7 | Live evaluation | Dev split: `dev-full-1` + `dev-complete-1`, combined 286/291 (below). Test split: **not run**. |
+| Human review path | Blinded packet `lh-1`, rubric `lh-rubric-1`, import/seal/score | Built 2026-10-21. Selection `hr-dev-1` frozen and packet written (git-ignored). **No review has been done.** |
 
 ## Approved scope (owner, 2026-10-21)
 
@@ -1739,59 +1749,177 @@ or below: at best 6/291 = 2.06 %.
 | `pytest tests/unit/listing_eval tests/unit/listing_decisions` (unraisable warnings as errors) | **439 passed** in 29.11 s |
 | Review fix: `verify_lineage` now refuses an empty or unreadable file, and `combine` refuses a journal item that is not a dev item of the set, cleanly (`EvalSetError` instead of a raw exception); 4 tests added. Then `ruff check` / `ruff format --check`, `pytest tests/unit/listing_eval` (unraisable warnings as errors) | **All checks passed**; **28 files already formatted**; completion tests **23 passed**; listing_eval suite **237 passed** in 25.56 s |
 
-## M14 acceptance checklist (2026-10-21)
+## Closure work, part C (2026-10-21; offline, no provider call)
 
-**Approved M14 requirements:**
-- MASTER_PLAN Milestone 14: "Implement bounded category, subcategory, attribute-validation,
+### Latency and cost from recorded outcomes (dev, combined 286)
+
+Each `ListingDecisionOutcome.latency_ms` is the provider's wall time for one listing:
+- it covers call A, plus call B when claims were asked;
+- it is measured in-process with `perf_counter`;
+- it includes the runner's journalling transport, which fsyncs every attempt.
+
+It is not a server-side or end-to-end API latency. All 286 records have a value.
+The groups cover all 286 records, corrupted twins included.
+
+| Group | n | p50 ms | p90 | p95 | p99 | max | mean |
+|---|---|---|---|---|---|---|---|
+| All | 286 | 1011.7 | 1232.5 | 1340.6 | 1595.1 | 1821.1 | 1014.1 |
+| Success, with claims (2 calls) | 270 | 1021.6 | 1243.5 | 1366.6 | 1598.1 | 1821.1 | 1041.6 |
+| Success, no claims (1 call) | 9 | 516.8 | 747.7 | 809.9 | 859.5 | 872.0 | 577.1 |
+| Fallback `invalid_response` | 7 | 505.9 | 663.0 | 764.7 | 846.1 | 866.4 | 516.6 |
+| Flipkart | 150 | 1010.6 | 1232.1 | 1361.6 | 1530.2 | 1611.0 | 997.8 |
+| Laptop Price | 65 | 1015.2 | 1253.9 | 1379.3 | 1548.7 | 1755.5 | 1022.1 |
+| Smartphones | 71 | 1021.6 | 1210.3 | 1271.7 | 1518.0 | 1821.1 | 1041.1 |
+
+Percentiles are linearly interpolated. With n = 7 and n = 9, the tail values are not
+meaningful.
+
+**Cost per 1,000 decisions (estimate):**
+- **Spend:** the journals' known spend is $0.02117346 (`dev-full-1`, 544 attempts) plus
+  $0.000516054 (`dev-complete-1`, 13 attempts) over 286 recorded decisions. That is about
+  **$0.0758 per 1,000 listing decisions**, at $0.042 per million input tokens with output free
+  (price re-checked 2026-10-21).
+- **Invoice:** none was checked; this is not one.
+- **Smoke run:** `smoke-1` is excluded.
+
+**Routing metrics, descriptive (from the combined report):**
+- **Clean items:** every routed clean item is `manual_review`: deterministic 245/245, Jev
+  240/240.
+- **Rates:** the automation rate is 0 and the review rate is 100 %.
+- **Unsafe auto-accept:** zero, because `auto_accept` is unreachable under `lr-1`.
+- **Unnecessary review rate:** unmeasured; it needs human `needs_review` labels.
+
+### Blinded human-review path (`lh-1`)
+
+**Files:**
+- `evals/listing_decisions/review.py`: freeze, packet, import, score;
+- `docs/m14-human-review-rubric.md`: `lh-rubric-1`;
+- `tests/unit/listing_eval/test_listing_eval_review.py`: 15 tests.
+
+It reuses the existing contracts:
+- the `ann-N` annotator handles and free-text limit from `evals/contracts`;
+- the `le-1` set, `load_raw`, `load_outcomes`;
+- the `jl-1` state builder;
+- canonical JSON with exclusive creation, as in the M12 labelling seal.
+
+**Behaviour:**
+- **Frozen selection:** seeded and stratified by source, computed from the set alone (no
+  outcome, prediction or label read). It is written once, before any packet or answer.
+- **Packet:** shows exactly what Jev saw (title, description, asked claims) under shuffled
+  opaque ids. It has no source, row, label, model output or route.
+- **Import:**
+  - refuses unless the operator passes `--reviewer-is-human`;
+  - validates every packet id exactly once, one reviewer, allowed labels only, and exactly the
+    asked claims;
+  - seals with the selection, packet and labels hashes, and never overwrites.
+- **Score:**
+  - re-checks every seal;
+  - excludes `unsure` answers and reports them apart;
+  - counts model ties as `tie` and fallbacks as missing;
+  - reports agreement with both the model and the external source labels.
+
+**Real selection (git-ignored, counts and hashes only):**
+- **Selection:** `hr-dev-1` on `le-set-2`, seed 20261021, 20 per source = 60 items (20 Flipkart,
+  20 Laptop Price, 20 Smartphones). `selection.json` sha256 is
+  `a277004a210daa19f4d10e88512584ba02081dd503ef337f8b85934188847b82`.
+- **Packet:** 60 items with 157 claims; 40 items have no description (the Laptop Price and
+  Smartphones sources have none). `packet.jsonl` sha256 is
+  `96fe9e1377e2ac671ec2c9b06f9520c65a70d7ec5d7d1e5a3b1fdae051ddac59`.
+- **No reviewer has been assigned and no answer exists.** No review has been fabricated, and
+  no AI or source label is called human-reviewed.
+
+### Provider clarification request
+
+`docs/m14-provider-clarification-request.md` is **drafted, not sent**: five questions about
+`choice` selection, probability precision and sums, ties and `confidence`. The counts were
+verified against the journals: 557 attempts, all HTTP 200, and 7 invalid responses (4
+`probability_sum`, 1 `choice_not_top`, 2 not recorded). Validation, tolerances, thresholds and
+the 2 % rule are unchanged; nothing is normalized or argmax-substituted.
+
+### Commands and results (2026-10-21, `uv run --offline`)
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/listing_eval/test_listing_eval_review.py` | **15 passed** |
+| `ruff check` / `ruff format` (review module and tests) | 1 line-length finding, fixed; then **All checks passed** |
+| `python -m evals.listing_decisions.review freeze --set-dir <le-set-2> --review-id hr-dev-1 --seed 20261021 --per-source 20` | 60 items, selection sha256 as above |
+| `python -m evals.listing_decisions.review packet ...` | packet sha256 as above |
+| `python -m evals.listing_decisions status` for `dev-full-1` / `dev-complete-1` (read-only), plus a journal tally | 544 / 13 attempts, every `attempt_result` HTTP 200, spend as above, 0 unaccounted |
+| Latency summary script over `combined-dev-286.jsonl` (read-only) | the table above |
+
+## M14 acceptance matrix (2026-10-21)
+
+**Sources (exact wording):**
+- **MASTER_PLAN Milestone 14:** "Implement bounded category, subcategory, attribute-validation,
   ambiguity, and review-routing decisions. Do not allow invented attributes. Evaluate on
   human-reviewed data. Stop."
-- Dataset registry: "Listing decision set | listing → decision | M14 | human".
-- Spec §8: human review is required for decision-evaluation labels.
-- Spec §13.4, which applies to listing intelligence as a whole: "done only when raw data is
-  preserved, normalization and contradiction detection work, decisions are bounded, uncertainty
-  reaches human review, and evaluation is human-reviewed."
+- **MASTER_PLAN dataset registry:** "Listing decision set | listing → decision | M14 | human".
+- **MASTER_PLAN, decision evaluation:** "compare deterministic, optional general LLM, Jev, and
+  deterministic plus confidence-gated Jev. Measure: accuracy, precision, recall, and F1;
+  confusion matrix; schema validity; abstention and coverage; calibration, with Brier score
+  where appropriate; latency; cost per 1,000 decisions." "For review routing, measure
+  automation rate, review rate, unsafe auto-accept rate, and unnecessary review rate."
+- **Spec §8:** "Human review is required for … decision-evaluation labels … Review completion
+  is never recorded automatically."
+- **Spec §13.4:** "Listing intelligence is done only when raw data is preserved, normalization
+  and contradiction detection work, decisions are bounded, uncertainty reaches human review,
+  and evaluation is human-reviewed."
+- **Spec FR-LST-1:** "Normalized facts, inferred decisions, risk signals and human outcomes are
+  stored separately." **FR-LST-4:** "Automated outcomes are limited to `auto_accept`,
+  `accept_with_warning` and `manual_review`. Final rejection requires human review."
 
-| Requirement | Status |
-|---|---|
-| Bounded category decisions | **Met** (implemented, closed labels, tested). Measured on external labels only. |
-| Bounded subcategory decisions | **Met** for implementation. Measured on external labels for Flipkart only; phone and laptop subcategories **unmeasured**. |
-| Bounded attribute-validation decisions | **Met** for implementation. Text-support accuracy **unmeasured**; synthetic corruption detection only. |
-| Bounded ambiguity decisions | **Met** for implementation (ties and `none` escalate). Accuracy **unmeasured** (no labels). |
-| Bounded review-routing decisions (`lr-1`) | **Met** for implementation. Route correctness **unmeasured**. Every route is `manual_review` because of missing seller claims; **routing to `manual_review` is not evidence that any human reviewed anything.** |
-| No invented attributes | **Met** (schema-enforced and tested). |
-| Evaluate on human-reviewed data | **Failed / outstanding.** External source labels were used under a scoped amendment that does not satisfy the requirement. |
-| Full dev-set evaluation (external labels) | **Outstanding:** 279/291. The completion tooling is built but not run. |
-| Invalid-response run criterion (2 %) | **Failed:** 2.15 % now; at least 2.06 % even if all 12 remaining succeed. |
-| Gate confidence and calibration (spec §8) | **Unmeasured** (`gate_confidence` is `None`). |
-| Decision metrics (accuracy, P/R/F1, confusion, coverage) | **Partly met** on external labels. Calibration and Brier **unmeasured**; latency per decision not summarized (**outstanding**). Cost reported as an estimate. |
-| Routing metrics (automation, unsafe auto-accept, unnecessary review) | **Unmeasured.** |
-| Prompt-injection safety | **Met** for the mocked offline tests only. Live injection checks are non-informative (ceiling-limited). **Mocked tests are not a general security certification.** |
-| Test-split evaluation | **Outstanding** (never run; needs approval). |
-| Upstream data rights | **Outstanding:** unresolved. The live sends were owner decisions, not clearance. |
+### Mandatory M14
 
-**Later-milestone or shared dependencies**, not treated as mandatory M14 work without a decision:
-- **Endpoints:** MASTER_PLAN says "Deferred endpoints are created only in their milestone. The
-  paths below are indicative, not final": `POST /listings/analyze (M13-M14)`,
-  `GET /reviews/pending (M14/M21)`, `POST /reviews/{review_id}/decision (M14/M21)`. Not built;
-  the scope split between M14 and M21 is **undecided**.
-- **Inferred-decisions storage (spec FR-LST-1):** M14-5 persistence is now implemented (see
-  "M14-5 implementation"); human-outcome layers remain later work.
-- **Risk triage** (M15) and the human review workflow (M21, "Corrective Action and HITL
-  Workflow"): later milestones. `auto_accept` stays unreachable until risk exists.
+| # | Requirement | Evidence | Status | Remaining action |
+|---|---|---|---|---|
+| 1 | Bounded category decisions | `jl-1` closed labels plus `none`; validator; `be2cdf3`, `d77a099`; tests | **Met** | none |
+| 2 | Bounded subcategory decisions | as 1 | **Met** | none |
+| 3 | Bounded attribute-validation decisions | allowlisted claims, `supported` / `contradicted` / `not_stated` | **Met** | none |
+| 4 | Bounded ambiguity decisions | ties and `none` keep no label and escalate (`lr-1`) | **Met** | none |
+| 5 | Bounded review-routing decisions (FR-LST-4) | `lr-1`: three routes, no rejection, `auto_accept` unreachable; `5a9cc2f`; DB CHECKs in `0006` | **Met** | none |
+| 6 | No invented attributes | schema-enforced: claims come only from M13 seller fields; tests | **Met** | none |
+| 7 | Inferred decisions stored separately (FR-LST-1, inferred layer) | `0006` + store + CLI, `a725bfc`; 20 scratch-DB integration tests | **Met** for storage | apply `0006` to a real database only on owner decision |
+| 8 | Evaluate on human-reviewed data ("Listing decision set … human"; spec §8; §13.4) | the path `lh-1` is built and the `hr-dev-1` selection frozen; **0 human reviews** | **NOT MET** | the owner assigns real reviewers, they answer the packet, `import --reviewer-is-human`, then `score` |
+| 9 | Decision metrics (accuracy, P/R/F1, confusion, schema validity, abstention, coverage) | `report-dev-combined-286.json` on **external source labels**: category overall 0.9551; Flipkart subcategory overall 0.6852; schema validity 279/286 | **Partly met:** computed on non-human labels; phone and laptop subcategory and claim-support accuracy unmeasured | re-score on human labels (8) |
+| 10 | Calibration / Brier "where appropriate" | `gate_confidence` is always NULL; no calibration | **Not met / undecided** whether "appropriate" before human labels | owner decision; needs human labels |
+| 11 | Latency | per-listing latency summary above (n = 286) | **Met** (descriptive, in-process timing) | none |
+| 12 | Cost per 1,000 decisions | about $0.0758 estimated from journal token counts | **Met as an estimate** (no invoice) | optional invoice check |
+| 13 | Comparison: deterministic, optional general LLM, Jev, deterministic plus confidence-gated Jev | deterministic vs Jev reported; the general LLM is optional; the gated arm is impossible without calibration | **Partly met** | the gated arm depends on 10 |
+| 14 | Routing metrics: automation, review, unsafe auto-accept, unnecessary review | automation 0 %, review 100 %, unsafe auto-accept 0 (unreachable) | **Partly met:** unnecessary review is unmeasured | needs the human `needs_review` labels (8) |
+| 15 | Uncertainty reaches human review (§13.4) | every uncertain case routes to `manual_review`; storage is ready; no review queue | **Partly met:** routed, but no human workflow consumes it (M21 or undecided) | owner decides the M14/M21 split |
+| 16 | Run-quality criterion (invalid responses at most 2 % at 20+ results; runner rule) | combined 7/286 = 2.45 %, breached; `dev-full-1` 6/279 breached | **FAILED** | the owner accepts the failure as recorded, or approves a provider clarification (send the draft) and a new run; tolerances are never loosened |
+| 17 | Complete dev coverage | 286/291; 5 never sent (`dev-complete-1` stopped on its first invalid response) | **Not met** | the owner decides whether to send the 5 |
+| 18 | Test-split evaluation | never run | **Not met** | needs an owner send approval after the human labels |
+| 19 | Upstream data rights for the sent sources | recorded caveats; owner send decisions are not clearance | **Unresolved** | owner / rights decision |
+| 20 | Prompt-injection safety | mocked offline tests; live checks are ceiling-limited (19/20) | **Met for mocked tests only.** Not a security certification. | none for M14 |
 
-None of these requirements is redefined or waived. **Finishing the remaining 12 items would not
-complete M14.**
+### Not mandatory for M14 without an owner decision
 
-## Next batch (needs explicit approval)
+- **Endpoints:** `POST /listings/analyze (M13-M14)`, `GET /reviews/pending (M14/M21)`,
+  `POST /reviews/{review_id}/decision (M14/M21)`. MASTER_PLAN marks the paths "indicative, not
+  final"; the split is **undecided**. Not built.
+- **Risk signals** (FR-LST-5): M15. Human outcomes and the review workflow: M21.
+  `auto_accept` stays unreachable until risk exists.
 
-1. The runner is committed with this record.
-2. *(Done for `smoke-1` only, above.)* Any further live run is a **separate send decision**. It needs:
-   - the rights caveats;
-   - the prices, with their date and source;
-   - the token allowances;
-   - `max_estimated_usd`;
-   - the smoke size (≤ 5);
-   - the send-approval reference.
-3. M14-7 (live evaluation) follows only after that.
+**Verdict: M14 is BLOCKED.** Requirements 8 and 16 to 18 are unmet, and 10, 13, 14 and 15 are
+only partly met. The direct blocker is 8: no human-reviewed evaluation exists. None of these
+requirements is redefined, waived, or met by routing to `manual_review`.
 
-No live call has been made.
+## Human decisions needed (one list)
+
+1. **Human review:**
+   - assign real reviewers (`ann-N` handles mapped outside the repository) for packet
+     `hr-dev-1` (60 items);
+   - decide whether one reviewer suffices or two are needed for agreement;
+   - confirm or replace the selection size and seed.
+2. **Run-quality failure (2.45 % > 2 %):** accept it as recorded for M14, or pursue it, which
+   means approving the provider clarification request to be sent.
+3. **The 5 unsent dev listings:** leave them unsent, or approve a separate bounded send.
+4. **Test split:** whether and when to approve a test-split send, after the human labels.
+5. **Calibration and the confidence-gated arm:** confirm they are deferred, or required for M14.
+6. **M14/M21 boundary:** the endpoints `POST /listings/analyze`, `GET /reviews/pending` and
+   `POST /reviews/{review_id}/decision`, and the review queue that consumes `manual_review`.
+7. **Upstream data rights** for Flipkart, Laptop Price and Smartphones.
+8. **Database:** whether and when to apply migration `0006` (and `0005`) to the development
+   database.
+9. **Pushing** the unpushed commits.

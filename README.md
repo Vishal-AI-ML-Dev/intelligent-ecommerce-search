@@ -96,7 +96,7 @@ Development is organized milestone by milestone. See
   - Not claimed: accuracy on real seller listings, any search improvement, production
     readiness. The development database has not been migrated to `0005`.
   - See "Listing normalization (Milestone 13)" below and `docs/listing-normalization-m13.md`.
-- M14 (listing decisions): **in progress, not complete.** Built: bounded `jl-1` Jev listing
+- M14 (listing decisions): **BLOCKED, not complete** (no human-reviewed evaluation yet). Built: bounded `jl-1` Jev listing
   proposals, deterministic routing `lr-1` (no rejection route; `auto_accept` unreachable), an
   offline evaluator and a guarded live runner, and append-only decision storage (migration
   `0006`) with a `decide` / `show` command line. A dev-split evaluation on external source
