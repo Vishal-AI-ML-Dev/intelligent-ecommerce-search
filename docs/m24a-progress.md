@@ -1,6 +1,7 @@
 # M24A — Observability for the search path and the Search page (progress)
 
-Status: **IN PROGRESS** until its acceptance tests pass in CI on `main`. Scope (§28 of
+Status: **COMPLETE** (2026-10-22): acceptance tests passed locally and in CI on `main` at
+`d392472` (run below). Scope (§28 of
 `MASTER_PLAN.md`): Milestone 24's requirements applied to the existing search path and the M25A
 page. No new dependency, vendor, dashboard or telemetry stack; API paths and response bodies are
 unchanged.
@@ -85,4 +86,12 @@ in uvicorn's own access and error lines.
 
 ## CI run
 
-Pending.
+Run `39741772078` on push of `d392472`:
+https://github.com/Vishal-AI-ML-Dev/intelligent-ecommerce-search/actions/runs/39741772078
+
+| Job | Result | Evidence from the job log |
+|---|---|---|
+| `backend` | success (423 s) | Ruff passed; unit suite 4,886 passed, 4 skipped (the visible M23A skips), 780 deselected |
+| `integration` | success (189 s) | 762 passed, 18 deselected (`real_model`) |
+| `frontend` | success (207 s) | typecheck; Vitest 30 passed; build |
+| `e2e-fixture` | success (66 s) | 6 passed |
