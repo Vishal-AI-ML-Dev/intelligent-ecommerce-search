@@ -64,12 +64,48 @@ def test_only_the_api_gets_the_read_only_model_mount_and_embedding_settings():
     assert "EMBEDDING_MODELS_DIR: /models" in api
 
 
-def test_model_weights_are_never_copied_into_the_image():
-    root_files = {
-        name: (ROOT / name).read_text(encoding="utf-8") for name in ("Dockerfile", ".dockerignore")
-    }
-    assert "models" not in root_files["Dockerfile"]
-    assert "models/" in root_files[".dockerignore"].splitlines()
+EMBEDDING_SNAPSHOT = (
+    "models--sentence-transformers--all-MiniLM-L6-v2/snapshots/"
+    "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+)
+RERANKER_SNAPSHOT = (
+    "models--cross-encoder--ms-marco-MiniLM-L6-v2/snapshots/"
+    "233902d25c440f23af6f7d6e94d2946bac0bee0a"
+)
+
+
+def test_only_the_pinned_model_snapshots_are_copied_into_the_image():
+    # M26A: the image carries the two registry pins (ADR-006, ADR-007) and nothing else from
+    # models/; the other fetched snapshots and hub cache files stay out of the build context.
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    assert "models/" in ignore
+    reincluded = sorted(line for line in ignore if line.startswith("!models/"))
+    assert reincluded == sorted(
+        [
+            f"!models/hub/{EMBEDDING_SNAPSHOT}/**",
+            f"!models/hub/{RERANKER_SNAPSHOT}/**",
+            f"!models/manifests/{EMBEDDING_SNAPSHOT.replace('/snapshots/', '@')}.json",
+            f"!models/manifests/{RERANKER_SNAPSHOT.replace('/snapshots/', '@')}.json",
+        ]
+    )
+    assert f"ARG EMBEDDING_SNAPSHOT={EMBEDDING_SNAPSHOT}" in dockerfile
+    assert f"ARG RERANKER_SNAPSHOT={RERANKER_SNAPSHOT}" in dockerfile
+    copies = [line for line in dockerfile.splitlines() if line.startswith("COPY models/")]
+    assert copies == [
+        "COPY models/manifests ./models/manifests",
+        "COPY models/hub/${EMBEDDING_SNAPSHOT} ./models/hub/${EMBEDDING_SNAPSHOT}",
+        "COPY models/hub/${RERANKER_SNAPSHOT} ./models/hub/${RERANKER_SNAPSHOT}",
+    ]
+    for line in ("HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1", "EMBEDDING_MODELS_DIR=/app/models"):
+        assert line in dockerfile
+    assert "USER app" in dockerfile
+
+
+def test_secrets_and_private_data_stay_out_of_the_build_context():
+    ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    for entry in (".git", ".env", ".env.*", ".claude", "data/", "tests/", "frontend/node_modules/"):
+        assert entry in ignore
 
 
 def test_hybrid_settings_reach_only_the_api_service():

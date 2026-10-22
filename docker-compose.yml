@@ -51,8 +51,9 @@ services:
       SEARCH_DEFAULT_TOP_K: ${SEARCH_DEFAULT_TOP_K:-10}
       SEARCH_MAX_QUERY_LENGTH: ${SEARCH_MAX_QUERY_LENGTH:-200}
       # Milestone 4 dense search: the pinned model is read from the read-only mount below.
-      # Weights are never copied into the image; without a fetched snapshot, /search/dense
-      # returns a fixed 503 while /search and /health keep working.
+      # Since M26A the image also carries the two pinned snapshots; this mount and
+      # EMBEDDING_MODELS_DIR override them, so Compose keeps reading the host models/. Without a
+      # fetched snapshot, /search/dense returns a fixed 503 while /search and /health keep working.
       SEARCH_DENSE_K: ${SEARCH_DENSE_K:-50}
       # Milestone 5 hybrid search (lexical + dense + RRF).
       SEARCH_CANDIDATE_K: ${SEARCH_CANDIDATE_K:-50}

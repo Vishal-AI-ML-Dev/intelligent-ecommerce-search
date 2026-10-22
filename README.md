@@ -419,8 +419,9 @@ curl "http://127.0.0.1:8000/search/dense?q=noise+cancelling+headphones&top_k=5"
 curl -X POST http://127.0.0.1:8000/search/dense -H "Content-Type: application/json" -d '{"query": "running shoes", "top_k": 5}'
 ```
 
-* **Docker.** Model weights are never copied into the image (`.dockerignore` excludes
-  `models/`). Compose mounts the repository `models/` directory **read-only** into the `api`
+* **Docker.** Since M26A the image carries only the two pinned snapshots (embedding and
+  reranker) and the built Search UI; building it needs those snapshots fetched first
+  (`docs/m26a-progress.md`). Every other file under `models/` stays out. Compose mounts the repository `models/` directory **read-only** into the `api`
   service only (`./models:/models:ro`, `EMBEDDING_MODELS_DIR=/models`); `db` and `migrate` get
   neither the mount nor embedding settings. Without a fetched snapshot, dense search returns the
   fixed 503 inside the container while lexical search and `/health` still work. The image is

@@ -562,6 +562,9 @@ is in `docs/MASTER_PLAN.md` §24. Milestone 0 adds only `docs/*.md` and
   `models/` directory read-only into the `api` service only (`./models:/models:ro`). Without a
   snapshot, dense search returns the fixed 503 and lexical search and `/health` keep working
   (verified in Docker; `docs/search-dense-m4.md` §7).
+- M26A (amends the Milestone 4 rule above): the image bakes in only the two pinned registry
+  snapshots (ADR-006, ADR-007) and their manifests, plus the built Search UI, so a container runs
+  without a mount. Compose's read-only mount still overrides them. See `docs/m26a-progress.md`.
 - Milestone 8: the reranker snapshot uses the same read-only mount and is never downloaded at
   runtime. Without it, an enabled `/search/reranked` returns the fixed 503 whenever it has
   candidates to rerank, while `/health` and the V0–V2 routes keep working (verified in-process

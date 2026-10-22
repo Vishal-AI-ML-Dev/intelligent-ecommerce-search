@@ -1,13 +1,35 @@
+# Build context allow-list by exclusion (M26A). The Dockerfile copies explicit paths only; this
+# keeps secrets, private data, unrelated models and generated output out of the context too.
 .git
+.github
+.claude
 .venv
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 **/__pycache__/
 **/*.py[cod]
 **/.pytest_cache/
 **/.ruff_cache/
+.coverage
+htmlcov/
+*.log
+.freeze-staging-*/
 tests/
 docs/
-models/
+evals/
+scripts/
 data/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+# Only the two pinned registry snapshots (ADR-006 embedding, ADR-007 reranker) and their
+# manifests; the other fetched snapshots and any hub cache files stay out.
+models/
+!models/manifests/models--sentence-transformers--all-MiniLM-L6-v2@1110a243fdf4706b3f48f1d95db1a4f5529b4d41.json
+!models/manifests/models--cross-encoder--ms-marco-MiniLM-L6-v2@233902d25c440f23af6f7d6e94d2946bac0bee0a.json
+!models/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/**
+!models/hub/models--cross-encoder--ms-marco-MiniLM-L6-v2/snapshots/233902d25c440f23af6f7d6e94d2946bac0bee0a/**
