@@ -52,12 +52,22 @@ Other documents written before this revision still use the former numbers. These
 | M10 human-reviewed report | Closed, development-scoped (pilot/dev), under the owner-approved M10 scope amendment (2026-10-17); not a claim that all original requirements were met | Approved report `docs/m10-human-pilot-dev-evaluation.md`: V0–V3 on the 20 human-reviewed pilot/dev queries and fresh `/search/reranked` latency on a different 17-query set. Named limitations and deferred items: (1) `rrf_k` = 100 and the embedding model remain provisional, not comparatively re-decided; (2) fresh latency excludes V0, V1 and `/search/filtered`; (3) the latency run has connected-standby contamination and unexplained between-run variation and is not a clean baseline; (4) quality uses recorded actual retrieval runs, not fresh runs; (5) held-out evidence deferred, no held-out or production claims. No reranker approved for development scope only; configuration unchanged. Does not by itself satisfy M16's "M10 complete" prerequisite. |
 | M11 Jev decision provider | Complete for provider implementation and verification scope (owner decision, 2026-10-18); live success-path smoke-verified, not production-validated | Commits `4de0a03`, `ca4128e`, `fe5adca`, `b622426`. Off by default; used by no endpoint. Full unit suite 3,739 passed (4 OS-related skips), database integration tests 721 passed, offline real-model tests 14 passed; one live smoke request (HTTP 200, `jev-1.13.0`, validated response). Not verified, and not waived for production: live failure, retry, rate-limit and cancellation behaviour (unobserved); server-side cancellation and billing behaviour (unknown); quality improvement, calibration and latency distributions (unproven). Details in `docs/jev-provider-m11.md`. |
 | M12 Jev V4 experiment | Closed as development-scoped, partially met (owner decision, 2026-10-19) | Diagnostic, calibration and gate tooling, category-only annotation and an experimental, ungated, opt-in V4 (`/search/routed`, commit `2fa1d56`) are implemented. Live development runs `live-001` (40) and `cal1-live-001` (80), on AI-authored queries with one human annotator, plus three approved V3/V4 live queries, were performed on 2026-10-19. Calibration found no candidate confidence gate. The V3/V4 comparison was performed and showed no relevance improvement. Not met: the confidence-gated Jev comparison and the planned confidence-gated V4. Partly met: human-reviewed decision data (one annotator, AI-assisted) and latency (no V4 P50/P95/P99). Deferred: independent held-out confirmation, default enablement (FR-DEC-4), model-derived hard filters, and V4 latency under load. Optional, not done: the general-LLM comparison. V3 remains the baseline; V4 stays opt-in and experimental; the confidence gate is off. The milestone requirements below are unchanged. Report: `docs/m12-diagnostic-tooling.md` (M12 experiment report and owner decision) and `docs/v4-jev-routing-m12.md`. |
-| M13 Listing normalization | Complete for the approved scope, on synthetic inputs and scratch databases only (M13-4 closure, 2026-10-21), with a verification caveat; uncommitted at the time of writing | Raw-listing intake contract, pure deterministic normalizer (candidates with exact source evidence; conflict, contradiction, compatibility, missing, empty and unsupported findings; no winner chosen, nothing invented), append-only versioned storage (migration `0005`) and a command line (`normalize`, `submit`, `show`). Rules version `listing-norm-1` released, digest `3b97986aa7585b4b38c3557167df8e9a43f25866f267dfe77cf8557d208711db`. Final checks (2026-10-21): full unit suite: 4,365 passed, 2 failed, 4 skipped; the 2 failed M10 runner tests passed on a targeted rerun with the working tree static (14 passed, pytest exit 0); the cause of the original failures is not proven; 86 M13 persistence/migration integration tests on scratch databases passed; repository-wide Ruff passed; a 15-check end-to-end CLI smoke test on a scratch database passed. Owner decision D1: command line only; the indicative `POST /listings/normalize` endpoint was not built. Not claimed: accuracy on real seller listings, search improvement, production readiness; the development database was not migrated to `0005`. The milestone requirements below are unchanged. Details: `docs/listing-normalization-m13.md`, `docs/m13-progress.md`. |
-| M14–M26 | Not started | |
+| M13 Listing normalization | Complete for the approved scope, on synthetic inputs and scratch databases only (M13-4 closure, 2026-10-21), with a verification caveat; committed as `c185fe6` (status corrected 2026-10-22; the original row said "uncommitted at the time of writing") | Raw-listing intake contract, pure deterministic normalizer (candidates with exact source evidence; conflict, contradiction, compatibility, missing, empty and unsupported findings; no winner chosen, nothing invented), append-only versioned storage (migration `0005`) and a command line (`normalize`, `submit`, `show`). Rules version `listing-norm-1` released, digest `3b97986aa7585b4b38c3557167df8e9a43f25866f267dfe77cf8557d208711db`. Final checks (2026-10-21): full unit suite: 4,365 passed, 2 failed, 4 skipped; the 2 failed M10 runner tests passed on a targeted rerun with the working tree static (14 passed, pytest exit 0); the cause of the original failures is not proven; 86 M13 persistence/migration integration tests on scratch databases passed; repository-wide Ruff passed; a 15-check end-to-end CLI smoke test on a scratch database passed. Owner decision D1: command line only; the indicative `POST /listings/normalize` endpoint was not built. Not claimed: accuracy on real seller listings, search improvement, production readiness; the development database was not migrated to `0005`. The milestone requirements below are unchanged. Details: `docs/listing-normalization-m13.md`, `docs/m13-progress.md`. |
+| M14 Jev listing decisions | Implementation present; **BLOCKED / INCOMPLETE** (recorded 2026-10-21). Not accepted. | Commits `be2cdf3` through `f01cf93` (M14-1 to M14-6, runner and tooling, append-only decision storage in migration `0006`, `decide` / `show` command line, blinded human-review path `lh-1`). The Jev listing provider is off by default. Unmet mandatory criteria, recorded in the acceptance matrix of `docs/m14-progress.md`: no human-reviewed evaluation (0 human reviews of the frozen `hr-dev-1` selection); calibration not done; the confidence-gated comparison arm is missing; the run-quality criterion **failed**: 7 invalid responses in 286 results = 2.45 %, above the owner-approved 2 % limit, not waived; dev coverage incomplete (286/291, 5 listings never sent); the test split was never evaluated; upstream data rights for the sent sources are unresolved (owner send decisions are not a rights clearance). The development-split results on external source labels are not human-reviewed evidence. Endpoints and the operational review queue were assigned to M21 (owner, 2026-10-21). |
+| M15–M26 | Not started | |
 | M27 | Excluded from the current scope | The original optional milestone definition below is unchanged. |
 
-The status above was checked against git history at this revision, except the M13 row, which
-describes the uncommitted M13 working tree as verified on 2026-10-21. The M9 strict-track rows were checked on 2026-10-17 against the read-only verification of the golden chain, which is committed with this revision. The test suite was not re-run as part of this documentation change.
+The status above was checked against git history at this revision. The M13 and M14 rows were
+corrected on 2026-10-22 from commit history and `docs/m13-progress.md` / `docs/m14-progress.md`;
+the tests were not re-run for that correction. A commit's existence does not by itself make a
+milestone complete; the status column records the recorded acceptance state. Push status is an
+operational authorization, not a quality gate.
+
+The execution order of the remaining milestones was amended on 2026-10-22; see §28,
+"Execution order (amended 2026-10-22)". The milestone IDs, completed work, evidence and
+acceptance criteria above and below are unchanged by that amendment.
+
+The M9 strict-track rows were checked on 2026-10-17 against the read-only verification of the golden chain, which is committed with this revision. The test suite was not re-run as part of this documentation change.
 
 ## 1. Business problem
 
@@ -210,6 +220,12 @@ Only after evaluation is stable:
 - AWS deployment
 - Terraform
 
+**Amended 2026-10-22.** The "only after" lines in Levels 3 and 4 describe the original sequence.
+The authoritative order is now §28, "Execution order (amended 2026-10-22)". It schedules the
+scoped subdivisions M25A, M23A, M24A and M26A, which cover only the existing core search, before
+M16. The remaining Level 4 work (M25B, M23B, M24B, M26B) keeps its original position after the
+evaluation milestones. Every milestone's own prerequisites and acceptance criteria still apply.
+
 ### Optional — Authorized marketplace integration (M27)
 
 This level is optional and needs authorized official access. The portfolio MVP is complete without it, using CSV/JSON import and export.
@@ -252,6 +268,8 @@ This level is optional and needs authorized official access. The portfolio MVP i
 Use Python 3.12, uv, FastAPI, PostgreSQL, pgvector, PostgreSQL Full Text Search, SQLAlchemy, Alembic, Pydantic, pytest, and Ruff.
 
 Use configurable local sentence-transformers-compatible models for embeddings and cross-encoder reranking. Do not make a paid embedding API a core dependency.
+
+The frontend stack (from M25A) is React, TypeScript and Vite with Playwright browser tests, served same-origin by the existing FastAPI application (owner decision 2026-10-22, ADR-008). The core search engine does not depend on it.
 
 Do not introduce Elasticsearch, OpenSearch, Qdrant, Pinecone, Kafka, Airflow, Kubernetes, or multiple databases for the same search workload unless measurements prove PostgreSQL insufficient.
 
@@ -700,7 +718,7 @@ Retrieval-augmented generation is allowed only in M16 (buyer assistant) and M20 
    - abstain.
 4. Recommendations never violate explicit constraints. Any trade-off (for example "nothing under ₹40,000 has 16 GB RAM") is stated explicitly.
 5. The assistant never places orders, applies discounts, or takes payments. It never invents prices, offers, or availability.
-6. Buyer feedback can be captured for evaluation (M25 UI).
+6. Buyer feedback can be captured for evaluation (originally "M25 UI"; under the 2026-10-22 execution-order amendment M25B no longer creates first-time domain UI. Buyer feedback is deferred: no owning milestone, endpoint or dataset is defined; §28).
 
 ## 19. Return-intelligence workflow
 
@@ -899,18 +917,27 @@ POST /assistant/answer                      (M16)
 POST /returns/import                        (M18)
 GET  /returns/clusters                      (M19)
 GET  /returns/cases/{case_id}/evidence      (M20)
-GET  /reviews/pending                       (M14/M21)
-POST /reviews/{review_id}/decision          (M14/M21)
+GET  /reviews/pending                       (M21; originally M14/M21)
+POST /reviews/{review_id}/decision          (M21; originally M14/M21)
 GET  /corrections/{correction_id}/history   (M21)
 GET  /reports/outcomes                      (M22)
 ```
+
+Amended 2026-10-22: the operational human-review queue and its endpoints belong to M21 (owner
+assignment of 2026-10-21, recorded in `docs/m14-progress.md`). M14 does not build that queue.
+Listing API adapters are created in M14–M15 only to expose existing listing domain logic; see
+§28, "Listings API and the M21 review queue".
 
 No endpoint places orders, issues refunds, moves money, or bans sellers, and none publishes to a marketplace without explicit authorized human approval.
 
 ## 24. Intended repository structure
 
-Create directories only when their milestone begins. The current layout (through M11; M12 and
-later milestones have not started) is:
+Create directories only when their milestone begins. The layout below was recorded through M11
+and has not been redrawn since. Corrected 2026-10-22: M12 is closed (development-scoped), M13 is
+complete for its approved scope, and M14's implementation is present but BLOCKED (§"Repository
+status at this revision"). They added `src/ecommerce_search/normalization/` (M13), listing modules
+in `src/ecommerce_search/decision/` (M14), and `evals/query_decisions/` (M12) and
+`evals/listing_decisions/` (M14). M15 and later have not started. The recorded layout is:
 
 ```text
 intelligent-ecommerce-search/
@@ -949,7 +976,7 @@ src/ecommerce_search/
   generation/          (M16; provider-isolated)
   returns/             (M18-M19)
   evidence/            (M20)
-  review/              (M14/M21)
+  review/              (M21 operational review queue; originally M14/M21)
   observability/       (M24)
 evals/
   reports/          (planned for M9-M10, never created; M10 reports are in docs/ and evals/results/)
@@ -1016,6 +1043,161 @@ Generated workflows also record:
 Logs never contain secrets or unredacted PII.
 
 ## 28. Milestones
+
+### Execution order (amended 2026-10-22)
+
+This amendment changes the order in which the remaining milestones run. It does not change
+history. Milestone IDs M0–M27, completed work, recorded evidence and every acceptance criterion
+below stay as written. No historical acceptance gate is waived. Running a milestone earlier
+does not lower its acceptance standard and does not imply production readiness. This subsection
+is the only authoritative execution order. There is no separate phase plan.
+
+Authoritative order of the remaining work:
+
+```text
+M25A -> M23A -> M24A -> M26A -> M16 -> M17 -> M18 -> M19 -> M20 ->
+M14 -> M15 -> M21 -> M22 -> M25B -> M23B -> M24B -> M26B
+```
+
+- **A/B subdivisions.** M23A/M23B, M24A/M24B, M25A/M25B and M26A/M26B are scoped subdivisions
+  of the existing M23–M26. They do not replace or renumber them. A B part covers only what its A
+  part did not deliver; it does not redo A's work. Each original milestone is complete only when
+  its A and B parts together meet its original requirements plus the approved amendments.
+- **M14–M15 may resume earlier.** They may resume before their listed position, at a safe
+  milestone boundary (never in the middle of another milestone), once their recorded blockers
+  are resolved by the owner. The M14 blockers are in §"Repository status at this revision" and
+  `docs/m14-progress.md`. They are not waived.
+- **Order is not independence.** The dependencies below apply in addition to the order. When a
+  dependency blocks a step, record the block in that milestone's progress document. Do not
+  bypass it and do not implement around it.
+- **A blocker stops only its dependents.** An external blocker (owner approval, a chargeable
+  action, human reviewers, data rights) stops the steps that depend on it, not independent
+  steps. The next unblocked step in the order proceeds, at a milestone boundary, and the blocked
+  step runs when its blocker clears. In particular, M26A waiting for approval of chargeable
+  deployment does not block M16–M20 or other local work, and the M14 blockers do not block
+  M16–M20.
+
+| Step | Depends on | Known blocking or open items |
+|---|---|---|
+| M25A | M8 `POST /search/reranked` (exists); frontend stack (decided, ADR-008) | None recorded |
+| M23A | M25A and its Playwright smoke path; existing test suites | CI never requires live Jev or any live generation provider |
+| M24A | Existing search path; M25A for UI-to-API request correlation | Logs never contain unredacted PII |
+| M26A | M23A and M24A; local stability (Milestone 26) | Owner approval before any chargeable action; cloud account and billing are owner decisions. Blocks only M26B. |
+| M16 | M10 prerequisite (the development-scoped M10 closure does not by itself satisfy it; the owner decides); generation-provider ADR | No generation provider selected |
+| M17 | M16; a separate human-reviewed answer set | Real human reviewers |
+| M18 | Return data source with recorded provenance and rights; PII redaction | Data source not chosen |
+| M19 | M18; a separate human-reviewed return-reason set; generation-provider ADR | Real human reviewers |
+| M20 | M18, M19; M13 listing versions (exist) | Separate human-reviewed root-cause set |
+| M14 (resume) | Recorded M14 blockers resolved by the owner | Human reviews (0 recorded), calibration, gated comparison arm, run-quality failure, 5 unsent dev listings, test split, upstream rights |
+| M15 | M13; M14 routing and decisions; human-reviewed examples | M14 blocked |
+| M21 | M14 decisions and routing; M20 evidence; authorized-reviewer check | M14 blocked |
+| M22 | M19, M20, M21 | Measured outcomes need real decisions; simulated figures must be labelled |
+| M25B | The domain UIs built in M14–M22 | — |
+| M23B, M24B | M25B and all domain milestones | — |
+| M26B | M23B, M24B, M25B; owner approval before chargeable actions | — |
+
+The A subdivisions are provisionally scoped below. Each scope is confirmed in a milestone-scoped
+plan when that step is planned:
+
+- **M25A:** the buyer Search frontend over the existing Search backend (bounded below).
+- **M23A:** Milestone 23's requirements applied to the existing core search and the M25A page.
+  It automates in CI the tests M25A already passes; it does not supply M25A's acceptance tests.
+- **M24A:** Milestone 24's requirements applied to the existing search path and the M25A page.
+  It strengthens M25A's logging; it does not supply the logging M25A needs for acceptance.
+- **M26A:** Milestone 26's requirements applied to the existing core search and the M25A page.
+- **B parts:** the requirements of M23–M26 that the A parts did not deliver, across all domains.
+
+#### Frontend ownership
+
+| Milestone | Owns |
+|---|---|
+| M25A | The buyer Search frontend, using the existing Search backend |
+| M14–M15 | The Listings UI, plus the minimum API adapters needed to expose existing listing domain logic |
+| M16–M17 | The shopping-assistant backend and its UI |
+| M18–M22 | The returns capabilities and their UI |
+| M21 | The operational human-review queue and its UI |
+| M25B | Unifying and hardening the existing UIs. It does not create first-time domain UI |
+
+Milestone 25's buyer and retailer UI lists remain the overall UI inventory. Each screen is built
+by the milestone that owns its backend, as listed above.
+
+#### Listings API and the M21 review queue
+
+- **CLI-only decision amended prospectively.** Owner decision D1 (M13, command line only) is
+  amended prospectively. The command lines (`python -m ecommerce_search.normalization`,
+  `python -m ecommerce_search.decision.listing_cli`) remain supported.
+- **Adapters reuse domain logic.** API adapters created in M14–M15 call the same domain and
+  application services as the command lines. They do not duplicate business logic.
+- **No early queue.** M14 does not build, and does not implement early, M21's operational
+  review queue or the `/reviews/*` endpoints. M14's blinded human-review path (`lh-1`) is
+  evaluation tooling, not the operational queue.
+- **Decisions are not sanctions.** No adapter rejects listings, bans sellers or publishes to a
+  marketplace (§6).
+
+#### Access control
+
+Any exposed workflow that touches sensitive data or consequential decisions gets minimum access
+controls in the same milestone that exposes it. This covers seller listings, return records, PII,
+review decisions and corrections. Essential security is not deferred to M25B, M23B, M24B or M26B.
+
+#### M25A scope
+
+In scope:
+
+- one buyer search page;
+- the existing `POST /search/reranked` with `{query, top_k}`;
+- product cards built from the existing response contract (`RerankedSearchResponse`);
+- loading, empty and error states, plus the reranker status and fallback state the response
+  already reports;
+- existing captured responses (`docs/demo/*.json`) as fixtures where suitable;
+- minimal same-origin browser serving and integration.
+
+Out of scope:
+
+- new search, retrieval or ranking implementation;
+- the experimental `/search/routed` (V4) enabled by default;
+- a debug-mode or search-version selector, comparison, the assistant, and unsupported controls;
+- explicit filter controls, until their request contract is approved (the search request models
+  accept only `query` and `top_k`; filters come from the M6 parse);
+- product-detail or purchase flows, which no backend supports.
+
+**Stack (decided 2026-10-22, ADR-008).** React, TypeScript and Vite in one frontend codebase with
+domain-specific modules, served same-origin by the existing FastAPI application, with Playwright
+browser smoke tests. Nothing is installed yet.
+
+**Reuse boundary.** The Search UI is a domain module that later buyer UIs can reuse; it consumes
+the existing API contract and contains no search logic. Shared code is limited to what M25A
+itself uses across the app shell (for example the HTTP client and the loading and error
+handling). No speculative shared framework.
+
+**Acceptance essentials stay in M25A:** its unit and Playwright smoke tests, safe rendering of
+catalog text, no secrets in the browser bundle, and request and error logging sufficient to
+diagnose the UI-to-API flow. M23A and M24A automate and strengthen these; they do not postpone
+them.
+
+#### Reuse and completion rules
+
+Before creating a component, service, endpoint or data store, inspect existing ownership and
+record **REUSE**, **EXTEND** or **CREATE** with a reason. A CREATE must state why existing code
+cannot serve the need.
+
+Every user-facing deliverable needs:
+
+- integrated backend and frontend;
+- an explicit API contract;
+- relevant automated tests;
+- one browser-level smoke path through the UI-to-API flow;
+- safe loading, error and empty states;
+- appropriate logs, documentation, and fallback or feature flags.
+
+Two clarifications:
+
+- **Browser smoke test.** A `TestClient` check that a page is served is not an end-to-end browser
+  test.
+- **Report kind.** Mocked or fixture-backed smoke tests and checks against a live local stack are
+  reported separately and labelled as such.
+
+Provider-dependent functionality stays off by default.
 
 ### Milestone 0 — Specification
 
@@ -1157,6 +1339,14 @@ Preserve original values. Stop.
 ### Milestone 14 — Jev Listing Decisions
 
 Implement bounded category, subcategory, attribute-validation, ambiguity, and review-routing decisions. Do not allow invented attributes. Evaluate on human-reviewed data. Stop.
+
+Amended 2026-10-22 (§28 execution order). This adds no acceptance criterion and waives none:
+
+- **Status:** M14 is BLOCKED. When resumed, it continues from its recorded state in
+  `docs/m14-progress.md`. It is not rebuilt.
+- **UI ownership:** M14–M15 also own the Listings UI and the minimum listing API adapters,
+  reusing existing domain logic.
+- **Review queue:** the operational review queue remains M21's.
 
 ### Milestone 15 — Policy-Risk Triage
 
@@ -1300,6 +1490,8 @@ Label every measured, simulated, and estimated figure as such. Do not present si
 
 Implement unit/integration CI, evaluation smoke tests, provider contract tests, and configurable thresholds. Routine CI must not require live Jev or any live generation provider. Stop.
 
+Amended 2026-10-22: delivered as M23A (existing core search and the M25A page) and M23B (the rest); see §28 execution order.
+
 ### Milestone 24 — Observability
 
 Implement:
@@ -1313,6 +1505,8 @@ Implement:
 - P50/P95/P99 reporting.
 
 Logs never contain unredacted PII. Stop.
+
+Amended 2026-10-22: delivered as M24A (existing search path and the M25A page) and M24B (the rest); see §28 execution order.
 
 ### Milestone 25 — Dual Frontend
 
@@ -1338,6 +1532,14 @@ Retailer UI:
 
 Build only the screens whose backend milestones exist. Never expose hidden reasoning or unredacted PII. Stop.
 
+Amended 2026-10-22 (§28 execution order):
+
+- **Inventory:** the lists above remain the UI inventory.
+- **M25A:** the buyer Search page over the existing Search backend only (scope in §28).
+- **Domain screens:** first-time domain screens are built by their owning domain milestones
+  (M14–M15, M16–M17, M18–M22).
+- **M25B:** unifies and hardens those existing UIs. It does not create first-time domain UI.
+
 ### Milestone 26 — AWS Deployment
 
 Only after local stability, implement:
@@ -1351,6 +1553,8 @@ Only after local stability, implement:
 - Terraform.
 
 Do not introduce EKS. Require approval before chargeable actions. Stop.
+
+Amended 2026-10-22: delivered as M26A (existing core search and the M25A page) and M26B (the rest); see §28 execution order. Local stability and approval before chargeable actions apply to both parts.
 
 ### Milestone 27 — Optional Authorized Marketplace Integration
 
@@ -1435,6 +1639,15 @@ Prefer:
 - simple architecture over unnecessary infrastructure.
 
 ## Start now
+
+**Superseded 2026-10-22.** The text below is the historical start instruction from the M9
+period, kept for the record. M9–M13 have since progressed or closed with the scopes and
+deferrals recorded in §"Repository status at
+this revision", and M14 is BLOCKED. The next step is the first item of §28, "Execution order
+(amended 2026-10-22)": M25A, on the stack recorded in ADR-008. Its milestone-scoped plan needs
+owner approval before any implementation.
+
+Historical text:
 
 M0–M8 are complete. The next implementation milestone is **Milestone 9 — Golden Dataset**. Its Session B contracts (`15f3ac1`) and Session C1 (`6009fa3`, `queries_frozen`) are committed; Session C2 (`pool_frozen`, blind annotation CLI, primary-seal tooling, retrieval-metric evaluator) is committed. The next step is human primary annotation by `ann-1`.
 

@@ -537,10 +537,17 @@ setting selects it.
 | `GET /search/filtered?q=...`, `POST /search/filtered` | 7 (V2 filtered hybrid implemented; filters from the M6 parse under `fp-1`) |
 | `GET /search/reranked?q=...`, `POST /search/reranked` | 8 (V3 implemented: V2 candidates + head-only cross-encoder reranking; provisional model pin) |
 | `POST /listings/analyze`, `POST /listings/normalize` | 13–14 (provisional). Not built in M13: owner decision D1 made M13 command-line only (`python -m ecommerce_search.normalization`) |
-| `GET /reviews/pending`, `POST /reviews/{review_id}/decision` | Listing milestones (provisional) |
+| `GET /reviews/pending`, `POST /reviews/{review_id}/decision` | 21 (operational review queue; amended 2026-10-22, originally "Listing milestones (provisional)") |
 
 The listing endpoint milestone mapping is provisional. `docs/MASTER_PLAN.md` §23 gives
 indicative milestones only; the mapping is confirmed when those milestones are planned.
+
+Amended 2026-10-22 (`docs/MASTER_PLAN.md` §28):
+
+- **D1 amended prospectively.** The command lines remain supported. M14–M15 may add the minimum
+  listing API adapters, which reuse the same domain and application services as the command
+  lines.
+- **Review queue.** The operational review queue belongs to M21, not M14.
 
 ## 10. Repository layout
 
@@ -575,3 +582,4 @@ is in `docs/MASTER_PLAN.md` §24. Milestone 0 adds only `docs/*.md` and
 | [ADR-005](decisions/ADR-005-jev-bounded-decision-provider.md) | Jev as an optional bounded-decision provider |
 | [ADR-006](decisions/ADR-006-embedding-model-selection.md) | MiniLM embedding model (pinned revision) and exact scan at the current scale |
 | [ADR-007](decisions/ADR-007-reranker-model-selection.md) | MiniLM cross-encoder reranker: a provisional compatibility pin (pinned revision), re-decided in Milestone 10 |
+| [ADR-008](decisions/ADR-008-frontend-stack.md) | React + TypeScript + Vite frontend, one codebase with domain modules, served same-origin by FastAPI; Playwright browser smoke tests (owner decision 2026-10-22; nothing installed yet) |

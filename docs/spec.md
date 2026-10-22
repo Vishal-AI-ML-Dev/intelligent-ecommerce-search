@@ -74,7 +74,10 @@ measured against human-reviewed evaluation data.
   multiple databases for the same search workload, unless measurements prove
   PostgreSQL insufficient.
 - A universal latency promise not backed by measurement.
-- Frontend, AWS or Terraform work before Milestones 25 and 26.
+- Frontend work outside the milestone that owns it, and AWS or Terraform work before Milestone
+  26 (M26A/M26B). Amended 2026-10-22: frontend ownership and the execution order are in
+  `docs/MASTER_PLAN.md` §28, "Execution order (amended 2026-10-22)". The original text was
+  "Frontend, AWS or Terraform work before Milestones 25 and 26."
 - Multi-currency conversion, personalization, and learning-to-rank from user
   behavior. None of these are in the master plan.
 
@@ -87,6 +90,11 @@ measured against human-reviewed evaluation data.
 | 3 — Buyer and Return Intelligence (M16–M22) | Grounded buyer assistant and its evaluation, return data foundation, return-reason intelligence, evidence retrieval and root-cause hypotheses, corrective actions with human review, closed-loop evaluation | Only after Level 1 and its evaluation are stable; not implemented |
 | 4 — Production extensions (M23–M26) | Regression CI, observability, dual frontend, production Docker, AWS, Terraform | Only after evaluation is stable |
 | Optional (M27) | Authorized marketplace integration (official access only) | Optional; the MVP uses CSV/JSON import and export |
+
+Amended 2026-10-22: the gates in this table describe the original sequence. The authoritative
+execution order, which schedules M25A, M23A, M24A and M26A (existing core search only) before
+M16, is in `docs/MASTER_PLAN.md` §28. Each milestone's own prerequisites and acceptance criteria
+are unchanged.
 
 ## 5. Actors and workflows
 
@@ -375,9 +383,11 @@ the inferred, risk-signal and human-outcome layers for listings are later milest
 is implemented for brand aliases (the M2 table, unextended), brand casing, whitespace, units,
 storage terms and numeric formats; model and series names keep their text apart from
 whitespace collapsing. FR-LST-3 is implemented narrowly: structured seller fields plus RAM and
-storage patterns in title/description, which yield unverified candidates. FR-LST-4 and
-FR-LST-5 are not started (M14, M15). Verified on synthetic listings and scratch databases only;
-see `docs/listing-normalization-m13.md`.
+storage patterns in title/description, which yield unverified candidates. FR-LST-4 has an
+implementation in M14 (deterministic routing `lr-1`), but M14 is BLOCKED and not accepted (status
+corrected 2026-10-22; see `docs/m14-progress.md`). FR-LST-5 is not started (M15). The M13
+items above were verified on synthetic listings and scratch databases only; see
+`docs/listing-normalization-m13.md`.
 
 ### 6.7 Annotation tool requirements
 
