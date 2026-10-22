@@ -39,6 +39,7 @@ from ecommerce_search.api.dependencies import (
     get_reranker,
     get_settings_dep,
 )
+from ecommerce_search.api.observability import log_event
 from ecommerce_search.api.schemas import (
     FilteredQueryUnderstandingBlock,
     FilterPolicy,
@@ -298,7 +299,7 @@ def _reranked_search(
     lexical_ids = {hit.product_id for hit in lexical_hits}
     dense_ids = {hit.product_id for hit in dense_hits}
     total_ms = _elapsed_ms(started)
-    return RerankedSearchResponse(
+    response = RerankedSearchResponse(
         query=query,
         search_version=RERANKED_SEARCH_VERSION,
         document_version=DOCUMENT_VERSION,
@@ -360,6 +361,21 @@ def _reranked_search(
             total_ms=total_ms,
         ),
     )
+    # Milestone 24A: fixed codes, counts and the existing stage timings only. Never the query,
+    # the parsed tsquery, derived filters or product data.
+    log_event(
+        logger,
+        "reranked_search_completed",
+        reranker_status=reranker_status,
+        reranker_enabled=enabled,
+        dense_status=response.dense_status,
+        top_k=limit,
+        candidate_count=response.candidate_count,
+        reranked_count=reranked_count,
+        result_count=response.result_count,
+        latency_ms=response.latency_ms.model_dump(),
+    )
+    return response
 
 
 @router.get(

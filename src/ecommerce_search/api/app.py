@@ -12,6 +12,11 @@ from ecommerce_search.api.dense import router as dense_router
 from ecommerce_search.api.filtered import router as filtered_router
 from ecommerce_search.api.health import router as health_router
 from ecommerce_search.api.hybrid import router as hybrid_router
+from ecommerce_search.api.observability import (
+    RequestIdMiddleware,
+    configure_logging,
+    install_access_log_redaction,
+)
 from ecommerce_search.api.reranked import router as reranked_router
 from ecommerce_search.api.routed import LazyJevProvider
 from ecommerce_search.api.routed import router as routed_router
@@ -32,10 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        logging.basicConfig(
-            level=settings.log_level,
-            format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        )
+        configure_logging(settings.log_level)
         engine = create_db_engine(settings)
         app.state.settings = settings
         app.state.engine = engine
@@ -66,6 +68,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             logger.info("engine disposed")
 
     app = FastAPI(title="Intelligent E-commerce Search", version=__version__, lifespan=lifespan)
+    # Milestone 24A: request IDs, one completion log per request, query-free access logs.
+    app.add_middleware(RequestIdMiddleware)
+    install_access_log_redaction()
     # One stateless, local provider per app: constructing it performs no I/O.
     app.state.decision_provider = DeterministicDecisionProvider()
     # One reranker per app, created unloaded: construction reads no file and imports no model

@@ -10,6 +10,7 @@ the quality of any model. Hand-written expectations use explicit per-product sco
 """
 
 import hashlib
+import io
 import json
 import logging
 import math
@@ -36,6 +37,7 @@ from ecommerce_search.api.dependencies import (
     get_embedder,
     get_reranker,
 )
+from ecommerce_search.api.observability import build_log_handler
 from ecommerce_search.api.schemas import RerankedSearchResponse
 from ecommerce_search.catalog.mapping import spec_columns
 from ecommerce_search.catalog.schemas import CORE_KEYS, parse_raw
@@ -1778,3 +1780,76 @@ def test_importing_the_v3_modules_and_creating_the_app_load_no_model_library():
     )
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == ""
+
+
+# ---- Milestone 24A: one query-free summary per reranked search --------------------------
+
+M24A_MARKER = "zqx7privatemarker"
+SUMMARY_KEYS = {
+    "event",
+    "request_id",
+    "reranker_status",
+    "reranker_enabled",
+    "dense_status",
+    "top_k",
+    "candidate_count",
+    "reranked_count",
+    "result_count",
+    "latency_ms",
+}
+
+
+@pytest.fixture
+def formatted_app_logs(caplog):
+    caplog.set_level(logging.INFO)
+    stream = io.StringIO()
+    handler = build_log_handler(stream)
+    handler.addFilter(logging.Filter("ecommerce_search"))  # not the test client's httpx logger
+    logging.getLogger().addHandler(handler)
+    yield stream.getvalue
+    logging.getLogger().removeHandler(handler)
+
+
+def json_events(text: str, event: str) -> list[dict]:
+    marker = f'"event":"{event}"'
+    return [json.loads(line[line.find("{") :]) for line in text.splitlines() if marker in line]
+
+
+@pytest.mark.parametrize("method", ["get", "post"])
+@pytest.mark.parametrize(
+    ("query", "enabled", "status"),
+    [
+        (f"gaming laptop {M24A_MARKER}", True, "applied"),
+        (f"gaming laptop {M24A_MARKER}", False, "disabled"),
+        (f"nike laptop {M24A_MARKER}", True, "skipped_no_candidates"),
+        ("!!!", True, "skipped_no_searchable_text"),
+    ],
+)
+def test_reranked_summary_is_logged_once_without_query_text(
+    client_for, formatted_app_logs, method, query, enabled, status
+):
+    with client_for(reranker_enabled=enabled) as client:
+        if method == "get":
+            response = client.get(
+                PATH, params={"q": query}, headers={"X-Request-ID": "m24a-req-01"}
+            )
+        else:
+            response = client.post(
+                PATH, json={"query": query}, headers={"X-Request-ID": "m24a-req-01"}
+            )
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "m24a-req-01"
+    body = response.json()
+    text = formatted_app_logs()
+    (summary,) = json_events(text, "reranked_search_completed")
+    assert set(summary) == SUMMARY_KEYS
+    assert summary["request_id"] == "m24a-req-01"
+    assert summary["reranker_status"] == body["reranker"]["status"] == status
+    assert summary["reranker_enabled"] is enabled
+    assert summary["latency_ms"] == body["latency_ms"]
+    for key in ("dense_status", "top_k", "candidate_count", "result_count"):
+        assert summary[key] == body[key], key
+    assert summary["reranked_count"] == body["reranker"]["reranked_count"]
+    (completed,) = json_events(text, "request_completed")
+    assert (completed["route"], completed["status"]) == (PATH, 200)
+    assert M24A_MARKER not in text and "laptop" not in text and "!!!" not in text

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { postJson, RequestAborted } from './client';
+import { newRequestId, postJson, REQUEST_ID_HEADER, RequestAborted } from './client';
 
 const SECRET_QUERY = 'private query text';
 const isAny = (_value: unknown): _value is unknown => true;
@@ -82,5 +82,66 @@ describe('postJson', () => {
     const logs = captureLogs();
     await expect(postJson('/x', {}, isAny, controller.signal)).rejects.toBeInstanceOf(RequestAborted);
     expect(logs()).toBe('');
+  });
+
+  it('sends a generated request ID and logs the ID the server returned', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('{"a":1}', { status: 200, headers: { [REQUEST_ID_HEADER]: 'server-id-0001' } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const logs = captureLogs();
+    await postJson('/x', { query: SECRET_QUERY }, isObject);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const sent = (init.headers as Record<string, string>)[REQUEST_ID_HEADER];
+    expect(sent).toMatch(/^[A-Za-z0-9-]{8,64}$/);
+    expect(logs()).toContain('"request_id":"server-id-0001"');
+    expect(logs()).not.toContain(SECRET_QUERY);
+  });
+
+  it.each([
+    ['no header', {}],
+    ['an invalid header', { [REQUEST_ID_HEADER]: 'bad id <script>' }],
+  ])('logs the generated ID when the response has %s', async (_label, headers) => {
+    const fetchMock = vi.fn(async () => new Response('{"detail":"x"}', { status: 503, headers }));
+    vi.stubGlobal('fetch', fetchMock);
+    const logs = captureLogs();
+    await postJson('/x', {}, isAny);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const sent = (init.headers as Record<string, string>)[REQUEST_ID_HEADER];
+    expect(logs()).toContain(`"request_id":"${sent}"`);
+    expect(logs()).not.toContain('<script>');
+  });
+
+  it('logs the generated ID when no response arrives', async () => {
+    const fetchMock = vi.fn(async () => Promise.reject(new TypeError('offline')));
+    vi.stubGlobal('fetch', fetchMock);
+    const logs = captureLogs();
+    await postJson('/x', {}, isAny);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const sent = (init.headers as Record<string, string>)[REQUEST_ID_HEADER];
+    expect(logs()).toContain(`"request_id":"${sent}"`);
+    expect(logs()).toContain('network_error');
+  });
+
+  it('uses a fresh ID per request', async () => {
+    const fetchMock = vi.fn(async () => new Response('{"a":1}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    captureLogs();
+    await postJson('/x', {}, isObject);
+    await postJson('/x', {}, isObject);
+    const ids = fetchMock.mock.calls.map(
+      (call) => ((call as unknown as [string, RequestInit])[1].headers as Record<string, string>)[REQUEST_ID_HEADER],
+    );
+    expect(new Set(ids).size).toBe(2);
+  });
+});
+
+describe('newRequestId', () => {
+  it('falls back to getRandomValues outside a secure context', () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues: (bytes: Uint8Array) => bytes.fill(0xab),
+    });
+    expect(newRequestId()).toBe('ab'.repeat(16));
   });
 });
