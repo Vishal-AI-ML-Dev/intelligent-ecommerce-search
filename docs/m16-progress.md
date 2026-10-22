@@ -155,4 +155,6 @@ The full local unit suite was not run. CI runs the broad regression; see "CI" be
      rule was removed; the evidence depth is now capped at `search_candidate_k` when used.
   2. `test_filtered_api.py` has its own route-list assertion, which now includes
      `/assistant/answer`. The frozen-contract digest was unchanged.
-- The fix commit and its run are recorded below.
+- Run 39813357381 (commit `503cb1d`, the fix): **success.** All 4 jobs passed: backend lint +
+  hermetic unit suite, frontend typecheck/unit/build, pgvector integration suite, and fixture
+  Playwright against the FastAPI-served build. CI never calls a live generation provider.
