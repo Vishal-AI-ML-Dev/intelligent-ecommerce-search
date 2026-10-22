@@ -1,7 +1,7 @@
 # M23A — Baseline CI (progress)
 
-Status: **IN PROGRESS**. M23A is recorded complete only after the required GitHub Actions jobs pass
-on `main`. Scope (§28 of `MASTER_PLAN.md`): Milestone 23's requirements applied to the existing
+Status: **COMPLETE** (2026-10-22): all four required GitHub Actions jobs passed on `main` at
+`c9b6e6d` (run below). Scope (§28 of `MASTER_PLAN.md`): Milestone 23's requirements applied to the existing
 core search and the M25A page. It automates the tests M25A already passes.
 
 ## What was added
@@ -80,8 +80,10 @@ databases on the development server); its first evidence is the GitHub run.
 Billing checked by the owner on 2026-10-22: GitHub Free, 0/2,000 included Actions minutes,
 0/0.5 GB storage, $0 billable. Standard runners only; no paid runners, budgets or billing changes.
 Each run downloads the locked Python dependencies (including the CPU-only torch wheel), npm
-packages, Chromium with its system packages and the pgvector image. Measured CI durations are
-recorded below once the first run completes.
+packages, Chromium with its system packages and the pgvector image. Measured on the first run: `backend` 669 s, `frontend`
+321 s, `e2e-fixture` 92 s, `integration` 204 s (torch download 187.2 MiB per Python job). With
+per-job rounding up to whole minutes that is about 24 runner-minutes per push (computed from job
+times, not read from the billing page), against 2,000 included minutes per month.
 
 ## Out of scope (M23B)
 
@@ -92,4 +94,16 @@ protection.
 
 ## GitHub run
 
-Pending.
+Run `39738936822` on push of `c9b6e6d`, standard `ubuntu-latest` runners:
+https://github.com/Vishal-AI-ML-Dev/intelligent-ecommerce-search/actions/runs/39738936822
+
+| Job | Result | Evidence from the job log |
+|---|---|---|
+| `backend` | success (669 s) | Ruff: all checks passed, format check passed; unit suite 4,853 passed, 4 skipped, 780 deselected |
+| `integration` | success (204 s) | 762 passed, 18 deselected (`real_model`) |
+| `frontend` | success (321 s) | typecheck; Vitest 24 passed; build |
+| `e2e-fixture` | success (92 s) | Playwright fixture project 6 passed |
+
+Visible skips in `backend`: `test_unit_isolation.py:25` "already inside the hermetic child" (by
+design, above) and 3 in `test_model_fetch_profiles.py:363` ("could not import '_winapi'", Windows-only
+tests on Linux). The run was observed through read-only Actions API calls.
