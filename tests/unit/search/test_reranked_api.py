@@ -1366,7 +1366,7 @@ def test_base_exceptions_propagate(make_settings, events, monkeypatch, stage):
     else:
         reranker.failures["score"] = Boom()
     with pytest.raises(Boom):
-        reranked_api._reranked_search(
+        reranked_api.run_reranked_search(
             session,
             make_settings(),
             embedder,
@@ -1562,7 +1562,8 @@ def test_frozen_operations_and_components_are_byte_identical_to_head(make_settin
     frozen = frozen_openapi(schema)
     blob = json.dumps(frozen, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     assert hashlib.sha256(blob.encode()).hexdigest() == HEAD_FROZEN_DIGEST
-    assert set(schema["paths"]) == {*FROZEN_PATHS, PATH, "/search/routed"}  # + experimental V4
+    # + experimental V4 and the M16 assistant
+    assert set(schema["paths"]) == {*FROZEN_PATHS, PATH, "/search/routed", "/assistant/answer"}
     v3_only = {
         "RerankedSearchRequest",
         "RerankedSearchResponse",

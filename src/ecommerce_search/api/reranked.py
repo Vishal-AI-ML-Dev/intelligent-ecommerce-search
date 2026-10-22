@@ -139,7 +139,7 @@ def _elapsed_ms(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 3)
 
 
-def _reranked_search(
+def run_reranked_search(
     session: Session,
     settings: Settings,
     embedder: Embedder | None,
@@ -150,6 +150,8 @@ def _reranked_search(
     query_location: tuple[str, str],
     top_k_location: tuple[str, str],
 ) -> RerankedSearchResponse:
+    """The single V3 entry point, shared by both routes and the M16 assistant's retriever
+    adapter. Raises `RequestValidationError` (422) or `HTTPException` (503) as documented above."""
     started = time.perf_counter()
     try:
         query = normalize_query(raw_query, settings.search_max_query_length)
@@ -397,7 +399,7 @@ def reranked_search_get(
         Query(ge=1, description="Maximum results. Default and upper bound come from settings."),
     ] = None,
 ) -> RerankedSearchResponse:
-    return _reranked_search(
+    return run_reranked_search(
         session,
         settings,
         embedder,
@@ -425,7 +427,7 @@ def reranked_search_post(
     reranker: Annotated[RerankerProvider | None, Depends(get_reranker)],
     provider: Annotated[DecisionProvider, Depends(get_decision_provider)],
 ) -> RerankedSearchResponse:
-    return _reranked_search(
+    return run_reranked_search(
         session,
         settings,
         embedder,

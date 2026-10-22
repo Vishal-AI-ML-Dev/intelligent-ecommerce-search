@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, get_args
@@ -27,6 +28,8 @@ from ecommerce_search.reranking.spec import (
 _JEV_PINNED_MODEL = re.compile(r"jev-\d+\.\d+\.\d+")
 # The only model experimental V4 may call (the M12 diagnostic and calibration runs used it).
 V4_JEV_MODEL = "jev-1.13.0"
+# A plain generation model id (letters, digits, dots and hyphens); no URL, path or whitespace.
+_GENERATION_MODEL_ID = re.compile(r"[a-z0-9][a-z0-9.-]{0,63}")
 
 
 def _secret_input_names(fields: dict[str, FieldInfo]) -> frozenset[str]:
@@ -194,6 +197,32 @@ class Settings(BaseSettings):
     # explicitly configured frontend is never silently hidden.
     frontend_dist_dir: Path | None = None
 
+    # Shopping assistant (Milestone 16, ADR-009). Generation is off by default ("none"): the
+    # assistant still clarifies and retrieves, and says that no generated answer is available.
+    # "gemini" (Gemini Developer API, free tier) is the proposed optional provider; it needs the
+    # key and is never required by tests. Limits are provisional bounds, not benchmarked values.
+    assistant_generation_provider: Literal["none", "gemini"] = "none"
+    # The Gemini API key variable name used by Google's docs. Empty means unset; never logged or
+    # echoed in errors. Passed explicitly: GOOGLE_API_KEY and ambient Google credentials are
+    # never read.
+    gemini_api_key: SecretStr | None = None
+    # Proposed, unverified: a stable free-tier model at the time of writing (ADR-009).
+    assistant_generation_model: str = "gemini-3.5-flash-lite"
+    # The SDK's per-request timeout (one attempt, SDK retries off); not a wall-clock bound.
+    assistant_generation_timeout_seconds: float = Field(
+        default=20, gt=0, le=60, allow_inf_nan=False
+    )
+    # No repair call is started once this much time has passed since the request began.
+    assistant_generation_deadline_seconds: float = Field(
+        default=30, gt=0, le=120, allow_inf_nan=False
+    )
+    assistant_generation_max_output_tokens: int = Field(default=2048, ge=256, le=4096)
+    # Retrieved records given to the generator (the first V3 results); <= search_candidate_k.
+    assistant_evidence_k: int = Field(default=5, ge=1, le=10)
+    # Optional owner-supplied prices for cost estimates. Unset = cost reported as unknown.
+    assistant_input_usd_per_mtok: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+    assistant_output_usd_per_mtok: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+
     @field_validator("frontend_dist_dir")
     @classmethod
     def _frontend_build(cls, value: Path | None) -> Path | None:
@@ -234,7 +263,7 @@ class Settings(BaseSettings):
             raise ValueError("must be a number")
         return value
 
-    @field_validator("typesafe_api_key", mode="before")
+    @field_validator("typesafe_api_key", "gemini_api_key", mode="before")
     @classmethod
     def _empty_key_is_unset(cls, value: object) -> object:
         # Inspect without unwrapping, so a non-empty key stays a SecretStr in every error input.
@@ -253,6 +282,37 @@ class Settings(BaseSettings):
                 raise ValueError("typesafe_api_key has an invalid format")
             return SecretStr(key)
         return value
+
+    @field_validator("gemini_api_key")
+    @classmethod
+    def _gemini_key_format(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            key = value.get_secret_value().strip()
+            if not key.isascii() or not key.isprintable() or " " in key:
+                raise ValueError("gemini_api_key has an invalid format")
+            return SecretStr(key)
+        return value
+
+    @field_validator("assistant_generation_model")
+    @classmethod
+    def _generation_model_id(cls, value: str) -> str:
+        if not _GENERATION_MODEL_ID.fullmatch(value):
+            raise ValueError("assistant_generation_model must be a plain model id")
+        return value
+
+    @model_validator(mode="after")
+    def _assistant_is_configured_consistently(self) -> "Settings":
+        if self.assistant_generation_provider == "gemini" and self.gemini_api_key is None:
+            raise ValueError(
+                "gemini_api_key is required when assistant_generation_provider is gemini"
+            )
+        if self.assistant_evidence_k > self.search_candidate_k:
+            raise ValueError("assistant_evidence_k must not exceed search_candidate_k")
+        if (self.assistant_input_usd_per_mtok is None) != (
+            self.assistant_output_usd_per_mtok is None
+        ):
+            raise ValueError("set both assistant token prices or neither")
+        return self
 
     @field_validator("jev_model", "jev_base_url", mode="before")
     @classmethod
@@ -283,6 +343,13 @@ class Settings(BaseSettings):
         ):
             raise ValueError("jev_base_url must be a plain https URL")
         return value.rstrip("/")
+
+    @field_validator("assistant_generation_model", mode="before")
+    @classmethod
+    def _exact_model_string(cls, value: object) -> object:
+        if not isinstance(value, str):
+            raise ValueError("must be a string")
+        return value
 
     @field_validator("reranker_enabled", "jev_enabled", "search_v4_jev_enabled", mode="before")
     @classmethod

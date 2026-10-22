@@ -5,7 +5,15 @@
 // JSON imports). Exact contract validity is checked against the Pydantic models by
 // `tests/unit/test_frontend_fixture_contract.py`.
 
+import type { AssistantResponse } from '../src/domains/assistant/types';
 import type { RerankedSearchResponse } from '../src/domains/search/types';
+import assistantUnavailableJson from './fixtures/synthetic-assistant-503.json' with { type: 'json' };
+import assistantAnswerJson from './fixtures/synthetic-assistant-answer.json' with { type: 'json' };
+import assistantClarifyJson from './fixtures/synthetic-assistant-clarify.json' with { type: 'json' };
+import assistantGenerationFailedJson from './fixtures/synthetic-assistant-generation-failed.json' with { type: 'json' };
+import assistantGenerationOffJson from './fixtures/synthetic-assistant-generation-off.json' with { type: 'json' };
+import assistantNoMatchesJson from './fixtures/synthetic-assistant-no-matches.json' with { type: 'json' };
+import assistantValidationFailedJson from './fixtures/synthetic-assistant-validation-failed.json' with { type: 'json' };
 import unavailableJson from './fixtures/synthetic-503.json' with { type: 'json' };
 import appliedJson from './fixtures/synthetic-reranked-applied.json' with { type: 'json' };
 import disabledJson from './fixtures/synthetic-reranked-disabled.json' with { type: 'json' };
@@ -32,4 +40,20 @@ export const fixtures = {
   noSearchableText: response(noSearchableTextJson),
   similarityOnly: response(similarityOnlyJson),
   unavailable: unavailableJson satisfies { detail: string },
+};
+
+function assistant(body: JsonShape<AssistantResponse>): AssistantResponse {
+  return body as AssistantResponse;
+}
+
+// Milestone 16: `POST /assistant/answer` bodies, generated from the Pydantic models with fake
+// retriever and generator objects (synthetic; no model was called).
+export const assistantFixtures = {
+  answer: assistant(assistantAnswerJson),
+  clarify: assistant(assistantClarifyJson),
+  noMatches: assistant(assistantNoMatchesJson),
+  validationFailed: assistant(assistantValidationFailedJson),
+  generationOff: assistant(assistantGenerationOffJson),
+  generationFailed: assistant(assistantGenerationFailedJson),
+  unavailable: assistantUnavailableJson satisfies { detail: string },
 };

@@ -15,6 +15,9 @@ _ISOLATED_PREFIXES = (
     "JEV_",
     "TYPESAFE_",
     "FRONTEND_",
+    "ASSISTANT_",
+    "GEMINI_",
+    "GOOGLE_",
 )
 
 

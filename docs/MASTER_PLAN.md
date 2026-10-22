@@ -1087,7 +1087,7 @@ M14 -> M15 -> M21 -> M22 -> M25B -> M23B -> M24B -> M26B
 | M23A | M25A and its Playwright smoke path; existing test suites | CI never requires live Jev or any live generation provider |
 | M24A | Existing search path; M25A for UI-to-API request correlation | Logs never contain unredacted PII |
 | M26A | M23A and M24A; local stability (Milestone 26) | Owner approval before any chargeable action; cloud account and billing are owner decisions. Blocks only M26B. |
-| M16 | M10 prerequisite (the development-scoped M10 closure does not by itself satisfy it; the owner decides); generation-provider ADR | No generation provider selected |
+| M16 | M10 prerequisite (the development-scoped M10 closure does not by itself satisfy it; the owner decides); generation-provider ADR | IN PROGRESS (2026-10-22): the owner accepted M10's reduced-scope closure for M16 development only (no gate waived); ADR-009 proposes the Gemini Developer API free tier (Proposed, unmeasured, default off). First slice built with mocked generation only; gaps in `docs/m16-progress.md` |
 | M17 | M16; a separate human-reviewed answer set | Real human reviewers |
 | M18 | Return data source with recorded provenance and rights; PII redaction | Data source not chosen |
 | M19 | M18; a separate human-reviewed return-reason set; generation-provider ADR | Real human reviewers |
@@ -1650,8 +1650,9 @@ deferrals recorded in §"Repository status at
 this revision", and M14 is BLOCKED. M25A, the first item of §28, "Execution order (amended 2026-10-22)", was
 accepted on 2026-10-22, and M23A was completed on 2026-10-22 (`docs/m23a-progress.md`). M24A was
 completed on 2026-10-22 (`docs/m24a-progress.md`). M26A was accepted on 2026-10-22 (single-EC2
-staging demo; `docs/m26a-progress.md`). The next step is M16; its prerequisites (M10, generation-provider
-ADR) need owner decisions before any implementation.
+staging demo; `docs/m26a-progress.md`). M16 is IN PROGRESS (2026-10-22): the owner accepted M10's
+reduced-scope closure for M16 development only, ADR-009 is Proposed, and the first slice uses
+mocked generation only (`docs/m16-progress.md`).
 
 Historical text:
 

@@ -1,0 +1,135 @@
+"""Request and response contract of `POST /assistant/answer` (Milestone 16).
+
+Every product fact in a response comes from a retrieved catalog record. The only model-written
+text is `summary`, which is unverified and is labelled as such.
+"""
+
+from decimal import Decimal
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from ecommerce_search.generation.provider import FactField
+
+PROMPT_VERSION = "asst-prompt-1"
+POLICY_VERSION = "asst-policy-1"
+EVIDENCE_VERSION = "asst-evidence-1"
+
+Outcome = Literal["answer", "clarify", "abstain", "generation_unavailable"]
+ClarifyReason = Literal["conflicting_requirements", "ambiguous_requirement", "no_product_need"]
+AbstainReason = Literal["no_matching_products", "model_abstained", "validation_failed"]
+GenerationStatus = Literal["not_needed", "disabled", "used", "failed"]
+ValidationStatus = Literal["not_run", "passed", "repaired", "failed"]
+CostStatus = Literal[
+    "not_applicable", "estimated", "unknown_pricing_not_configured", "unknown_usage"
+]
+ConstraintField = Literal[
+    "category",
+    "brand",
+    "min_price",
+    "max_price",
+    "ram_gb",
+    "storage_gb",
+    "storage_type",
+    "storage_interface",
+]
+
+
+class _Frozen(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class AssistantRequest(_Frozen):
+    # The effective limit and character policy are those of search query text (normalize_query).
+    message: str = Field(min_length=1, max_length=1000, description="The shopper's request.")
+
+
+class EvidenceProduct(_Frozen):
+    """One retrieved catalog record, exactly as the search API returned it."""
+
+    search_rank: int
+    product_id: str
+    title: str
+    brand: str
+    category: str
+    subcategory: str | None
+    description: str | None
+    price: Decimal = Field(description="Serialized as a decimal string (no float rounding).")
+    currency: str
+    rating: float | None
+    review_count: int | None
+    availability: str
+
+
+class CitedFact(_Frozen):
+    field: FactField
+    value: str | None = Field(description="Rendered from the catalog record, never model text.")
+
+
+class ConstraintCheck(_Frozen):
+    field: ConstraintField
+    requested: str
+    status: Literal["passed", "failed", "not_checked"] = Field(
+        description="`not_checked`: the retrieved record has no field to check it against."
+    )
+
+
+class Recommendation(_Frozen):
+    product_id: str
+    facts: tuple[CitedFact, ...]
+    constraint_checks: tuple[ConstraintCheck, ...]
+
+
+class Clarification(_Frozen):
+    reason: ClarifyReason
+    question: str
+
+
+class GenerationInfo(_Frozen):
+    status: GenerationStatus
+    failure: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    calls: int = Field(ge=0, le=2)
+    validation: ValidationStatus
+    validation_errors: tuple[str, ...] = ()
+    input_tokens: int | None = Field(description="None = unknown (not reported), not zero.")
+    output_tokens: int | None = Field(description="None = unknown (not reported), not zero.")
+    estimated_cost_usd: Decimal | None
+    cost_status: CostStatus
+
+
+class Versions(_Frozen):
+    prompt: str = PROMPT_VERSION
+    policy: str = POLICY_VERSION
+    evidence: str = EVIDENCE_VERSION
+    retriever: str | None
+
+
+class AssistantLatency(_Frozen):
+    understanding_ms: float
+    retrieval_ms: float | None
+    generation_ms: float | None
+    total_ms: float
+
+
+class AssistantResponse(_Frozen):
+    outcome: Outcome
+    notice: str = Field(description="Fixed, server-written explanation of the outcome.")
+    clarification: Clarification | None
+    abstain_reason: AbstainReason | None
+    summary: str | None = Field(
+        description="Model-written and unverified: it may only select and describe retrieved "
+        "products; it never carries prices, numbers or availability."
+    )
+    recommendations: tuple[Recommendation, ...]
+    evidence: tuple[EvidenceProduct, ...] = Field(
+        description="The retrieved catalog records (V3 search results) the answer may cite."
+    )
+    generation: GenerationInfo
+    versions: Versions
+    latency_ms: AssistantLatency
+
+
+class AssistantUnavailable(_Frozen):
+    detail: Literal["assistant unavailable"]

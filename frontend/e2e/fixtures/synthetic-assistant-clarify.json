@@ -1,0 +1,37 @@
+{
+  "outcome": "clarify",
+  "notice": "More detail is needed before searching.",
+  "clarification": {
+    "reason": "conflicting_requirements",
+    "question": "Your request gives conflicting RAM requirements (16, 8). Which one should I use?"
+  },
+  "abstain_reason": null,
+  "summary": null,
+  "recommendations": [],
+  "evidence": [],
+  "generation": {
+    "status": "not_needed",
+    "failure": null,
+    "provider": null,
+    "model": null,
+    "calls": 0,
+    "validation": "not_run",
+    "validation_errors": [],
+    "input_tokens": null,
+    "output_tokens": null,
+    "estimated_cost_usd": null,
+    "cost_status": "not_applicable"
+  },
+  "versions": {
+    "prompt": "asst-prompt-1",
+    "policy": "asst-policy-1",
+    "evidence": "asst-evidence-1",
+    "retriever": null
+  },
+  "latency_ms": {
+    "understanding_ms": 0.5,
+    "retrieval_ms": null,
+    "generation_ms": null,
+    "total_ms": 15.0
+  }
+}

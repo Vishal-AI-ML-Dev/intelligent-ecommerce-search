@@ -7,6 +7,9 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.13",
     "fastapi>=0.115",
+    # Milestone 16: optional Gemini generation adapter (ADR-009). Exact pin; imported only by
+    # generation/gemini_provider.py, and only when ASSISTANT_GENERATION_PROVIDER=gemini.
+    "google-genai==2.32.0",
     "pgvector>=0.5.0",
     "psycopg[binary]>=3.2",
     "pydantic>=2.7",

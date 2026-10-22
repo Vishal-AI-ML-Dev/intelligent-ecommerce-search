@@ -131,3 +131,103 @@ body {
 .product-price {
   font-weight: 600;
 }
+
+/* Milestone 16: section tabs and the shopping assistant. */
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.app-tabs [role='tab'] {
+  padding: 6px 12px;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.app-tabs [role='tab'][aria-selected='true'] {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.input-hint,
+.fact-heading,
+.product-ref {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.input-hint {
+  margin: 0 0 6px;
+}
+
+.assistant-notice,
+.assistant-clarification,
+.assistant-summary {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.assistant-summary {
+  margin: 12px 0;
+}
+
+.assistant-summary figcaption {
+  color: var(--muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.assistant-summary p {
+  margin: 4px 0 0;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 4px 0;
+}
+
+.facts div {
+  display: contents;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.checks {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 0.875rem;
+}
+
+.checks [data-status='failed'] {
+  color: var(--danger);
+}
+
+.checks [data-status='not_checked'] {
+  color: var(--muted);
+}

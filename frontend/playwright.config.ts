@@ -3,8 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Both projects drive the built page as FastAPI serves it (same origin, FRONTEND_DIST_DIR), so
 // the static-serving integration and its Content-Security-Policy are exercised too.
-//   fixture: every /search/** request is answered by the browser from synthetic fixtures; no
-//            request reaches the search API, the database or a model.
+//   fixture: every /search/** and /assistant/** request is answered by the browser from
+//            synthetic fixtures; no request reaches the API, the database or a model.
 //   live:    no mocks; needs the local stack (database, seeded catalog, embeddings, local model
 //            snapshots) configured for the API by the repository's usual settings.
 // Run `npm run build` first. Reports from the two projects are separate by design.
@@ -28,7 +28,11 @@ export default defineConfig({
     screenshot: 'off',
   },
   projects: [
-    { name: 'fixture', testMatch: 'fixture.spec.ts', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'fixture',
+      testMatch: ['fixture.spec.ts', 'assistant-fixture.spec.ts'],
+      use: { ...devices['Desktop Chrome'] },
+    },
     {
       name: 'live',
       testMatch: 'live.spec.ts',

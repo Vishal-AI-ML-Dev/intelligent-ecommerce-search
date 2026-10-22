@@ -565,7 +565,11 @@ def _settings_from(source, tmp_path, monkeypatch, *, key=FAKE_KEY, cls=Settings,
 
 
 def test_secret_fields_are_derived_from_secretstr_annotations():
-    assert _secret_input_names(Settings.model_fields) == {"postgres_password", "typesafe_api_key"}
+    assert _secret_input_names(Settings.model_fields) == {
+        "postgres_password",
+        "typesafe_api_key",
+        "gemini_api_key",
+    }
 
 
 @pytest.mark.parametrize("source", SOURCES)

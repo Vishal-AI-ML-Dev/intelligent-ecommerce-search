@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ecommerce_search.config import Settings
 from ecommerce_search.decision import DecisionProvider
 from ecommerce_search.embeddings.provider import Embedder
+from ecommerce_search.generation import GenerationProvider
 from ecommerce_search.reranking.provider import RerankerProvider
 
 
@@ -43,3 +44,9 @@ def get_reranker(request: Request) -> RerankerProvider | None:
     """The application's single, lazily loaded reranker (used only by /search/reranked; None
     when no models dir is known). Not loaded until a request needs to score candidates."""
     return request.app.state.reranker
+
+
+def get_generation_provider(request: Request) -> GenerationProvider | None:
+    """The assistant's optional generation provider (Milestone 16), or None while generation is
+    off (`ASSISTANT_GENERATION_PROVIDER=none`, the default)."""
+    return request.app.state.generation_provider

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from ecommerce_search import __version__
+from ecommerce_search.api.assistant import router as assistant_router
 from ecommerce_search.api.dense import router as dense_router
 from ecommerce_search.api.filtered import router as filtered_router
 from ecommerce_search.api.health import router as health_router
@@ -27,6 +28,7 @@ from ecommerce_search.decision import DeterministicDecisionProvider
 from ecommerce_search.embeddings.sentence_transformers_provider import (
     SentenceTransformerEmbedder,
 )
+from ecommerce_search.generation import GenerationProvider
 from ecommerce_search.reranking.cross_encoder_provider import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             if app.state.v4_jev_provider is not None:
                 app.state.v4_jev_provider.close()
+            close = getattr(app.state.generation_provider, "close", None)
+            if callable(close):
+                close()
             engine.dispose()
             logger.info("engine disposed")
 
@@ -87,6 +92,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # the first request that needs it (no thread, SDK import or call at start-up).
     v4_config = settings.v4_jev_config()
     app.state.v4_jev_provider = None if v4_config is None else LazyJevProvider(v4_config)
+    # Milestone 16: the assistant's optional generator. None unless explicitly configured.
+    app.state.generation_provider = build_generation_provider(settings)
     app.include_router(health_router)
     app.include_router(search_router)
     app.include_router(dense_router)
@@ -94,9 +101,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(filtered_router)
     app.include_router(reranked_router)
     app.include_router(routed_router)
+    app.include_router(assistant_router)
     if settings.frontend_dist_dir is not None:
         mount_frontend(app, settings.frontend_dist_dir)
     return app
+
+
+def build_generation_provider(settings: Settings) -> GenerationProvider | None:
+    """None while generation is off (the default). The SDK is imported only when a provider is
+    configured; constructing the client performs no I/O and makes no call."""
+    if settings.assistant_generation_provider == "none" or settings.gemini_api_key is None:
+        return None
+    from ecommerce_search.generation.gemini_provider import (
+        GeminiConfig,
+        GeminiGenerationProvider,
+    )
+
+    return GeminiGenerationProvider(
+        GeminiConfig(
+            api_key=settings.gemini_api_key,
+            model=settings.assistant_generation_model,
+            timeout_seconds=settings.assistant_generation_timeout_seconds,
+        )
+    )
 
 
 # Served with the page only; the built bundle has no inline script or style and calls the API
