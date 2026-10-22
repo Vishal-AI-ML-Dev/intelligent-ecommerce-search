@@ -246,7 +246,6 @@ def test_retriever_adapter_reuses_v3_search_and_maps_failures(monkeypatch, make_
         {"gemini_api_key": "bad key"},
         {"assistant_generation_provider": "anthropic", "gemini_api_key": SECRET_KEY},
         {"assistant_generation_model": "https://evil.test/model"},
-        {"assistant_evidence_k": 10, "search_candidate_k": 5},
         {"assistant_input_usd_per_mtok": Decimal("1")},
         {"assistant_generation_max_output_tokens": 100_000},
         {"assistant_generation_timeout_seconds": 0},
@@ -256,3 +255,16 @@ def test_invalid_assistant_settings_fail_without_echoing_the_key(make_settings, 
     with pytest.raises(ValueError) as excinfo:
         make_settings(**overrides)
     assert "bad key" not in str(excinfo.value)
+
+
+def test_evidence_depth_is_capped_by_the_search_candidate_limit(client_for):
+    retriever = FakeRetriever()
+    with client_for(
+        retriever=retriever,
+        assistant_evidence_k=10,
+        search_candidate_k=3,
+        search_default_top_k=3,
+        search_rerank_depth=3,
+    ) as client:
+        client.post(PATH, json={"message": "laptop for coding"})
+    assert retriever.calls == [("laptop for coding", 3)]

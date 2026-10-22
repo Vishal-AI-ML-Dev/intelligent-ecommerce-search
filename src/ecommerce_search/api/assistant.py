@@ -128,7 +128,7 @@ def get_assistant_retriever(
 
 def limits_from(settings: Settings) -> AssistantLimits:
     return AssistantLimits(
-        evidence_k=settings.assistant_evidence_k,
+        evidence_k=min(settings.assistant_evidence_k, settings.search_candidate_k),
         max_output_tokens=settings.assistant_generation_max_output_tokens,
         deadline_seconds=settings.assistant_generation_deadline_seconds,
         input_usd_per_mtok=settings.assistant_input_usd_per_mtok,

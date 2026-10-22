@@ -83,8 +83,9 @@ Changed:
 - `pyproject.toml`, `uv.lock`: `google-genai==2.32.0`
 - `.env.example`: assistant settings (provider `none`, empty key)
 - `tests/unit/conftest.py`: isolates `ASSISTANT_`, `GEMINI_` and `GOOGLE_` variables
-- `tests/unit/search/test_reranked_api.py`: renamed helper; route list includes
-  `/assistant/answer` (the frozen V0–V3 contract digest is unchanged)
+- `tests/unit/search/test_reranked_api.py`, `tests/unit/search/test_filtered_api.py`: renamed
+  helper; route lists include `/assistant/answer` (the frozen V0–V3 contract digests are
+  unchanged)
 - `tests/unit/test_settings.py`: the secret-field set includes `gemini_api_key`
 - `tests/unit/test_frontend_fixture_contract.py`: assistant fixtures checked against the
   Pydantic contract
@@ -104,6 +105,7 @@ Changed:
 | `npm test` (Vitest) | 57 passed (3 files) |
 | `npm run build` | built |
 | `npm run e2e:fixture` (Playwright, mocked API) | 12 passed (6 Search + 6 assistant) |
+| After the CI fix: `uv run python -m pytest tests/unit/search/test_filtered_api.py tests/unit/search/test_hybrid_api.py tests/unit/search/test_reranked_api.py tests/unit/assistant tests/unit/test_settings.py tests/unit/test_app.py tests/unit/test_compose_config.py tests/unit/test_frontend_fixture_contract.py -q -p no:cacheprovider -m "not integration and not real_model"` | 755 passed |
 
 The full local unit suite was not run. CI runs the broad regression; see "CI" below.
 
@@ -145,4 +147,12 @@ The full local unit suite was not run. CI runs the broad regression; see "CI" be
 
 ## CI
 
-Recorded after the push.
+- Run 39811150311 (commit `c58937e`): **failure.** Frontend, fixture Playwright and pgvector
+  integration jobs passed. The backend hermetic unit job failed with 3 failed, 4977 passed,
+  4 skipped. Two causes, both introduced by this milestone:
+  1. A new settings rule (`assistant_evidence_k` <= `search_candidate_k`) made previously valid
+     search configurations invalid (two hybrid/filtered tests use a small candidate limit). The
+     rule was removed; the evidence depth is now capped at `search_candidate_k` when used.
+  2. `test_filtered_api.py` has its own route-list assertion, which now includes
+     `/assistant/answer`. The frozen-contract digest was unchanged.
+- The fix commit and its run are recorded below.

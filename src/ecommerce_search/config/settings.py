@@ -217,7 +217,8 @@ class Settings(BaseSettings):
         default=30, gt=0, le=120, allow_inf_nan=False
     )
     assistant_generation_max_output_tokens: int = Field(default=2048, ge=256, le=4096)
-    # Retrieved records given to the generator (the first V3 results); <= search_candidate_k.
+    # Retrieved records given to the generator (the first V3 results). Capped at
+    # search_candidate_k when used, so it never invalidates an existing search configuration.
     assistant_evidence_k: int = Field(default=5, ge=1, le=10)
     # Optional owner-supplied prices for cost estimates. Unset = cost reported as unknown.
     assistant_input_usd_per_mtok: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
@@ -306,8 +307,6 @@ class Settings(BaseSettings):
             raise ValueError(
                 "gemini_api_key is required when assistant_generation_provider is gemini"
             )
-        if self.assistant_evidence_k > self.search_candidate_k:
-            raise ValueError("assistant_evidence_k must not exceed search_candidate_k")
         if (self.assistant_input_usd_per_mtok is None) != (
             self.assistant_output_usd_per_mtok is None
         ):
