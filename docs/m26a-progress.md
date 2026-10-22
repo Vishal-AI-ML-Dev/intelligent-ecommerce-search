@@ -299,6 +299,27 @@ system has no calibrated "no relevant result" signal.
 | `pytest` frontend fixture-contract, serving and compose-config tests | 45 passed |
 | Ruff | PASS |
 
+### Slice 4 deployment (2026-10-22)
+
+- **Commit:** `88518678c5e3a508dedd6cf0e27e6502e199544f`.
+- **CI:** run `39795620361` passed all four jobs: backend lint + hermetic unit suite, pgvector
+  integration, frontend typecheck/unit/build, fixture Playwright.
+- **Image:** `ecommerce-search:m26a-8851867`, ID `sha256:2082f377515f88557115b870b9d834b05136660d1308a5d5c097cfafa1e1d79e`,
+  label `org.opencontainers.image.revision=88518678…`. Built locally from the committed tree; the
+  only uncommitted files (`docs/m12-…`, `.claude/`) are outside the build context.
+- **Update:** `update.sh` on the EC2 server. It took a backup first
+  (`ecommerce_search-20261022T152613Z.dump`, 608 KB), then recreated only `app`. The database
+  (240 products), the hostname and Caddy were unchanged. No new AWS resource.
+- **Previous image:** `ecommerce-search:m26a-staging-1` (`sha256:3658d892eff6…`), still on the
+  server as the rollback target.
+- **Public checks:**
+  - HTTPS `/health` 200 with a valid certificate.
+  - `live.spec.ts` 1/1 passed.
+  - A temporary browser check against the public URL (not committed) passed 2/2:
+    - `HI`: 10 results, 0 filters, 0 keyword hits, notice shown.
+    - `laptop 8gb 256 ssd`: 10 results, 4 filters, notice hidden.
+    - In both cases the cards equalled the API response, and an `X-Request-Id` was present.
+
 ## Remaining M26A deployment gaps (each needs owner decisions or approval)
 
 AWS account and region; budget and billing alarm; domain or CloudFront URL; always-on or
