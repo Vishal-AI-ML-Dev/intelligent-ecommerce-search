@@ -60,6 +60,15 @@ Provider history in this milestone, recorded for transparency:
   `gemini-3.5-flash-lite` accepts this request shape has not been verified.
 - Models page: `gemini-3.5-flash-lite` is listed as stable with no deprecation date.
 
+## Local live smoke trial result (2026-10-22)
+
+Owner-approved, at most 5 requests, synthetic data. Model access was confirmed by one metadata
+request. 2 generation requests were sent: the first returned a draft that parsed into the
+structured-output schema but failed deterministic validation; the repair request got a provider
+5xx (`server_error`), and the trial stopped. Free-tier status rests on the owner's AI Studio
+check; the API does not expose billing. Details: `docs/m16-progress.md`. The ADR stays
+**Proposed**: one parsed response is not a measurement of quality, latency or cost.
+
 ## Required before any live trial (separate owner approval)
 
 1. Confirm in Google AI Studio that the project is on the free tier with no billing account

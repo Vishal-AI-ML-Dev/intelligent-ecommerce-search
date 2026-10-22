@@ -192,3 +192,35 @@ The full local unit suite was not run. CI runs the broad regression; see "CI" be
 - Run 39813357381 (commit `503cb1d`, the fix): **success.** All 4 jobs passed: backend lint +
   hermetic unit suite, frontend typecheck/unit/build, pgvector integration suite, and fixture
   Playwright against the FastAPI-served build. CI never calls a live generation provider.
+
+## Local live smoke trial (2026-10-22, owner-approved)
+
+Approval: at most 5 generation requests in total including repairs, synthetic records only,
+bounded tokens and timeouts, no paid fallback, stop on any error.
+
+- **Key:** `GEMINI_API_KEY` is in the git-ignored `.env`. Detection was confirmed by the dry run
+  (`key_configured: true`). No part of the key was printed, logged or committed.
+- **Free tier:** the API does not expose whether billing is attached. The free-tier status rests
+  on the owner's check in Google AI Studio. No billing change was made.
+- **Model access:** one metadata request (`models.get`, no generation, outside the 5-request
+  budget) succeeded. `models/gemini-3.5-flash-lite`, version `3.5-flash-lite-07-2026`, supports
+  `generateContent`, has a 1,048,576-token input limit and a 65,536-token output limit, and has
+  thinking enabled.
+- **Trial** (`uv run python scripts/m16_live_smoke.py --confirm-live`, exit 1): **2 of 5
+  requests sent; stopped on a provider error.**
+  - Request 1 (case "dell laptop with 16gb ram under rs 50000"): returned without a provider
+    failure, and its text parsed into the `GroundedDraft` schema (otherwise the adapter would
+    have reported `invalid_response` and the trial would have stopped there). The draft then
+    failed deterministic validation, so the workflow sent one repair.
+  - Request 2 (the repair): the provider returned a 5xx error (`server_error`). The trial
+    stopped as required: no retry, case 2 (synthetic injection-titled record) did not run.
+- **Not recorded, because the script lost them:** the failed check codes of request 1, its token
+  counts and both requests' latencies. The script recorded only per-case results, and the
+  failing repair ended the case. The script now logs every request (failure code, parsed or
+  not, draft outcome and IDs, tokens, latency, and the repair's check codes). That change is
+  covered by a mocked test; no further request was sent.
+- **What this shows:** the key, the model access and one structured-output round trip work
+  (`response_mime_type` + `response_json_schema` with this model). **What it does not show:**
+  that drafts usually pass validation (the one observed draft did not), output quality,
+  faithfulness, injection resistance, latency or cost. This is not M17 evaluation.
+- **Open:** another trial needs new owner approval. The cause of the 5xx is unknown.

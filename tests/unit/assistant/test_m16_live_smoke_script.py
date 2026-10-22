@@ -113,3 +113,16 @@ def test_dry_run_sends_nothing_and_never_prints_the_key(smoke, monkeypatch, caps
     plan = json.loads(out)
     assert plan["dry_run"] is True and plan["key_configured"] is True
     assert "gm-fake-key-not-real" not in out
+
+
+def test_every_request_is_logged_including_the_repair_codes(smoke):
+    quota = GenerationResult(
+        draft=None, failure="server_error", input_tokens=None, output_tokens=None
+    )
+    fake = Fake([bad(), quota])
+    report = smoke.run_trial(smoke.BudgetedProvider(fake), LIMITS)
+    first, second = report["requests"]
+    assert first["structured_output_parsed"] is True and first["repair_of"] is None
+    assert (first["input_tokens"], first["output_tokens"]) == (10, 5)
+    assert second["failure"] == "server_error"
+    assert second["repair_of"] == ["answer_without_products", "summary_empty"]
