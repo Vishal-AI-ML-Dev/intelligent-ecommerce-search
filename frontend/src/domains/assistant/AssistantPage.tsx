@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { type HttpFailure, RequestAborted } from '../../shared/http/client';
 import { askAssistant } from './api';
+import { buildComparison, MAX_COMPARED } from './comparison';
 import type {
   AssistantResponse,
   CitedFact,
@@ -67,7 +68,14 @@ const CHECK_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<ConstraintCheck['status'], string> = {
   passed: 'matches',
   failed: 'does not match',
-  not_checked: 'not checked (not in the catalog record)',
+  not_verified: 'not verified (not given in the catalog)',
+};
+
+const VERIFICATION_LABELS: Record<Recommendation['verification'], string> = {
+  all_verified: 'Every stated requirement matches the catalog data.',
+  not_all_verified:
+    'Not a verified match: some stated requirements are not given in the catalog data.',
+  no_requirements: 'No checkable requirement was stated.',
 };
 
 const plain = (code: string) => code.replaceAll('_', ' ');
@@ -84,7 +92,17 @@ function factText(fact: CitedFact, product: EvidenceProduct | undefined): string
 
 const evidenceAnchor = (product: EvidenceProduct) => `evidence-${product.search_rank}`;
 
-function EvidenceItem({ product }: { product: EvidenceProduct }) {
+function EvidenceItem({
+  product,
+  selected,
+  selectable,
+  onToggle,
+}: {
+  product: EvidenceProduct;
+  selected: boolean;
+  selectable: boolean;
+  onToggle: () => void;
+}) {
   return (
     <li
       className="product-card evidence-item"
@@ -106,7 +124,57 @@ function EvidenceItem({ product }: { product: EvidenceProduct }) {
         {product.rating === null ? 'No rating yet' : `Rated ${product.rating} out of 5`}
       </p>
       <p className="product-availability">{plain(product.availability)}</p>
+      <label className="compare-toggle">
+        <input
+          type="checkbox"
+          checked={selected}
+          disabled={!selected && !selectable}
+          onChange={onToggle}
+          data-testid="compare-toggle"
+        />{' '}
+        Compare E{product.search_rank}
+      </label>
     </li>
+  );
+}
+
+function ComparisonTable({ products }: { products: EvidenceProduct[] }) {
+  const rows = buildComparison(products);
+  return (
+    <section aria-labelledby="comparison-heading" data-testid="comparison">
+      <h2 id="comparison-heading">Comparison</h2>
+      <p className="assistant-notice">
+        Catalog values of the selected retrieved products, side by side. Nothing here is
+        generated; "not given" means the catalog does not state it.
+      </p>
+      <div className="comparison-scroll">
+        <table className="comparison">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              {products.map((product) => (
+                <th scope="col" key={product.product_id}>
+                  E{product.search_rank} · {product.title}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} data-testid="comparison-row" data-label={row.label}>
+                <th scope="row">{row.label}</th>
+                {row.cells.map((cell, i) => (
+                  <td key={products[i]?.product_id ?? i}>
+                    {cell.text}
+                    {cell.note !== null && <span className="comparison-note"> ({cell.note})</span>}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -142,6 +210,13 @@ function RecommendationItem({
           </div>
         ))}
       </dl>
+      <p
+        className="verification"
+        data-testid="verification"
+        data-verification={recommendation.verification}
+      >
+        {VERIFICATION_LABELS[recommendation.verification]}
+      </p>
       {recommendation.constraint_checks.length > 0 && (
         <ul className="checks" aria-label="Requirement checks">
           {recommendation.constraint_checks.map((check) => (
@@ -158,6 +233,16 @@ function RecommendationItem({
 
 function Result({ data }: { data: AssistantResponse }) {
   const byId = new Map(data.evidence.map((product) => [product.product_id, product]));
+  const [compared, setCompared] = useState<string[]>([]);
+  const toggle = (productId: string) =>
+    setCompared((current) => {
+      if (current.includes(productId)) {
+        return current.filter((id) => id !== productId);
+      }
+      return current.length < MAX_COMPARED ? [...current, productId] : current;
+    });
+  // In evidence order, from the evidence of this response only.
+  const comparedProducts = data.evidence.filter((p) => compared.includes(p.product_id));
   const evidenceTitle =
     data.outcome === 'generation_unavailable'
       ? 'Search results (not a recommendation)'
@@ -193,13 +278,25 @@ function Result({ data }: { data: AssistantResponse }) {
       {data.evidence.length > 0 && (
         <section aria-labelledby="evidence-heading">
           <h2 id="evidence-heading">{evidenceTitle}</h2>
+          {data.evidence.length > 1 && (
+            <p className="input-hint" data-testid="compare-hint">
+              Select 2 or {MAX_COMPARED} products to compare their catalog values.
+            </p>
+          )}
           <ol className="product-list" aria-label={evidenceTitle}>
             {data.evidence.map((product) => (
-              <EvidenceItem key={product.product_id} product={product} />
+              <EvidenceItem
+                key={product.product_id}
+                product={product}
+                selected={compared.includes(product.product_id)}
+                selectable={compared.length < MAX_COMPARED}
+                onToggle={() => toggle(product.product_id)}
+              />
             ))}
           </ol>
         </section>
       )}
+      {comparedProducts.length >= 2 && <ComparisonTable products={comparedProducts} />}
     </div>
   );
 }
@@ -208,6 +305,7 @@ export function AssistantPage() {
   const [message, setMessage] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
   const [state, setState] = useState<State>({ phase: 'idle' });
+  const [responseKey, setResponseKey] = useState(0);
   const inFlight = useRef<AbortController | null>(null);
   const inputId = useId();
   const hintId = useId();
@@ -236,6 +334,7 @@ export function AssistantPage() {
       if (inFlight.current !== controller) {
         return; // superseded by a newer request
       }
+      setResponseKey((key) => key + 1);
       setState(
         result.ok ? { phase: 'success', data: result.data } : { phase: 'error', error: result.error },
       );
@@ -289,7 +388,8 @@ export function AssistantPage() {
             {errorMessage(state.error)}
           </p>
         )}
-        {state.phase === 'success' && <Result data={state.data} />}
+        {/* Keyed per response, so a new answer starts with an empty comparison selection. */}
+        {state.phase === 'success' && <Result key={responseKey} data={state.data} />}
       </div>
     </section>
   );

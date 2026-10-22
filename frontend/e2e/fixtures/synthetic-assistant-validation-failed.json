@@ -18,7 +18,11 @@
       "currency": "INR",
       "rating": 4.1,
       "review_count": 12,
-      "availability": "in_stock"
+      "availability": "in_stock",
+      "ram_gb": 16,
+      "storage_gb": 512,
+      "storage_type": "SSD",
+      "storage_interface": "NVME"
     },
     {
       "search_rank": 2,
@@ -32,7 +36,11 @@
       "currency": "INR",
       "rating": null,
       "review_count": null,
-      "availability": "in_stock"
+      "availability": "in_stock",
+      "ram_gb": 8,
+      "storage_gb": 256,
+      "storage_type": "SSD",
+      "storage_interface": null
     },
     {
       "search_rank": 3,
@@ -46,7 +54,11 @@
       "currency": "INR",
       "rating": 4.1,
       "review_count": 12,
-      "availability": "out_of_stock"
+      "availability": "out_of_stock",
+      "ram_gb": null,
+      "storage_gb": null,
+      "storage_type": null,
+      "storage_interface": null
     }
   ],
   "generation": {
@@ -67,8 +79,8 @@
   },
   "versions": {
     "prompt": "asst-prompt-1",
-    "policy": "asst-policy-1",
-    "evidence": "asst-evidence-1",
+    "policy": "asst-policy-2",
+    "evidence": "asst-evidence-2",
     "retriever": "v3_reranked"
   },
   "latency_ms": {

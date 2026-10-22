@@ -39,6 +39,10 @@ def product(pid, brand, price, *, title=None, category="laptop", rank=1, **extra
         rating=extra.get("rating", 4.2),
         review_count=extra.get("review_count", 10),
         availability="in_stock",
+        ram_gb=extra.get("ram_gb"),
+        storage_gb=extra.get("storage_gb"),
+        storage_type=extra.get("storage_type"),
+        storage_interface=extra.get("storage_interface"),
     )
 
 
@@ -212,13 +216,75 @@ def test_valid_draft_renders_facts_from_the_catalog_not_from_model_text():
     assert response.versions.prompt == "asst-prompt-1"
 
 
-def test_constraints_without_a_catalog_field_are_reported_not_checked():
-    generator = FakeGenerator(ok(draft()))
-    response = run("laptop with 16gb ram and 512gb ssd", generator)
+SPEC_EVIDENCE = (
+    product("S1", "Dell", "45000.00", ram_gb=16, storage_gb=512, storage_type="SSD"),
+    product("S2", "Dell", "46000.00"),  # the catalog gives no RAM or storage
+    product("S3", "Dell", "47000.00", ram_gb=8, storage_gb=512, storage_type="SSD"),
+)
+SPEC_MESSAGE = "laptop with 16gb ram and 512gb ssd"
+
+
+def spec_checks(pid):
+    selected = draft(selected=((pid, ("ram_gb", "storage_gb")),))
+    generator = FakeGenerator(ok(selected), ok(selected))  # the second reply serves a repair
+    return run(SPEC_MESSAGE, generator, FakeRetriever(SPEC_EVIDENCE))
+
+
+def test_ram_and_storage_are_verified_on_typed_catalog_fields():
+    response = spec_checks("S1")
+    [recommendation] = response.recommendations
+    checks = {c.field: c.status for c in recommendation.constraint_checks}
+    assert checks == {
+        "category": "passed",
+        "ram_gb": "passed",
+        "storage_gb": "passed",
+        "storage_type": "passed",
+    }
+    assert recommendation.verification == "all_verified"
+    assert [(f.field, f.value) for f in recommendation.facts] == [
+        ("ram_gb", "16"),
+        ("storage_gb", "512"),
+    ]
+
+
+def test_missing_catalog_fields_stay_not_verified_and_never_count_as_verified():
+    response = spec_checks("S2")
+    [recommendation] = response.recommendations
+    checks = {c.field: c.status for c in recommendation.constraint_checks}
+    assert checks["ram_gb"] == checks["storage_gb"] == checks["storage_type"] == "not_verified"
+    assert recommendation.verification == "not_all_verified"
+    assert [f.value for f in recommendation.facts] == [None, None]
+
+
+def test_title_text_is_never_used_as_a_spec_value():
+    titled = (product("T1", "Dell", "45000.00", title="Dell laptop 16GB RAM 512GB SSD"),)
+    generator = FakeGenerator(ok(draft(selected=(("T1", ("title",)),))))
+    response = run(SPEC_MESSAGE, generator, FakeRetriever(titled))
     checks = {c.field: c.status for c in response.recommendations[0].constraint_checks}
-    assert checks["ram_gb"] == "not_checked"
-    assert checks["storage_gb"] == "not_checked"
-    assert checks["storage_type"] == "not_checked"
+    assert checks["ram_gb"] == "not_verified"
+
+
+def test_a_catalog_spec_mismatch_is_a_constraint_violation():
+    response = spec_checks("S3")  # 8 GB RAM in the catalog, 16 requested
+    assert response.outcome == "abstain"
+    assert "constraint_violated" in response.generation.validation_errors
+
+
+def test_no_stated_requirements_is_reported_as_such():
+    response = run("dell laptop", FakeGenerator(ok(draft())))
+    assert response.recommendations[0].verification == "all_verified"  # category + brand passed
+    errors, recommendations = validate_draft(
+        draft(), EVIDENCE, parse_normalized_query("something for coding")
+    )
+    assert errors == () and recommendations[0].verification == "no_requirements"
+
+
+def test_evidence_record_sends_spec_fields_and_nulls_to_the_model():
+    content = build_user_content(SPEC_MESSAGE, SPEC_EVIDENCE)
+    block = content.split("<catalog_data>\n", 1)[1].split("\n</catalog_data>", 1)[0]
+    records = json.loads(block)
+    assert records[0]["ram_gb"] == 16 and records[0]["storage_type"] == "SSD"
+    assert records[1]["ram_gb"] is None
 
 
 def test_cost_is_estimated_only_from_configured_prices():

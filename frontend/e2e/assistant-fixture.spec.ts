@@ -76,6 +76,31 @@ test('grounded answer with evidence references and inert catalog text', async ({
   expectClean(captured);
 });
 
+test('comparison of selected retrieved products, with no new request', async ({ page }) => {
+  const captured = await setup(page, json(assistantFixtures.answer));
+  await ask(page);
+  await expect(page.getByTestId('verification')).toHaveText([
+    'Every stated requirement matches the catalog data.',
+    'Not a verified match: some stated requirements are not given in the catalog data.',
+  ]);
+  const toggles = page.getByTestId('compare-toggle');
+  await toggles.nth(0).check();
+  await toggles.nth(1).check();
+  const comparison = page.getByTestId('comparison');
+  await expect(comparison).toBeVisible();
+  await expect(comparison.locator('tr[data-label="Price"] td')).toHaveText([
+    'INR 45999.00',
+    'INR 1234.50 (lowest)',
+  ]);
+  await expect(comparison.locator('tr[data-label="RAM"] td')).toHaveText([
+    '16 GB (highest)',
+    '8 GB',
+  ]);
+  await expect(comparison.locator('img, script')).toHaveCount(0);
+  expect(captured.bodies).toHaveLength(1); // comparing sent nothing to the server
+  expectClean(captured);
+});
+
 test('clarification question', async ({ page }) => {
   const captured = await setup(page, json(assistantFixtures.clarify));
   await ask(page, 'laptop 8gb ram 16gb ram');

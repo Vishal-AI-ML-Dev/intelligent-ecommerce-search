@@ -46,9 +46,34 @@ POST /assistant/answer {message}
   - `answer` needs products and `abstain` must have none;
   - the summary may not contain digits, price, offer, budget, availability or delivery words,
     links or markup;
-  - explicit constraints are re-checked on catalog fields: category, brand and price bounds.
-    RAM, storage and storage type are not fields of the retrieved record, so they are reported
-    as `not_checked`, never as passed.
+  - explicit constraints are re-checked on catalog fields: category, brand, price bounds, and
+    (since slice 2) RAM, storage capacity, storage type and storage interface by exact equality,
+    as the search filter policy applies them. A field the catalog record does not give is
+    `not_verified`: never passed, never inferred from title or description text. A
+    recommendation with any `not_verified` check is `verification: not_all_verified`, and the UI
+    says "Not a verified match".
+
+## Slice 2 (2026-10-22): RAM/storage evidence and comparison
+
+- **Catalog fields:** authoritative typed fields already exist: `laptop_specs` and
+  `phone_specs` have `ram_gb` and `storage_gb`, and `laptop_specs` also has `storage_type` and
+  `storage_interface`, all nullable. The retriever adapter now reads them for exactly the
+  retrieved product IDs with the new `read_candidate_records` (`search/reranked.py`). It is a
+  by-ID read in its own read-only REPEATABLE READ snapshot that reuses the existing
+  candidate-row read and record validation. No search runs, and no other product is read. The
+  read is separate from the search snapshot, so a catalog change between the two reads is
+  possible but unlikely. A failed or invalid read is a 503, never a guess.
+- **Evidence and prompt:** `EvidenceProduct` and the model's evidence record carry the four
+  fields (null when not given). Selections may cite them. Versions: `asst-policy-2`,
+  `asst-evidence-2`.
+- **Comparison:** the user selects 2–3 retrieved evidence products in the current response,
+  and the UI shows a side-by-side table built only from those catalog values (`comparison.ts`).
+  Missing values show as "not given". A "lowest" price or "highest" rating/RAM/storage note is
+  shown only when at least two known values differ, and never across currencies. No request is
+  sent, nothing is retrieved again, and nothing is generated. It works with generation off.
+- **Live smoke tooling (not run):** `scripts/m16_live_smoke.py` has a hard budget of 5
+  generation requests including repairs, synthetic records only, stop on the first provider
+  failure, and a dry run by default. It sends requests only with `--confirm-live`.
 - **Bounds:** at most 2 generation calls; SDK retries off; 20 s per-request timeout (not a
   wall-clock bound); no repair after 30 s; `max_output_tokens` = 2048.
 - **Telemetry:** one `assistant_answer_completed` log line with codes, counts, token counts
@@ -105,6 +130,12 @@ Changed:
 | `npm test` (Vitest) | 57 passed (3 files) |
 | `npm run build` | built |
 | `npm run e2e:fixture` (Playwright, mocked API) | 12 passed (6 Search + 6 assistant) |
+| Slice 2: `uv run ruff check .`; `uv run ruff format --check .` | All checks passed; 433 files formatted |
+| Slice 2: unit tests for assistant, reranked sources/API, filtered, hybrid, settings, app, compose and the fixture contract | 787 passed |
+| Slice 2: assistant tests after adding the smoke script | 95 passed |
+| Slice 2: `uv run python -m pytest tests/integration/test_assistant_catalog_facts.py -m integration` (local pgvector container; throwaway database) | 2 passed |
+| Slice 2: `npm run typecheck`; `npm test`; `npm run build`; `npm run e2e:fixture` | passed; 65 passed (4 files); built; 13 passed |
+| Slice 2: `uv run python scripts/m16_live_smoke.py` (dry run) | plan printed, `key_configured: false`, no request |
 | After the CI fix: `uv run python -m pytest tests/unit/search/test_filtered_api.py tests/unit/search/test_hybrid_api.py tests/unit/search/test_reranked_api.py tests/unit/assistant tests/unit/test_settings.py tests/unit/test_app.py tests/unit/test_compose_config.py tests/unit/test_frontend_fixture_contract.py -q -p no:cacheprovider -m "not integration and not real_model"` | 755 passed |
 
 The full local unit suite was not run. CI runs the broad regression; see "CI" below.
@@ -135,12 +166,15 @@ The full local unit suite was not run. CI runs the broad regression; see "CI" be
 
 ## Remaining acceptance gaps (MASTER_PLAN Milestone 16)
 
-- **Comparisons** of specific products are not a separate flow yet. Facts are shown side by
-  side, but no deterministic comparison is produced.
-- **The generation-provider ADR is Proposed, not Accepted.** It needs the owner-approved local
-  live trial (ADR-009, "Required before any live trial") and measured quality, latency and cost.
+- ~~Comparisons~~: done in slice 2 as a deterministic comparison of selected retrieved
+  products. Comparison requested in the message text (for example "compare A and B") is not
+  parsed.
+- ~~RAM/storage re-check~~: done in slice 2 on typed catalog fields; missing fields stay
+  `not_verified`.
+- **The generation-provider ADR is Proposed, not Accepted.** The local live smoke trial (max 5
+  requests) waits for the owner to confirm a free-tier key. Even after it, quality, latency and
+  cost are M17 measurements.
 - **Grounded recommendations against a live model** are unverified (limitations 1–3).
-- RAM and storage constraints cannot be re-checked on the retrieved record (`not_checked`).
 - **M17 (not M16):** the human-reviewed answer set; faithfulness, relevance, citation, unsupported-claim,
   constraint, clarification, abstention and false-refusal metrics; prompt-injection and
   malicious-listing suites; measured latency, tokens and cost.

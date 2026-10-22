@@ -23,6 +23,11 @@ export interface EvidenceProduct {
   rating: number | null;
   review_count: number | null;
   availability: string;
+  /** Typed catalog spec fields; null when the catalog does not give them (never inferred). */
+  ram_gb: number | null;
+  storage_gb: number | null;
+  storage_type: string | null;
+  storage_interface: string | null;
 }
 
 export interface CitedFact {
@@ -34,13 +39,14 @@ export interface CitedFact {
 export interface ConstraintCheck {
   field: string;
   requested: string;
-  status: 'passed' | 'failed' | 'not_checked';
+  status: 'passed' | 'failed' | 'not_verified';
 }
 
 export interface Recommendation {
   product_id: string;
   facts: CitedFact[];
   constraint_checks: ConstraintCheck[];
+  verification: 'all_verified' | 'not_all_verified' | 'no_requirements';
 }
 
 export interface GenerationInfo {

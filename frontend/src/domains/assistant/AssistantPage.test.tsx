@@ -73,10 +73,69 @@ describe('AssistantPage', () => {
     expect(first.getByTestId('evidence-ref')).toHaveAttribute('href', '#evidence-1');
     expect(first.getByTestId('evidence-ref')).toHaveTextContent('Evidence E1 · FIXTURE-LAP-101');
     expect(within(cards[1] as HTMLElement).getByText('out of stock')).toBeInTheDocument();
-    const checks = screen.getAllByTestId('constraint-check').map((c) => c.dataset.status);
+    const checks = first.getAllByTestId('constraint-check').map((c) => c.dataset.status);
     expect(checks.every((s) => s === 'passed')).toBe(true);
     expect(screen.getAllByTestId('evidence-item')).toHaveLength(3);
     expect(document.getElementById('evidence-1')).not.toBeNull();
+  });
+
+  it('never presents a product with unverified requirements as a verified match', async () => {
+    respondWith(200, assistantFixtures.answer);
+    render(<AssistantPage />);
+    await ask('dell laptop with 16gb ram under rs 50000');
+    await result();
+    const labels = screen.getAllByTestId('verification');
+    expect(labels.map((l) => l.dataset.verification)).toEqual(['all_verified', 'not_all_verified']);
+    expect(labels[1]).toHaveTextContent('Not a verified match');
+    const second = within(screen.getAllByTestId('recommendation')[1] as HTMLElement);
+    const ram = second
+      .getAllByTestId('constraint-check')
+      .find((c) => c.textContent?.startsWith('RAM'));
+    expect(ram).toHaveAttribute('data-status', 'not_verified');
+    expect(ram).toHaveTextContent('not verified (not given in the catalog)');
+    expect(second.getByText('not given')).toBeInTheDocument();
+  });
+
+  it('compares 2 or 3 selected retrieved products from catalog values only', async () => {
+    const fetchMock = respondWith(200, assistantFixtures.answer);
+    render(<AssistantPage />);
+    const user = userEvent.setup();
+    await ask('dell laptop with 16gb ram under rs 50000');
+    await result();
+    const toggles = screen.getAllByTestId('compare-toggle');
+    await user.click(toggles[0] as HTMLElement);
+    expect(screen.queryByTestId('comparison')).toBeNull(); // one product is not a comparison
+    await user.click(toggles[2] as HTMLElement);
+    const table = within(screen.getByTestId('comparison'));
+    const ram = table.getAllByTestId('comparison-row').find((r) => r.dataset.label === 'RAM');
+    expect(ram).toHaveTextContent('RAM16 GBnot given'); // one known value: no "highest" note
+    await user.click(toggles[1] as HTMLElement);
+    expect(table.getAllByRole('columnheader')).toHaveLength(4);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no new request: nothing is retrieved again
+  });
+
+  it('caps the comparison at 3 and resets the selection for a new answer', async () => {
+    const many = {
+      ...assistantFixtures.answer,
+      evidence: [
+        ...assistantFixtures.answer.evidence,
+        { ...assistantFixtures.answer.evidence[0], product_id: 'FIXTURE-LAP-104', search_rank: 4 },
+      ],
+    };
+    respondWith(200, many);
+    render(<AssistantPage />);
+    const user = userEvent.setup();
+    await ask('dell laptop with 16gb ram under rs 50000');
+    await result();
+    const toggles = screen.getAllByTestId('compare-toggle');
+    for (const toggle of toggles.slice(0, 3)) {
+      await user.click(toggle);
+    }
+    expect(toggles[3]).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Ask' }));
+    await screen.findByTestId('assistant-result');
+    expect(screen.queryByTestId('comparison')).toBeNull();
+    expect(screen.getAllByTestId('compare-toggle').every((t) => !(t as HTMLInputElement).checked)).toBe(true);
   });
 
   it('renders hostile catalog text as inert text', async () => {

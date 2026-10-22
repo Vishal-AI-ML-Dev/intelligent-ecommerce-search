@@ -12,8 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from ecommerce_search.generation.provider import FactField
 
 PROMPT_VERSION = "asst-prompt-1"
-POLICY_VERSION = "asst-policy-1"
-EVIDENCE_VERSION = "asst-evidence-1"
+POLICY_VERSION = "asst-policy-2"
+EVIDENCE_VERSION = "asst-evidence-2"
 
 Outcome = Literal["answer", "clarify", "abstain", "generation_unavailable"]
 ClarifyReason = Literal["conflicting_requirements", "ambiguous_requirement", "no_product_need"]
@@ -45,7 +45,9 @@ class AssistantRequest(_Frozen):
 
 
 class EvidenceProduct(_Frozen):
-    """One retrieved catalog record, exactly as the search API returned it."""
+    """One retrieved catalog record: the search API's display fields plus the typed spec fields
+    of the catalog record. A spec field is None when the catalog does not give it (or the
+    category has no such field); it is never inferred from title or description text."""
 
     search_rank: int
     product_id: str
@@ -59,6 +61,10 @@ class EvidenceProduct(_Frozen):
     rating: float | None
     review_count: int | None
     availability: str
+    ram_gb: int | None = None
+    storage_gb: int | None = None
+    storage_type: str | None = None
+    storage_interface: str | None = None
 
 
 class CitedFact(_Frozen):
@@ -69,8 +75,9 @@ class CitedFact(_Frozen):
 class ConstraintCheck(_Frozen):
     field: ConstraintField
     requested: str
-    status: Literal["passed", "failed", "not_checked"] = Field(
-        description="`not_checked`: the retrieved record has no field to check it against."
+    status: Literal["passed", "failed", "not_verified"] = Field(
+        description="`not_verified`: the catalog record does not give this field, so the "
+        "requirement is neither confirmed nor ruled out."
     )
 
 
@@ -78,6 +85,10 @@ class Recommendation(_Frozen):
     product_id: str
     facts: tuple[CitedFact, ...]
     constraint_checks: tuple[ConstraintCheck, ...]
+    verification: Literal["all_verified", "not_all_verified", "no_requirements"] = Field(
+        description="`all_verified` only when every stated requirement passed on catalog "
+        "fields; `not_all_verified` when any is `not_verified`."
+    )
 
 
 class Clarification(_Frozen):

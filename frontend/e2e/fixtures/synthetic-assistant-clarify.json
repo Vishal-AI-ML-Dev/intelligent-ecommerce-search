@@ -24,8 +24,8 @@
   },
   "versions": {
     "prompt": "asst-prompt-1",
-    "policy": "asst-policy-1",
-    "evidence": "asst-evidence-1",
+    "policy": "asst-policy-2",
+    "evidence": "asst-evidence-2",
     "retriever": null
   },
   "latency_ms": {

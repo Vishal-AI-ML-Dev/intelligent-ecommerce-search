@@ -25,6 +25,10 @@ FactField = Literal[
     "rating",
     "review_count",
     "availability",
+    "ram_gb",
+    "storage_gb",
+    "storage_type",
+    "storage_interface",
 ]
 FACT_FIELDS: tuple[str, ...] = get_args(FactField)
 

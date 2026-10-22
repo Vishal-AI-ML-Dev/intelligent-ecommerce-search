@@ -64,6 +64,10 @@ def evidence_record(product: EvidenceProduct) -> dict[str, object]:
         "rating": product.rating,
         "review_count": product.review_count,
         "availability": product.availability,
+        "ram_gb": product.ram_gb,
+        "storage_gb": product.storage_gb,
+        "storage_type": product.storage_type,
+        "storage_interface": product.storage_interface,
     }
 
 

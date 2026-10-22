@@ -6,6 +6,7 @@ No database, model, network or provider call. Mocked only: not live-provider val
 import json
 import logging
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -17,8 +18,10 @@ from ecommerce_search.api.app import build_generation_provider, create_app
 from ecommerce_search.api.dependencies import get_generation_provider
 from ecommerce_search.api.schemas import RerankedSearchResult
 from ecommerce_search.assistant.retrieval import RetrievalUnavailable
+from ecommerce_search.catalog.taxonomy import StorageType
 from ecommerce_search.generation.gemini_provider import GeminiGenerationProvider
 from ecommerce_search.generation.provider import GenerationResult, GroundedDraft
+from ecommerce_search.reranking.documents import RerankDocumentError
 
 PATH = "/assistant/answer"
 SECRET_KEY = "gm-test-not-a-real-key"  # noqa: S105 - fake test value
@@ -109,6 +112,7 @@ def test_grounded_answer_contract(client_for):
                 {"field": "brand", "requested": "Dell", "status": "passed"},
                 {"field": "max_price", "requested": "50000.00", "status": "passed"},
             ],
+            "verification": "all_verified",
         }
     ]
     assert body["generation"] | {"estimated_cost_usd": None} == {
@@ -126,8 +130,8 @@ def test_grounded_answer_contract(client_for):
     }
     assert body["versions"] == {
         "prompt": "asst-prompt-1",
-        "policy": "asst-policy-1",
-        "evidence": "asst-evidence-1",
+        "policy": "asst-policy-2",
+        "evidence": "asst-evidence-2",
         "retriever": "v3_reranked",
     }
 
@@ -221,14 +225,35 @@ def test_retriever_adapter_reuses_v3_search_and_maps_failures(monkeypatch, make_
 
         return Response()
 
+    record_reads = []
+
+    def fake_records(session, product_ids):
+        record_reads.append((session, list(product_ids)))
+        spec = SimpleNamespace(
+            ram_gb=16, storage_gb=512, storage_type=StorageType.SSD, storage_interface=None
+        )
+        return {"P1": SimpleNamespace(spec=spec)}
+
     monkeypatch.setattr(assistant_api, "run_reranked_search", fake_search)
+    monkeypatch.setattr(assistant_api, "read_candidate_records", fake_records)
     settings = make_settings()
     retriever = assistant_api.RerankedSearchRetriever("session", settings, None, None, "provider")
     retrieval = retriever.retrieve("laptop for coding", 5)
     assert calls[0][:7] == ("session", settings, None, None, "provider", "laptop for coding", 5)
+    assert record_reads == [("session", ["P1"])]  # only the retrieved IDs
     assert retrieval.search_version == "v3_reranked"
-    assert retrieval.products[0].product_id == "P1"
-    assert retrieval.products[0].price == Decimal("45000.00")
+    [evidence] = retrieval.products
+    assert evidence.product_id == "P1" and evidence.price == Decimal("45000.00")
+    assert (evidence.ram_gb, evidence.storage_gb, evidence.storage_type) == (16, 512, "SSD")
+    assert evidence.storage_interface is None
+
+    def failed_records(session, product_ids):
+        raise RerankDocumentError
+
+    monkeypatch.setattr(assistant_api, "read_candidate_records", failed_records)
+    with pytest.raises(RetrievalUnavailable):
+        retriever.retrieve("laptop for coding", 5)
+    monkeypatch.setattr(assistant_api, "read_candidate_records", fake_records)
 
     def unavailable(*args):
         raise HTTPException(503, "search unavailable")

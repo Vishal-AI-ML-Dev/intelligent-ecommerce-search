@@ -30,7 +30,7 @@ counts and the summary are invented; latencies are fixed placeholder values.
 
 | File | Case |
 |---|---|
-| `synthetic-assistant-answer.json` | Answer with 2 suggestions from 3 evidence records; one evidence title contains HTML text to test safe rendering. |
+| `synthetic-assistant-answer.json` | Answer to a 16 GB RAM request with 2 suggestions from 3 evidence records: one all verified, one whose RAM the catalog does not give (`not_verified`). Evidence carries RAM/storage values (one record has none) for the comparison table; one evidence title contains HTML text to test safe rendering. |
 | `synthetic-assistant-clarify.json` | Conflicting RAM requirements; no retrieval. |
 | `synthetic-assistant-no-matches.json` | Abstain: search returned nothing. |
 | `synthetic-assistant-validation-failed.json` | Abstain: the draft failed validation twice (unknown product ID, digit in summary). |

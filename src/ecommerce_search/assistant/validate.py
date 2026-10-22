@@ -1,10 +1,11 @@
 """Deterministic checks of a generated draft (Milestone 16).
 
 What passing means, and what it does not: every selected ID is a retrieved record, cited fields
-exist in the catalog contract, explicit constraints that the record can show (category, brand,
-price bounds) hold on the catalog values, and the summary carries no digits, price, offer,
-availability, link or markup wording. Passing does NOT show that the summary's remaining words
-are supported by the records; faithfulness is evaluated by humans in Milestone 17.
+exist in the catalog contract, explicit constraints hold on the catalog values (category, brand,
+price bounds, and RAM/storage where the catalog gives them; otherwise `not_verified`), and the
+summary carries no digits, price, offer, availability, link or markup wording. Passing does NOT
+show that the summary's remaining words are supported by the records; faithfulness is evaluated
+by humans in Milestone 17.
 """
 
 import re
@@ -43,8 +44,7 @@ def _fact_value(product: EvidenceProduct, field: str) -> str | None:
 def constraint_checks(
     product: EvidenceProduct, understanding: QueryUnderstanding
 ) -> tuple[ConstraintCheck, ...]:
-    """Explicit constraints re-checked against the catalog record. Constraints the record has no
-    field for are reported as `not_checked`, never as passed."""
+    """Explicit constraints re-checked against the catalog record's typed fields."""
     checks: list[ConstraintCheck] = []
     if understanding.category is not None:
         ok = product.category == understanding.category.value
@@ -61,15 +61,31 @@ def constraint_checks(
         checks.append(
             _check("max_price", str(understanding.max_price), price <= understanding.max_price)
         )
-    for field, value in (
+    # Exact equality, as the search filter policy (fp-1) applies these fields. A field the catalog
+    # record does not give stays `not_verified`: never passed, never inferred from text.
+    for field, requested in (
         ("ram_gb", understanding.ram_gb),
         ("storage_gb", understanding.storage_gb),
         ("storage_type", understanding.storage_type),
         ("storage_interface", understanding.attributes.storage_interface),
     ):
-        if value is not None:
-            checks.append(ConstraintCheck(field=field, requested=str(value), status="not_checked"))
+        if requested is None:
+            continue
+        wanted = str(requested)
+        actual = getattr(product, field)
+        if actual is None:
+            checks.append(ConstraintCheck(field=field, requested=wanted, status="not_verified"))
+        else:
+            checks.append(_check(field, wanted, str(actual) == wanted))
     return tuple(checks)
+
+
+def _verification(checks: tuple[ConstraintCheck, ...]) -> str:
+    if not checks:
+        return "no_requirements"
+    if all(check.status == "passed" for check in checks):
+        return "all_verified"
+    return "not_all_verified"
 
 
 def _check(field: str, requested: str, ok: bool) -> ConstraintCheck:
@@ -128,6 +144,7 @@ def validate_draft(
                         for field in selection.relevant_facts
                     ),
                     constraint_checks=checks,
+                    verification=_verification(checks),
                 )
             )
     if errors:

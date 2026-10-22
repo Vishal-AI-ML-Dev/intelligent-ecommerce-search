@@ -171,6 +171,26 @@ def build_candidate_records(
     return records
 
 
+def read_candidate_records(
+    session: Session, product_ids: Sequence[str]
+) -> Mapping[str, CatalogRecord]:
+    """Validated catalog records (core fields plus typed category specs) of exactly
+    `product_ids`, read in one read-only snapshot. Milestone 16 uses it for catalog facts of
+    already-retrieved products: no search runs and no other product is read.
+
+    Database errors propagate after rollback and release; record problems raise
+    `RerankDocumentError` after the transaction ended."""
+    if session.in_transaction():
+        raise RuntimeError("read_candidate_records needs a session without an open transaction")
+    ids = sorted(set(product_ids))
+    if not ids:
+        return MappingProxyType({})
+    with session.begin():
+        session.execute(SNAPSHOT_SQL)  # must be the first statement of the transaction
+        products, specs = _read_candidate_rows(session, ids)
+    return MappingProxyType(build_candidate_records(ids, products, specs))
+
+
 def read_reranked_sources(
     session: Session,
     query: str,

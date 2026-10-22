@@ -27,7 +27,11 @@ function isEvidence(value: unknown): value is EvidenceProduct {
     typeof value.currency === 'string' &&
     isNullableNumber(value.rating) &&
     isNullableNumber(value.review_count) &&
-    typeof value.availability === 'string'
+    typeof value.availability === 'string' &&
+    isNullableNumber(value.ram_gb) &&
+    isNullableNumber(value.storage_gb) &&
+    isNullableString(value.storage_type) &&
+    isNullableString(value.storage_interface)
   );
 }
 
@@ -45,8 +49,9 @@ function isRecommendation(value: unknown): value is Recommendation {
         isRecord(check) &&
         typeof check.field === 'string' &&
         typeof check.requested === 'string' &&
-        ['passed', 'failed', 'not_checked'].includes(check.status as string),
-    )
+        ['passed', 'failed', 'not_verified'].includes(check.status as string),
+    ) &&
+    ['all_verified', 'not_all_verified', 'no_requirements'].includes(value.verification as string)
   );
 }
 

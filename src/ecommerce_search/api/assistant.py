@@ -15,6 +15,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ecommerce_search.api.dependencies import (
@@ -39,8 +40,10 @@ from ecommerce_search.config import Settings
 from ecommerce_search.decision import DecisionProvider
 from ecommerce_search.embeddings.provider import Embedder
 from ecommerce_search.generation import GenerationProvider
+from ecommerce_search.reranking.documents import RerankDocumentError
 from ecommerce_search.reranking.provider import RerankerProvider
 from ecommerce_search.search.query import QueryError, normalize_query
+from ecommerce_search.search.reranked import read_candidate_records
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +73,18 @@ DESCRIPTION = (
 )
 
 
+SPEC_FIELDS = ("ram_gb", "storage_gb", "storage_type", "storage_interface")
+
+
+def _spec_value(record: object, field: str) -> int | str | None:
+    value = getattr(getattr(record, "spec", None), field, None)
+    return None if value is None else value if isinstance(value, int) else str(value)
+
+
 class RerankedSearchRetriever:
-    """Adapts the V3 search entry point to the assistant's retriever interface."""
+    """Adapts the V3 search entry point to the assistant's retriever interface, then reads the
+    typed catalog spec fields (RAM, storage) of exactly the retrieved products. That read is a
+    by-ID catalog lookup in its own read-only snapshot, not a second search."""
 
     def __init__(
         self,
@@ -92,6 +105,12 @@ class RerankedSearchRetriever:
         except HTTPException as exc:
             # Search has already logged its fixed reason code.
             raise RetrievalUnavailable from exc
+        session = self._args[0]
+        try:
+            records = read_candidate_records(session, [r.product_id for r in response.results])
+        except (SQLAlchemyError, RerankDocumentError):
+            logger.error("assistant catalog facts unavailable: catalog_read_failed")
+            raise RetrievalUnavailable from None
         products = tuple(
             EvidenceProduct(
                 search_rank=result.rank,
@@ -106,6 +125,10 @@ class RerankedSearchRetriever:
                 rating=result.rating,
                 review_count=result.review_count,
                 availability=result.availability,
+                **{
+                    field: _spec_value(records.get(result.product_id), field)
+                    for field in SPEC_FIELDS
+                },
             )
             for result in response.results
         )
