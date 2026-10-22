@@ -14,6 +14,7 @@ _ISOLATED_PREFIXES = (
     "RERANKER_",
     "JEV_",
     "TYPESAFE_",
+    "FRONTEND_",
 )
 
 

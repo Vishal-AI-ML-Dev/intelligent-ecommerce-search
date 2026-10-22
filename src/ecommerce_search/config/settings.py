@@ -189,6 +189,23 @@ class Settings(BaseSettings):
     # retries 0 and one call in flight (`v4_jev_config`). Independent of `jev_enabled`.
     search_v4_jev_enabled: bool = False
 
+    # Built Search UI (Milestone 25A, ADR-008). None = API only (no page, no asset route). When
+    # set it must be a Vite build output (`index.html` plus `assets/`), or settings fail: an
+    # explicitly configured frontend is never silently hidden.
+    frontend_dist_dir: Path | None = None
+
+    @field_validator("frontend_dist_dir")
+    @classmethod
+    def _frontend_build(cls, value: Path | None) -> Path | None:
+        if value is None:
+            return None
+        if not (value / "index.html").is_file() or not (value / "assets").is_dir():
+            raise ValueError(
+                "frontend_dist_dir must be a built frontend directory containing index.html and "
+                "assets/ (run `npm run build` in frontend/)"
+            )
+        return value
+
     @field_validator(
         "reranker_batch_size",
         "search_rerank_depth",

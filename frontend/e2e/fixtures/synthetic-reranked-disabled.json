@@ -1,0 +1,214 @@
+{
+  "query": "laptop 8gb 256 ssd",
+  "search_version": "v3_reranked",
+  "document_version": "1",
+  "tsquery": "'laptop' & '8gb' & '256' & 'ssd'",
+  "embedding_model_id": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "embedding_dimension": 384,
+  "embedding_text_version": "1",
+  "distance_metric": "cosine",
+  "fusion": {
+    "method": "rrf",
+    "rrf_k": 100,
+    "rrf_k_status": "provisional",
+    "lexical_k": 50,
+    "dense_k": 50,
+    "candidate_k": 50
+  },
+  "dense_status": "used",
+  "lexical_hit_count": 0,
+  "dense_hit_count": 3,
+  "overlap_count": 0,
+  "fused_count": 3,
+  "candidate_count": 3,
+  "top_k": 10,
+  "result_count": 3,
+  "filter_policy": {
+    "version": "fp-1"
+  },
+  "applied_filters": [
+    {
+      "field": "category",
+      "operator": "eq",
+      "value": "laptop"
+    },
+    {
+      "field": "ram_gb",
+      "operator": "eq",
+      "value": "8"
+    },
+    {
+      "field": "storage_gb",
+      "operator": "eq",
+      "value": "256"
+    },
+    {
+      "field": "storage_type",
+      "operator": "eq",
+      "value": "SSD"
+    }
+  ],
+  "ignored_constraints": [],
+  "query_understanding": {
+    "usage": "filter_source",
+    "provider": "deterministic",
+    "provider_version": "qu-1",
+    "understanding": {
+      "raw_query": "laptop 8gb 256 ssd",
+      "category": "laptop",
+      "brand": null,
+      "ram_gb": 8,
+      "storage_gb": 256,
+      "storage_type": "SSD",
+      "min_price": null,
+      "max_price": null,
+      "semantic_intent": null,
+      "retrieval_strategy": null,
+      "attributes": {
+        "storage_interface": null,
+        "price_preference": null
+      },
+      "parser_version": "qu-1",
+      "lexicon_version": "1",
+      "matched_terms": [
+        {
+          "rule": "category_term",
+          "field": "category",
+          "value": "laptop",
+          "span": {
+            "start": 0,
+            "end": 6,
+            "text": "laptop"
+          }
+        },
+        {
+          "rule": "ram_capacity_paired",
+          "field": "ram_gb",
+          "value": "8",
+          "span": {
+            "start": 7,
+            "end": 10,
+            "text": "8gb"
+          }
+        },
+        {
+          "rule": "storage_capacity_implicit_gb",
+          "field": "storage_gb",
+          "value": "256",
+          "span": {
+            "start": 11,
+            "end": 18,
+            "text": "256 ssd"
+          }
+        },
+        {
+          "rule": "storage_type_term",
+          "field": "storage_type",
+          "value": "SSD",
+          "span": {
+            "start": 15,
+            "end": 18,
+            "text": "ssd"
+          }
+        }
+      ],
+      "ambiguities": [],
+      "conflicts": [],
+      "unresolved": []
+    }
+  },
+  "reranker": {
+    "enabled": false,
+    "status": "disabled",
+    "model_id": "cross-encoder/ms-marco-MiniLM-L6-v2",
+    "model_revision": "233902d25c440f23af6f7d6e94d2946bac0bee0a",
+    "document_version": "rd-1",
+    "max_length": 512,
+    "rerank_depth": 20,
+    "reranked_count": 0,
+    "score_type": "logit"
+  },
+  "latency_ms": {
+    "lexical_ms": 4.845,
+    "model_load_ms": null,
+    "query_embedding_ms": 21.599,
+    "vector_ms": 3.977,
+    "rrf_ms": 0.196,
+    "query_understanding_ms": 0.554,
+    "filter_translation_ms": 0.231,
+    "document_read_ms": null,
+    "reranker_load_ms": null,
+    "rerank_document_ms": null,
+    "reranking_ms": null,
+    "total_ms": 1011.385
+  },
+  "results": [
+    {
+      "rank": 1,
+      "rrf_score": 0.009901,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 1,
+      "dense_score": 0.59,
+      "product_id": "FIXTURE-LAP-0001",
+      "title": "Fixture Alpha 14.0-inch Laptop - 8GB RAM, 256GB SSD",
+      "brand": "Fixturebrand",
+      "category": "laptop",
+      "subcategory": null,
+      "description": "Synthetic fixture product 1.",
+      "price": "43999.00",
+      "currency": "INR",
+      "rating": 4.2,
+      "review_count": 17,
+      "availability": "in_stock",
+      "rrf_rank": 1,
+      "rerank_rank": null,
+      "rerank_score": null
+    },
+    {
+      "rank": 2,
+      "rrf_score": 0.009804,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 2,
+      "dense_score": 0.58,
+      "product_id": "FIXTURE-LAP-0002",
+      "title": "<script>alert('x')</script> Fixture Beta <img src=x onerror=alert(1)> Laptop",
+      "brand": "Fixture & Co",
+      "category": "laptop",
+      "subcategory": null,
+      "description": "Synthetic fixture product 2.",
+      "price": "1234.50",
+      "currency": "INR",
+      "rating": null,
+      "review_count": null,
+      "availability": "in_stock",
+      "rrf_rank": 2,
+      "rerank_rank": null,
+      "rerank_score": null
+    },
+    {
+      "rank": 3,
+      "rrf_score": 0.009709,
+      "lexical_rank": null,
+      "lexical_score": null,
+      "dense_rank": 3,
+      "dense_score": 0.57,
+      "product_id": "FIXTURE-LAP-0003",
+      "title": "Fixture Gamma 14.0-inch Laptop - 8GB RAM, 256GB SSD",
+      "brand": "Fixturebrand",
+      "category": "laptop",
+      "subcategory": null,
+      "description": "Synthetic fixture product 3.",
+      "price": "67999.00",
+      "currency": "INR",
+      "rating": 4.2,
+      "review_count": 17,
+      "availability": "out_of_stock",
+      "rrf_rank": 3,
+      "rerank_rank": null,
+      "rerank_score": null
+    }
+  ]
+}

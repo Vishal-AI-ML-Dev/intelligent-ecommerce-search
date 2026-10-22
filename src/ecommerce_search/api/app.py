@@ -1,8 +1,11 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from ecommerce_search import __version__
 from ecommerce_search.api.dense import router as dense_router
@@ -86,4 +89,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(filtered_router)
     app.include_router(reranked_router)
     app.include_router(routed_router)
+    if settings.frontend_dist_dir is not None:
+        mount_frontend(app, settings.frontend_dist_dir)
     return app
+
+
+# Served with the page only; the built bundle has no inline script or style and calls the API
+# same-origin.
+FRONTEND_PAGE_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; "
+    "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; "
+    "form-action 'self'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+def mount_frontend(app: FastAPI, dist_dir: Path) -> None:
+    """Serve the built Search UI (M25A) same-origin: `GET /` and the hashed `/assets/*` files.
+
+    Registered after every API router and without a catch-all fallback, so no API path, `/docs`
+    or `/openapi.json` is shadowed and unknown paths still return the API's 404.
+    """
+    index = dist_dir / "index.html"
+
+    @app.get("/", include_in_schema=False)
+    def frontend_index() -> FileResponse:
+        return FileResponse(index, media_type="text/html", headers=FRONTEND_PAGE_HEADERS)
+
+    app.mount("/assets", StaticFiles(directory=dist_dir / "assets"), name="frontend-assets")

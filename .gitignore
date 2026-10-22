@@ -36,3 +36,8 @@ data/processed/*
 
 # Keep directory placeholders if added intentionally
 !.gitkeep
+
+# Frontend (M25A): dependencies and Playwright output; the build output is covered by dist/ above
+frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/

@@ -101,8 +101,12 @@ Development is organized milestone by milestone. See
   offline evaluator and a guarded live runner, and append-only decision storage (migration
   `0006`) with a `decide` / `show` command line. A dev-split evaluation on external source
   labels ran; the milestone's human-reviewed evaluation has not. See `docs/m14-progress.md`.
-- M15–M26: not started. This includes policy-risk triage, Buyer RAG, Return Intelligence,
-  human review (HITL) and the dual frontend.
+- M25A (buyer Search UI): **accepted (2026-10-22)** for the M25A scope. Fixture-backed (6/6)
+  and live-stack (1/1) Playwright smoke tests pass locally. Two backend unit failures are
+  recorded as follow-up debt; the full suite is not green. M25B remains. See
+  `docs/m25a-progress.md`.
+- M15–M26 (other than M25A): not started. This includes policy-risk triage, Buyer RAG, Return
+  Intelligence, human review (HITL) and the rest of the dual frontend.
 - M27 (authorized marketplace integration): excluded from the current scope. The original
   milestone definition in `docs/MASTER_PLAN.md` is unchanged.
 
@@ -693,6 +697,31 @@ uv run python -m ecommerce_search.decision.listing_cli show --database <db> --se
 - Every `decide` appends; a Jev failure or invalid response is recorded as a fallback.
 - Verified on synthetic listings and disposable scratch databases with in-process fake
   providers only; the development database has not been migrated to `0006`.
+
+## Search UI (Milestone 25A)
+
+One buyer Search page (React + TypeScript + Vite, ADR-008) over the existing
+`POST /search/reranked`. It contains no search logic and adds no API. The built page is served
+same-origin by the existing FastAPI app only when `FRONTEND_DIST_DIR` is set; unset, the app is
+API-only as before. A set but invalid directory fails settings validation.
+
+Needs Node.js 24 LTS (`frontend/.node-version`) and npm; versions are pinned in
+`frontend/package.json` and `frontend/package-lock.json`.
+
+```bash
+cd frontend
+npm ci
+npm run typecheck && npm test && npm run build
+npx playwright install chromium        # once
+npm run e2e:fixture                    # mocked API (synthetic fixtures), served by FastAPI
+npm run e2e:live                       # live stack: database, seeded catalog, embeddings, models
+cd ..
+FRONTEND_DIST_DIR=frontend/dist uv run uvicorn ecommerce_search.api.app:create_app --factory --port 8000
+```
+
+`npm run dev` serves the page with hot reload and proxies `/search` to `127.0.0.1:8000` (local
+development only). Fixture and live browser results are reported separately; see
+`docs/m25a-progress.md`.
 
 ## `GET /health`
 
