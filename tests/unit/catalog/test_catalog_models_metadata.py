@@ -30,6 +30,12 @@ EXPECTED_TABLES = {
     "listing_normalization_runs",
     "listing_candidates",
     "listing_findings",
+    # Milestone 14 adds exactly four append-only listing-decision history tables (migration 0006;
+    # no JSON, no vector or search column, no non-constraint index).
+    "listing_decision_runs",
+    "listing_decision_proposals",
+    "listing_decision_probabilities",
+    "listing_decision_reasons",
 }
 SEARCH_TABLE = "product_search_documents"
 EMBEDDING_TABLE = "product_embeddings"
