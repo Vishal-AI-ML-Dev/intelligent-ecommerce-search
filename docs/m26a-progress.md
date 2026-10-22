@@ -1,9 +1,18 @@
 # M26A: Search staging demo, progress
 
-Status: **IN PROGRESS.** A single-EC2 staging demo is online at
-<https://intelligent-ecommerce-search.duckdns.org/> (2026-10-22, slice 3). It runs on Free-plan
-credits until cleanup; it is not a permanent URL. A container that works locally is not an online deployment, and M26A stays open until
-an owner-approved deployment passes the online smoke test.
+Status: **ACCEPTED / COMPLETE** (owner, 2026-10-22). This covers the M26A scope under the
+scoped staging amendment: a single-EC2 staging demo at
+<https://intelligent-ecommerce-search.duckdns.org/>, running commit `8851867`.
+
+The acceptance includes the documented limitations:
+
+- one instance, so no high availability;
+- performance measured only for single sequential requests, with no load testing;
+- not production-ready;
+- runs on Free-plan credits until cleanup (target 2027-01-15), so it is not a permanent URL;
+- the managed-stack Terraform (`infra/staging/`) is unapplied.
+
+M26B remains pending.
 Scope: `docs/MASTER_PLAN.md` §28 "M26A" and Milestone 26, applied to the existing core search
 and the M25A page. The owner approved the plan and authorized **local image work only**
 (2026-10-22): no AWS resources, uploads, ECR push, cloud login, Terraform apply or paid calls.
