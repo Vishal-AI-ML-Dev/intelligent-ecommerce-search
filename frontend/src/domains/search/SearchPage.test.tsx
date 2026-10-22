@@ -105,6 +105,39 @@ describe('SearchPage', () => {
     expect(screen.getByTestId('reranker-status')).toHaveAttribute('data-status', status);
     expect(screen.getByText('0 results')).toBeInTheDocument();
     expect(cardIds()).toEqual([]);
+    expect(screen.queryByTestId('similarity-notice')).toBeNull();
+  });
+
+  it('shows the similarity notice when no result is a keyword hit and no filter applied', async () => {
+    respondWith(200, fixtures.similarityOnly);
+    render(<SearchPage />);
+    await search('hello');
+    expect(await screen.findByTestId('similarity-notice')).toHaveTextContent(
+      'Showing similarity-based suggestions. Try a product name or requirement for more specific results.',
+    );
+    expect(cardIds()).toEqual(fixtures.similarityOnly.results.map((r) => r.product_id));
+  });
+
+  it('hides the similarity notice when any result is a keyword hit', async () => {
+    const [first, ...rest] = fixtures.similarityOnly.results;
+    respondWith(200, {
+      ...fixtures.similarityOnly,
+      results: [{ ...first, lexical_rank: 1 }, ...rest],
+    });
+    render(<SearchPage />);
+    await search('hello');
+    await screen.findByText('5 results');
+    expect(screen.queryByTestId('similarity-notice')).toBeNull();
+  });
+
+  it('hides the similarity notice when filters were applied', async () => {
+    expect(fixtures.applied.applied_filters.length).toBeGreaterThan(0);
+    expect(fixtures.applied.results.every((r) => r.lexical_rank === null)).toBe(true);
+    respondWith(200, fixtures.applied);
+    render(<SearchPage />);
+    await search('laptop 8gb 256 ssd');
+    await screen.findByText('5 results');
+    expect(screen.queryByTestId('similarity-notice')).toBeNull();
   });
 
   it('shows a loading state until the response arrives', async () => {
@@ -136,6 +169,7 @@ describe('SearchPage', () => {
     expect(document.body.textContent).not.toContain('private');
     expect(document.body.textContent).not.toContain('search unavailable');
     expect(cardIds()).toEqual([]);
+    expect(screen.queryByTestId('similarity-notice')).toBeNull();
   });
 
   it('shows a network error message', async () => {

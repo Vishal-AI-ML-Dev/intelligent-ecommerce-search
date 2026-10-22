@@ -15,6 +15,7 @@ benchmark or catalog record.
 | `synthetic-reranked-disabled.json` | 3 results in fused order; reranker `disabled`. |
 | `synthetic-reranked-empty.json` | No results; reranker `skipped_no_candidates`. |
 | `synthetic-reranked-no-searchable-text.json` | Query `???`; nothing ran; reranker `skipped_no_searchable_text`. |
+| `synthetic-reranked-similarity-only.json` | M26A: derived from the applied fixture. Query `hello`, no applied filters, no keyword candidate (`lexical_rank` null on every result), so the similarity notice is shown. |
 | `synthetic-503.json` | The fixed 503 body `{"detail": "search unavailable"}`. |
 
 `tests/unit/test_frontend_fixture_contract.py` checks that each file is a valid response of the

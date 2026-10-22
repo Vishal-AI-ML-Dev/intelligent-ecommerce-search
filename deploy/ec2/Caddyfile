@@ -1,0 +1,5 @@
+# Automatic HTTPS (Let's Encrypt) for the DuckDNS hostname in .env; HTTP redirects to HTTPS.
+{$SITE_HOST} {
+	encode zstd gzip
+	reverse_proxy app:8000
+}

@@ -25,6 +25,16 @@ export function errorMessage(error: HttpFailure): string {
   return 'Something went wrong while searching. Please try again.';
 }
 
+// Results exist, none was a keyword candidate and no filter was applied: every result came only
+// from embedding similarity. A display hint only; ranking and results are unchanged.
+export function isSimilarityOnly(data: RerankedSearchResponse): boolean {
+  return (
+    data.results.length > 0 &&
+    data.applied_filters.length === 0 &&
+    data.results.every((result) => result.lexical_rank === null)
+  );
+}
+
 export function SearchPage() {
   const [query, setQuery] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
@@ -110,15 +120,23 @@ export function SearchPage() {
                 No products matched your search. Try different or fewer words.
               </p>
             ) : (
-              <ol className="product-list" aria-label="Search results">
-                {state.data.results.map((result) => (
-                  <ProductCard
-                    key={result.product_id}
-                    result={result}
-                    rerankerApplied={state.data.reranker.status === 'applied'}
-                  />
-                ))}
-              </ol>
+              <>
+                {isSimilarityOnly(state.data) && (
+                  <p className="search-notice" data-testid="similarity-notice">
+                    Showing similarity-based suggestions. Try a product name or requirement for
+                    more specific results.
+                  </p>
+                )}
+                <ol className="product-list" aria-label="Search results">
+                  {state.data.results.map((result) => (
+                    <ProductCard
+                      key={result.product_id}
+                      result={result}
+                      rerankerApplied={state.data.reranker.status === 'applied'}
+                    />
+                  ))}
+                </ol>
+              </>
             )}
           </>
         )}

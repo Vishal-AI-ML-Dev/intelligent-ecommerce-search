@@ -22,6 +22,9 @@ docs/
 evals/
 scripts/
 data/
+!data/seed/catalog_seed_v1.jsonl
+!data/seed/catalog_seed_v1.provenance.json
+infra/
 frontend/node_modules/
 frontend/dist/
 frontend/test-results/

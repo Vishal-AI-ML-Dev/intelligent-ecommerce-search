@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars (git-ignored). No credentials belong here.
+image_tag   = "<full 40-character git commit SHA of the pushed image>"
+alert_email = "<address for the budget alert>"

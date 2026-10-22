@@ -1,0 +1,2 @@
+# Copy to backend.hcl (git-ignored); the bucket name is printed by ./bootstrap.
+bucket = "<state bucket from bootstrap output>"

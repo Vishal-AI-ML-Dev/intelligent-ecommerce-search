@@ -26,6 +26,7 @@ function isSearchResult(value: unknown): value is SearchResult {
     isNullableNumber(value.rating) &&
     isNullableNumber(value.review_count) &&
     typeof value.availability === 'string' &&
+    isNullableNumber(value.lexical_rank) &&
     isNullableNumber(value.rerank_rank) &&
     isNullableNumber(value.rerank_score)
   );
@@ -42,6 +43,7 @@ export function isRerankedSearchResponse(value: unknown): value is RerankedSearc
     typeof value.result_count === 'number' &&
     Array.isArray(value.results) &&
     value.results.every(isSearchResult) &&
+    Array.isArray(value.applied_filters) &&
     typeof reranker.enabled === 'boolean' &&
     RERANKER_STATUS_CODES.some((code) => code === reranker.status) &&
     typeof reranker.rerank_depth === 'number' &&

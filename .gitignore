@@ -41,3 +41,13 @@ data/processed/*
 frontend/node_modules/
 frontend/test-results/
 frontend/playwright-report/
+
+# Terraform (M26A): state, plans, provider caches and local inputs never enter Git.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+infra/**/backend.hcl
+crash.log

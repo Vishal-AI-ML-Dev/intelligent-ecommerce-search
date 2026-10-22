@@ -1,0 +1,84 @@
+# M26A single-EC2 staging demo (docs/m26a-progress.md, "Single-EC2 staging").
+# Copied to /opt/m26a on the instance together with Caddyfile, setup.sh, the scripts and a
+# generated .env (mode 600, never leaves the instance). Only Caddy publishes ports (80/443); the
+# database has no published port and is reachable only on this Compose network.
+name: m26a-search
+
+x-db-env: &db-env
+  APP_ENV: production
+  LOG_LEVEL: INFO
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ecommerce_search
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ecommerce_search
+      POSTGRES_USER: search_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U search_admin -d ecommerce_search"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    mem_limit: 512m
+
+  # One-off: migrations, synthetic seed, embeddings, checks and the SELECT-only API role.
+  # Run only by `sudo ./setup-db.sh`; never started by `up`.
+  setup:
+    image: ${APP_IMAGE:?set in .env}
+    profiles: ["setup"]
+    command: ["sh", "/setup/setup.sh"]
+    volumes:
+      - ./setup.sh:/setup/setup.sh:ro
+    environment:
+      <<: *db-env
+      POSTGRES_USER: search_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set in .env}
+      APP_DB_USER: search_app
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set in .env}
+      SETUP_DB_SSLMODE: disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    image: ${APP_IMAGE:?set in .env}
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      POSTGRES_USER: search_app
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?set in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 1280m
+
+  caddy:
+    image: caddy:2.11.6
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_HOST: ${SITE_HOST:?set in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    mem_limit: 128m
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

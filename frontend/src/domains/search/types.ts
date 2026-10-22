@@ -27,6 +27,8 @@ export interface SearchResult {
   rating: number | null;
   review_count: number | null;
   availability: string;
+  /** Position in the keyword (lexical) candidate list; null when not a keyword candidate. */
+  lexical_rank: number | null;
   rerank_rank: number | null;
   /** Raw cross-encoder logit; null for candidates that were not scored. */
   rerank_score: number | null;
@@ -39,10 +41,19 @@ export interface RerankerBlock {
   reranked_count: number;
 }
 
+/** A hard filter the server applied (canonical strings, for example category eq "laptop"). */
+export interface AppliedFilter {
+  field: string;
+  operator: string;
+  value: string;
+}
+
 export interface RerankedSearchResponse {
   query: string;
   result_count: number;
   results: SearchResult[];
+  /** Empty when no filter was applied. */
+  applied_filters: AppliedFilter[];
   reranker: RerankerBlock;
 }
 

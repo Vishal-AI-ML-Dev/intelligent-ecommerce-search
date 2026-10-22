@@ -33,6 +33,9 @@ COPY --from=builder /app/.venv /app/.venv
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY --from=frontend /frontend/dist ./frontend/dist
+# M26A: the committed synthetic seed catalog (project-authored; provenance file alongside), read
+# by the one-off staging setup task (`catalog ingest` default path). No other data/ file.
+COPY data/seed/catalog_seed_v1.jsonl data/seed/catalog_seed_v1.provenance.json ./data/seed/
 # M26A: only the two pinned registry snapshots (Apache-2.0 model cards) and their manifests, owned
 # by root and read-only for the app user. `model-verify` re-checks them offline inside the image.
 COPY models/manifests ./models/manifests

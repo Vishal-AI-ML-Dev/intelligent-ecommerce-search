@@ -106,6 +106,11 @@ def test_secrets_and_private_data_stay_out_of_the_build_context():
     ignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     for entry in (".git", ".env", ".env.*", ".claude", "data/", "tests/", "frontend/node_modules/"):
         assert entry in ignore
+    # M26A: the only data/ files in the image are the committed synthetic seed and its provenance.
+    assert sorted(line for line in ignore if line.startswith("!data/")) == [
+        "!data/seed/catalog_seed_v1.jsonl",
+        "!data/seed/catalog_seed_v1.provenance.json",
+    ]
 
 
 def test_hybrid_settings_reach_only_the_api_service():

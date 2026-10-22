@@ -11,6 +11,7 @@ import appliedJson from './fixtures/synthetic-reranked-applied.json' with { type
 import disabledJson from './fixtures/synthetic-reranked-disabled.json' with { type: 'json' };
 import emptyJson from './fixtures/synthetic-reranked-empty.json' with { type: 'json' };
 import noSearchableTextJson from './fixtures/synthetic-reranked-no-searchable-text.json' with { type: 'json' };
+import similarityOnlyJson from './fixtures/synthetic-reranked-similarity-only.json' with { type: 'json' };
 
 type JsonShape<T> = T extends string
   ? string
@@ -29,5 +30,6 @@ export const fixtures = {
   disabled: response(disabledJson),
   empty: response(emptyJson),
   noSearchableText: response(noSearchableTextJson),
+  similarityOnly: response(similarityOnlyJson),
   unavailable: unavailableJson satisfies { detail: string },
 };
