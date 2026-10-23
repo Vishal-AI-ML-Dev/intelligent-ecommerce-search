@@ -7,7 +7,8 @@ Usage:
         --annotations PATH --expected-annotations-sha256 HEX \\
         --max-requests N --min-interval-seconds S --out DIR [--confirm-live] \\
         [--input-usd-per-mtok X --output-usd-per-mtok Y --price-source TEXT]
-    uv run python -m evals.assistant judgements --report REPORT.json --judgements FILE.jsonl
+    uv run python -m evals.assistant judgements --report REPORT.json --judgements FILE.jsonl \\
+        [--annotations FILE.json [--provenance FILE.json] [--pending FILE.json] [--markdown]]
     uv run python -m evals.assistant draft --spec SPEC.json --out DIR
 
 `mocked` sends nothing. `live` without `--confirm-live` is a dry run that prints the plan and
@@ -43,7 +44,12 @@ from ecommerce_search.assistant.workflow import AssistantLimits
 from ecommerce_search.generation.provider import GenerationProvider
 from evals.assistant.annotations import AnnotationError, Annotations, load_annotations
 from evals.assistant.contracts import EvalCase, file_sha256, load_cases
-from evals.assistant.judgements import load_judgements, summarize_judgements
+from evals.assistant.judgements import (
+    human_review_report,
+    load_judgements,
+    render_human_review,
+    summarize_judgements,
+)
 from evals.assistant.persist import (
     RUN_ID,
     RunBinding,
@@ -259,10 +265,51 @@ def _live(
     return 0 if complete and report["cases_passed"] == report["cases_scored"] else 1
 
 
+def _bound_sidecar(path: Path | None, report_sha256: str) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    data = json.loads(path.read_text("utf-8"))
+    if data.get("report_sha256") != report_sha256:
+        raise ValueError(f"{path.name} is bound to a different report")
+    return data
+
+
 def _judgements(args: argparse.Namespace) -> int:
     report = json.loads(args.report.read_text("utf-8"))
-    judgements = load_judgements(args.judgements, report, file_sha256(args.report))
-    print(json.dumps(summarize_judgements(judgements, report), indent=2))
+    report_sha256 = file_sha256(args.report)
+    judgements = load_judgements(args.judgements, report, report_sha256)
+    if args.annotations is None:
+        print(json.dumps(summarize_judgements(judgements, report), indent=2))
+        return 0
+    if file_sha256(args.annotations) != report.get("annotations_sha256"):
+        print("refused: annotations are not the ones this run used", file=sys.stderr)
+        return 2
+    annotation_set = json.loads(args.annotations.read_text("utf-8"))
+    if annotation_set["cases_sha256"] != report["cases_sha256"]:
+        print("refused: annotations are bound to a different case file", file=sys.stderr)
+        return 2
+    names = {"known_limitation_diagnostic": "diagnostic", "contract_limitation": "contract"}
+    classes = {
+        a["case_id"]: names.get(a["report_class"], "scored") for a in annotation_set["annotations"]
+    }
+    planned = {name: list(classes.values()).count(name) for name in set(classes.values())}
+    try:
+        provenance = _bound_sidecar(args.provenance, report_sha256)
+        pending = _bound_sidecar(args.pending, report_sha256)
+    except ValueError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
+    summary = human_review_report(
+        judgements,
+        report,
+        classes,
+        provenance=None if provenance is None else provenance["judgements"],
+        pending=pending,
+        planned=planned,
+    )
+    sys.stdout.write(
+        render_human_review(summary) if args.markdown else json.dumps(summary, indent=2) + "\n"
+    )
     return 0
 
 
@@ -380,6 +427,10 @@ def main(
     live.add_argument("--price-source")
     judge.add_argument("--report", type=Path, required=True)
     judge.add_argument("--judgements", type=Path, required=True)
+    judge.add_argument("--annotations", type=Path)
+    judge.add_argument("--provenance", type=Path)
+    judge.add_argument("--pending", type=Path)
+    judge.add_argument("--markdown", action="store_true")
     draft.add_argument("--spec", type=Path, required=True)
     draft.add_argument("--out", type=Path, required=True)
     draft.add_argument("--recapture", action="store_true")

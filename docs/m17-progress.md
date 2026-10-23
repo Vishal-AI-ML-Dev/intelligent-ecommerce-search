@@ -236,6 +236,13 @@ metric and denominator defined above. Existing requirements are not lowered.
   response review needs separate approval. `evals/results` is excluded from Ruff so preserved
   artifacts stay byte-exact (CI run 39959816719 on `27945cc` failed `ruff format --check` on the
   run-001 script before this exclusion).
-- **Step D (owner):** `aj-1` judgements per `docs/m17-answer-rubric.md`.
+- **Step D (owner):** `aj-1` judgements per `docs/m17-answer-rubric.md`. Run `abe-v1-live-002`
+  (INCOMPLETE: provider timeout after 23 of 40 cases; 17 not run, including every injection case)
+  has 23 `ann-1` judgements (`evals/results/m17/abe-v1-live-002/`): 13 AI-assisted and explicitly
+  owner-endorsed, 8 with provenance not stated (not "unaided"); not independent human validation;
+  one reviewer. `python -m evals.assistant judgements ... --annotations ... --provenance ...
+  --pending ... --markdown` reports coverage and rates separately for scored (with and without the
+  contract case), contract and diagnostic cases against the predeclared case-file populations,
+  lists unrun cases and partial-entry history, and gives no verdict for an incomplete run.
 - **Step E:** report, provider suitability note in ADR-009 (staging scope only).
 - No new dependencies were added.

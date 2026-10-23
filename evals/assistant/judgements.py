@@ -152,3 +152,169 @@ def summarize_judgements(
             "responses whose outcome was judged appropriate / responses judged yes or no",
         ),
     }
+
+
+INDEPENDENCE_NOTE = (
+    "AI-assisted, owner-endorsed judgements are not independent human validation; "
+    "'not stated' provenance is not 'unaided'. One reviewer: no agreement is claimed."
+)
+VIEWS = {
+    "scored_excluding_contract": ("scored",),
+    "scored_including_contract": ("scored", "contract"),
+    "contract": ("contract",),
+    "diagnostic": ("diagnostic",),
+}
+
+
+def _provenance_group(text: str | None) -> str:
+    if text is None:
+        return "not_recorded"
+    if text.startswith("AI-assisted"):
+        return "ai_assisted_owner_endorsed"
+    if text.startswith("not stated"):
+        return "not_stated"
+    return "other"
+
+
+def _rate(good: int, bad: int, unsure: int, definition: str) -> dict[str, Any]:
+    return {
+        "numerator": good,
+        "denominator": good + bad,
+        "unsure": unsure,
+        "definition": definition,
+    }
+
+
+def human_review_report(
+    judgements: tuple[AnswerJudgement, ...],
+    report: dict[str, Any],
+    classes: dict[str, str],
+    provenance: dict[str, str] | None = None,
+    pending: dict[str, Any] | None = None,
+    planned: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Human-review coverage and rates per case class for one recorded run.
+
+    `classes` maps every case in the run's case file to `scored`, `contract` or `diagnostic`
+    (from the approved annotations). Every processed case appears exactly once: judged, missing
+    or without a saved response; every unrun case is listed. `planned` gives the predeclared
+    population per class (case-file counts) so any difference is stated, never hidden. No
+    threshold is evaluated here, and an incomplete run never gets a verdict.
+    """
+    by_case = {j.case_id: j for j in judgements}
+    processed = [r["case_id"] for r in report["results"]]
+    if len(set(processed)) != len(processed):
+        raise ValueError("a case appears more than once in the report")
+    unknown = set(processed) - set(classes)
+    if unknown:
+        raise ValueError(f"no class for processed cases {sorted(unknown)}")
+    saved = {r["case_id"]: r.get("recommended", []) for r in report["results"] if not r["error"]}
+    provenance = provenance or {}
+    entries = (pending or {}).get("entries", [])
+    complete = report["stopped"] is None and not report["not_run"]
+
+    def view(names: tuple[str, ...]) -> dict[str, Any]:
+        ids = [c for c in processed if classes[c] in names]
+        judged = [by_case[c] for c in ids if c in by_case]
+        outcome = Counter(j.outcome_appropriate for j in judged)
+        misleading = Counter(j.misleading for j in judged)
+        fits = Counter(p.fit for j in judged for p in j.products)
+        missing = [c for c in ids if c in saved and c not in by_case]
+        groups = Counter(_provenance_group(provenance.get(j.case_id)) for j in judged)
+        planned_n = None if planned is None else sum(planned.get(n, 0) for n in names)
+        return {
+            "planned_cases": planned_n,
+            "processed": len(ids),
+            "saved_responses": sum(c in saved for c in ids),
+            "judged": len(judged),
+            "missing_judgements": missing,
+            "no_saved_response": [c for c in ids if c not in saved],
+            "outcome_appropriate": _rate(
+                outcome["yes"], outcome["no"], outcome["unsure"], "judged yes / judged yes or no"
+            ),
+            "not_misleading": _rate(
+                misleading["no"],
+                misleading["yes"],
+                misleading["unsure"],
+                "judged not misleading / judged yes or no",
+            ),
+            "products": {
+                "recorded": sum(len(saved.get(c, [])) for c in ids),
+                "fits": fits["fits"],
+                "partly_fits": fits["partly_fits"],
+                "does_not_fit": fits["does_not_fit"],
+                "unsure": fits["unsure"],
+                "in_missing_judgements": sum(len(saved[c]) for c in missing),
+                "fits_rate": _rate(
+                    fits["fits"],
+                    fits["partly_fits"] + fits["does_not_fit"],
+                    fits["unsure"],
+                    "products judged fits / products judged fits, partly or does not fit",
+                ),
+            },
+            "provenance": dict(sorted(groups.items())),
+        }
+
+    views = {name: view(names) for name, names in VIEWS.items()}
+    accounted = sum(
+        views[n]["processed"] for n in ("scored_excluding_contract", "contract", "diagnostic")
+    )
+    if accounted != len(processed):
+        raise ValueError("processed cases are not partitioned exactly once")
+    return {
+        "report_sha256_bound": next(iter(by_case.values())).report_sha256 if by_case else None,
+        "run_status": "complete" if complete else "incomplete",
+        "stopped": report["stopped"],
+        "not_run": list(report["not_run"]),
+        "processed_cases": len(processed),
+        "verdict": "none: human thresholds are not evaluated by this summary"
+        + ("" if complete else "; run incomplete"),
+        "population_note": "Rates cover processed cases with saved responses only; the "
+        "predeclared populations (planned_cases) are the case-file counts. Differences come "
+        "from unrun cases and missing judgements, which are listed; populations are not "
+        "changed after seeing results.",
+        "views": views,
+        "partial_entries": {
+            "active": [e["case_id"] for e in entries if "completed" not in e],
+            "history_completed": [e["case_id"] for e in entries if "completed" in e],
+        },
+        "independence": INDEPENDENCE_NOTE,
+    }
+
+
+def render_human_review(summary: dict[str, Any]) -> str:
+    lines = [
+        f"# Human review: {summary['run_status']} run",
+        "",
+        f"Processed cases: {summary['processed_cases']}; not run: {len(summary['not_run'])}. "
+        f"Verdict: {summary['verdict']}.",
+        "",
+        summary["independence"],
+        "",
+        summary["population_note"],
+        "",
+        "| View | Planned | Processed | Judged | Missing | Outcome appropriate | Not misleading "
+        "| Products: fits / partly / does not / unsure / in missing | Provenance |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for name, v in summary["views"].items():
+        o, m, p = v["outcome_appropriate"], v["not_misleading"], v["products"]
+        lines.append(
+            f"| {name} | {v['planned_cases']} | {v['processed']} | {v['judged']} | "
+            f"{len(v['missing_judgements'])} | {o['numerator']}/{o['denominator']} "
+            f"(unsure {o['unsure']}) | {m['numerator']}/{m['denominator']} (unsure "
+            f"{m['unsure']}) | {p['fits']} / {p['partly_fits']} / {p['does_not_fit']} / "
+            f"{p['unsure']} / {p['in_missing_judgements']} of {p['recorded']} | "
+            f"{', '.join(f'{k} {n}' for k, n in v['provenance'].items()) or '—'} |"
+        )
+    missing = [c for v in summary["views"].values() for c in v["missing_judgements"]]
+    active = ", ".join(summary["partial_entries"]["active"]) or "none"
+    history = ", ".join(summary["partial_entries"]["history_completed"]) or "none"
+    lines += [
+        "",
+        f"Missing judgements: {', '.join(sorted(set(missing))) or 'none'}. "
+        f"Active partial entries: {active}; completed (history only): {history}.",
+        "",
+        f"Not run: {', '.join(summary['not_run']) or 'none'}.",
+    ]
+    return "\n".join(lines) + "\n"
