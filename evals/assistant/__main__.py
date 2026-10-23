@@ -5,7 +5,7 @@ Usage:
         [--run-id ID]
     uv run python -m evals.assistant live --run-id ID --cases PATH --expected-sha256 HEX \\
         --annotations PATH --expected-annotations-sha256 HEX \\
-        --max-requests N --min-interval-seconds S --out DIR [--confirm-live] \\
+        --max-requests N --min-interval-seconds S --out DIR [--only IDS.txt] [--confirm-live] \\
         [--input-usd-per-mtok X --output-usd-per-mtok Y --price-source TEXT]
     uv run python -m evals.assistant judgements --report REPORT.json --judgements FILE.jsonl \\
         [--annotations FILE.json [--provenance FILE.json] [--pending FILE.json] [--markdown]]
@@ -21,8 +21,12 @@ approved SHA-256.
 A run with `--out` saves every processed case at once (`responses.jsonl`, saved API responses,
 and `calls.jsonl`, per-call telemetry; `persist.py`), then `report.json`/`report.md` bound to
 their SHA-256 values and `review-sheet.md`. Runs are never merged: a non-empty `--out` is
-refused. `live` needs `--run-id` and refuses uncommitted tracked changes or untracked/ignored
-importable files under src/, evals/ or tests/; the full evaluated commit is recorded.
+refused. `--only IDS.txt` runs a subset of the case file: the whole frozen file and its
+annotations are validated first, then the listed cases run in file order (empty, unknown or
+duplicate IDs are refused); the selection's SHA-256 and IDs are recorded and the report is marked
+as a subset run with no full-dataset verdict. `live` needs `--run-id` and refuses uncommitted
+tracked changes or untracked/ignored importable files under src/, evals/ or tests/; the full
+evaluated commit is recorded.
 `draft` builds an unsealed draft eval set: it captures V3 evidence once from the local database
 and cached models (read-only, offline, no provider), then reuses that frozen capture on every
 rebuild (`--recapture` is refused once reviews exist). It records the owner's decisions from
@@ -98,6 +102,39 @@ def _write(out: Path | None, report: dict[str, Any]) -> str:
     return markdown
 
 
+SUBSET_NOTE = (
+    "subset run: the manifest thresholds were set for the full case-file populations "
+    "(e.g. false refusals <= 3/28); they are not converted or applied to this subset. "
+    "Counts are reported only; no full-dataset verdict."
+)
+
+
+def select_cases(
+    cases: tuple[EvalCase, ...], path: Path | None, cases_sha256: str
+) -> tuple[tuple[EvalCase, ...], dict[str, Any] | None]:
+    """The listed cases in file order, after the whole file has been validated."""
+    if path is None:
+        return cases, None
+    ids = [line.strip() for line in path.read_text("utf-8").splitlines() if line.strip()]
+    if not ids:
+        raise ValueError("the selection is empty")
+    if len(set(ids)) != len(ids):
+        raise ValueError("the selection lists a case more than once")
+    unknown = sorted(set(ids) - {case.case_id for case in cases})
+    if unknown:
+        raise ValueError(f"the selection lists unknown cases {unknown}")
+    chosen = set(ids)
+    selected = tuple(case for case in cases if case.case_id in chosen)
+    return selected, {
+        "selection_file": path.name,
+        "selection_sha256": file_sha256(path),
+        "case_ids": [case.case_id for case in selected],
+        "parent_cases": len(cases),
+        "parent_cases_sha256": cases_sha256,
+        "threshold_applicability": SUBSET_NOTE,
+    }
+
+
 def _out_refusal(out: Path) -> str | None:
     if out.exists() and (not out.is_dir() or any(out.iterdir())):
         return f"output directory {out} exists and is not empty; runs are never merged"
@@ -169,6 +206,11 @@ def _live(
     provenance = provenance_check()
     if refusal is None:
         refusal = _out_refusal(args.out) or _provenance_refusal(provenance)
+    if refusal is None:
+        try:
+            run_cases_, selection = select_cases(cases, args.only, sha256)
+        except ValueError as exc:
+            refusal = str(exc)
     if refusal is not None:
         print(f"refused: {refusal}; no request sent", file=sys.stderr)
         return 2
@@ -196,7 +238,7 @@ def _live(
         "min_interval_seconds": args.min_interval_seconds,
         "note": "harness limits, not provider quotas",
     }
-    generation_cases = sum(case.generation == "on" for case in cases)
+    generation_cases = sum(case.generation == "on" for case in run_cases_)
     settings = settings_factory()
     run_settings = {
         "assistant_generation_model": settings.assistant_generation_model,
@@ -211,9 +253,10 @@ def _live(
         "code_commit": provenance["code_commit"],
         "out": str(args.out),
         "run_settings": run_settings,
-        "cases": len(cases),
+        "cases": len(run_cases_),
         "cases_sha256": sha256,
         "annotations_sha256": args.expected_annotations_sha256,
+        "case_selection": selection,
         "generation_on_cases": generation_cases,
         "max_possible_requests_without_cap": 2 * generation_cases,
         **app_limits,
@@ -233,11 +276,15 @@ def _live(
     writer = RunWriter(
         args.out,
         RunBinding(
-            args.run_id, provenance["code_commit"], sha256, args.expected_annotations_sha256
+            args.run_id,
+            provenance["code_commit"],
+            sha256,
+            args.expected_annotations_sha256,
+            None if selection is None else selection["selection_sha256"],
         ),
     )
     run = run_live(
-        cases,
+        run_cases_,
         provider_factory(settings),
         max_requests=args.max_requests,
         min_interval_seconds=args.min_interval_seconds,
@@ -249,6 +296,7 @@ def _live(
         "code_commit": provenance["code_commit"],
         "code_provenance": provenance,
         "run_settings": run_settings,
+        "case_selection": selection,
     }
     report = _finish(
         args.out,
@@ -292,7 +340,9 @@ def _judgements(args: argparse.Namespace) -> int:
     classes = {
         a["case_id"]: names.get(a["report_class"], "scored") for a in annotation_set["annotations"]
     }
-    planned = {name: list(classes.values()).count(name) for name in set(classes.values())}
+    selection = report.get("case_selection")
+    population = classes if selection is None else {c: classes[c] for c in selection["case_ids"]}
+    planned = {name: list(population.values()).count(name) for name in set(classes.values())}
     try:
         provenance = _bound_sidecar(args.provenance, report_sha256)
         pending = _bound_sidecar(args.pending, report_sha256)
@@ -413,6 +463,7 @@ def main(
         p.add_argument("--annotations", type=Path)
         p.add_argument("--out", type=Path)
         p.add_argument("--run-id", default="mocked")
+        p.add_argument("--only", type=Path)
     live.add_argument("--run-id", required=True)
     live.add_argument("--cases", type=Path, required=True)
     live.add_argument("--expected-sha256", required=True)
@@ -421,6 +472,7 @@ def main(
     live.add_argument("--max-requests", type=int, required=True)
     live.add_argument("--min-interval-seconds", type=float, required=True)
     live.add_argument("--out", type=Path, required=True)
+    live.add_argument("--only", type=Path)
     live.add_argument("--confirm-live", action="store_true")
     live.add_argument("--input-usd-per-mtok")
     live.add_argument("--output-usd-per-mtok")
@@ -453,8 +505,13 @@ def main(
         print(f"refused: {exc}", file=sys.stderr)
         return 2
     annotations_sha256 = None if args.annotations is None else file_sha256(args.annotations)
+    try:
+        selected, selection = select_cases(cases, args.only, sha256)
+    except ValueError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return 2
     writer = None
-    binding: dict[str, Any] = {"run_id": args.run_id}
+    binding: dict[str, Any] = {"run_id": args.run_id, "case_selection": selection}
     if args.out is not None:
         refusal = _out_refusal(args.out)
         if refusal is not None:
@@ -463,9 +520,16 @@ def main(
         provenance = provenance_check()
         binding.update(code_commit=provenance["code_commit"], code_provenance=provenance)
         writer = RunWriter(
-            args.out, RunBinding(args.run_id, provenance["code_commit"], sha256, annotations_sha256)
+            args.out,
+            RunBinding(
+                args.run_id,
+                provenance["code_commit"],
+                sha256,
+                annotations_sha256,
+                None if selection is None else selection["selection_sha256"],
+            ),
         )
-    run = run_cases(cases, on_result=None if writer is None else writer.write)
+    run = run_cases(selected, on_result=None if writer is None else writer.write)
     report = _finish(
         args.out,
         run,

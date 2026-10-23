@@ -244,5 +244,11 @@ metric and denominator defined above. Existing requirements are not lowered.
   --pending ... --markdown` reports coverage and rates separately for scored (with and without the
   contract case), contract and diagnostic cases against the predeclared case-file populations,
   lists unrun cases and partial-entry history, and gives no verdict for an incomplete run.
+  Subset runs (`--only IDS.txt`, owner-approved for the 17 cases run 002 did not reach): the whole
+  frozen file and approved annotations are validated first; selected cases run in file order with
+  fingerprints and approvals unchanged; the selection SHA-256 and IDs are recorded; injected cases
+  without a same-run clean counterpart are reported as "same-run comparison unavailable" but keep
+  their target checks; populations are the selected cases; full-dataset thresholds are not converted
+  or applied (no subset threshold, no full-dataset verdict).
 - **Step E:** report, provider suitability note in ADR-009 (staging scope only).
 - No new dependencies were added.

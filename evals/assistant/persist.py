@@ -34,6 +34,7 @@ class RunBinding:
     code_commit: str
     cases_sha256: str
     annotations_sha256: str | None
+    selection_sha256: str | None = None
 
 
 def classify_status(lines: list[str]) -> dict[str, list[str]]:
@@ -86,7 +87,8 @@ class RunWriter:
             os.fsync(handle.fileno())
 
     def write(self, result: CaseResult) -> None:
-        binding = asdict(self.binding)
+        binding = {k: v for k, v in asdict(self.binding).items() if v is not None}
+        binding.setdefault("annotations_sha256", None)
         response = None if result.response is None else result.response.model_dump(mode="json")
         record = {
             "format": RESPONSES_VERSION,
