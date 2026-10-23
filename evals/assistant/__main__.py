@@ -10,6 +10,8 @@ Usage:
     uv run python -m evals.assistant judgements --report REPORT.json --judgements FILE.jsonl \\
         [--annotations FILE.json [--provenance FILE.json] [--pending FILE.json] [--markdown]]
     uv run python -m evals.assistant draft --spec SPEC.json --out DIR
+    uv run python -m evals.assistant claims --run-dir RUN --cases CASES --spec SPEC --out DIR \
+        [--adjudications FILE]
 
 `mocked` sends nothing. `live` without `--confirm-live` is a dry run that prints the plan and
 sends nothing; with it, it sends real provider requests and is run only with explicit owner
@@ -363,6 +365,36 @@ def _judgements(args: argparse.Namespace) -> int:
     return 0
 
 
+def _claims(args: argparse.Namespace) -> int:
+    """Post-hoc unsupported-claims extraction for one run (`claims.py`); never pools runs."""
+    from evals.assistant.claims import extract, load_adjudications, summarize
+
+    refusal = _out_refusal(args.out)
+    if refusal is not None:
+        print(f"refused: {refusal}", file=sys.stderr)
+        return 2
+    if not (args.run_dir / "responses.jsonl").exists():
+        print("refused: this run has no saved responses; measurement unavailable", file=sys.stderr)
+        return 2
+    cases = {case.case_id: case for case in load_cases(args.cases)}
+    spec = json.loads(args.spec.read_text("utf-8"))
+    claims, omissions, binding = extract(args.run_dir, cases, spec)
+    args.out.mkdir(parents=True, exist_ok=True)
+    claims_path = args.out / "claims.uc-1.jsonl"
+    lines = "".join(json.dumps(c, ensure_ascii=False) + "\n" for c in claims)
+    claims_path.write_text(lines, "utf-8", newline="\n")
+    lines = "".join(json.dumps(o, ensure_ascii=False) + "\n" for o in omissions)
+    (args.out / "omissions.jsonl").write_text(lines, "utf-8", newline="\n")
+    claims_sha256 = file_sha256(claims_path)
+    adjudications = load_adjudications(args.adjudications, claims_sha256)
+    summary = summarize(claims, omissions, adjudications, binding)
+    summary["claims_sha256"] = claims_sha256
+    text = json.dumps(summary, indent=2) + "\n"
+    (args.out / "claims-summary.json").write_text(text, "utf-8", newline="\n")
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def _draft(args: argparse.Namespace) -> int:
     from evals.assistant.annotations import affects_eligibility
     from evals.assistant.draft import (
@@ -458,6 +490,12 @@ def main(
     live = sub.add_parser("live")
     judge = sub.add_parser("judgements")
     draft = sub.add_parser("draft")
+    claims = sub.add_parser("claims")
+    claims.add_argument("--run-dir", type=Path, required=True)
+    claims.add_argument("--cases", type=Path, required=True)
+    claims.add_argument("--spec", type=Path, required=True)
+    claims.add_argument("--out", type=Path, required=True)
+    claims.add_argument("--adjudications", type=Path)
     for p in (parser, mocked):
         p.add_argument("--cases", type=Path, default=DEFAULT_CASES)
         p.add_argument("--annotations", type=Path)
@@ -497,6 +535,8 @@ def main(
         return _judgements(args)
     if args.command == "draft":
         return _draft(args)
+    if args.command == "claims":
+        return _claims(args)
     cases = load_cases(args.cases)
     sha256 = file_sha256(args.cases)
     try:

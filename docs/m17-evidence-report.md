@@ -51,7 +51,7 @@ of them (`g02`, `f01`, `f03`) are generation failures, so their answer quality w
 | Abstention: deterministic · model cohort | 4/4 · **1/2** | 4/4 · **1/2** | — | — |
 | Tokens in / out | 25,115 / 3,704 | 8,781 / 1,379 | 692 / 170 | 13,522 / 1,974 |
 | Provider call p50 / max | 2.5 s / 13.0 s | 13.8 s / 17.6 s | 1.5 s / 20.2 s | 1.6 s / 7.0 s |
-| Cost | unknown (no prices configured; nothing billed claimed) | unknown | unknown | unknown |
+| Cost | see Cost section: paid-equivalent estimate only; billing not verified | partial estimate | partial estimate | estimate |
 
 Hard gates in the freeze manifest (0 displayed prose, 0 invalid citations, 0 failed
 server-checked requirements, 0 generation-unavailable in a complete run) were met by run 001,
@@ -71,6 +71,35 @@ Outcome "no" cases: `g02`, `f01`, `f03` (generation failed; fallback honestly la
 `f04`, `f06` (stated use not established), `u01` (unrecognised category asked again), `c05`
 (range unsupported), `c03` (diagnostic: compatible upper bounds called conflicting). Human
 thresholds in the manifest are **not evaluated**: no complete run has human review.
+
+## Cost (sourced, offline; recorded 2026-10-23)
+
+Source: Google, "Gemini Developer API pricing", https://ai.google.dev/gemini-api/docs/pricing,
+accessed 2026-10-23 (page "Last updated 2026-10-22 UTC"). Model `gemini-3.5-flash-lite`,
+Standard pricing, single tier (no context-length tiers listed):
+
+- **Published free-tier price:** input and output "Free of charge" (free-tier content may be
+  used by Google to improve its products).
+- **Paid-tier list price** (basis for the paid-equivalent estimate only): input USD 0.30 per
+  1M tokens (text); output USD 2.50 per 1M tokens, "including thinking tokens". The recorded
+  output counts already include thinking tokens (the adapter adds them).
+- **Actual billing: not verified.** No billing or account data was read. The runs used the free
+  tier (ADR-009); nothing billed is claimed.
+- **Historical applicability:** the page shows its update date, not the price in force at each
+  run time; the runs took place on 2026-10-23, after that update, but the price in force then is
+  not independently verified.
+
+Paid-equivalent estimate = recorded input tokens × 0.30/1M + recorded output tokens × 2.50/1M,
+per run, never pooled. Missing usage stays unknown, not zero.
+
+| Run | Calls | Recorded input / output tokens | Calls without usage | Paid-equivalent estimate (USD) |
+|---|---|---|---|---|
+| 001 | 29 | 25,115 / 3,704 | 0 | 0.0167945 |
+| 002 | 12 | 8,781 / 1,379 | 1 (`f01` timeout) | **partial:** 0.0060818 for 11 calls; run total unknown |
+| 003 | 2 | 692 / 170 | 1 (`f03` timeout) | **partial:** 0.0006326 for 1 call; run total unknown |
+| 004 | 15 | 13,522 / 1,974 | 0 | 0.0089916 |
+
+Whether failed (timed-out) calls would be billed on the paid tier is unknown.
 
 ## Known limitations
 
@@ -100,12 +129,12 @@ thresholds in the manifest are **not evaluated**: no complete run has human revi
 | Abstention accuracy | **Met as measured; failures reported** | deterministic 4/4; model cohort 1/2 (`u01` known failure) |
 | Latency | **Partial** | Provider call time per run; workflow times pacing-contaminated; no API latency under load |
 | Token usage | **Met** | Provider-reported per call; missing counts for failed calls listed |
-| Cost | **Unmet** | No prices configured; reported as unknown in every run, nothing billed claimed |
+| Cost | **Partial** | Sourced paid-equivalent estimates per run (runs 002/003 partial: missing usage); free tier published as free; actual billing not verified |
 | Prompt-injection tests | **Partial** | 6 message injections: 0/6 targets selected in runs 001 and 004; single runs, fixed evidence; run 004 same-run pair only for `m06` |
 | Malicious listing-content tests | **Partial** | 6 listing injections: 0/6 targets in runs 001 and 004; same caveats; run 004 same-run pair only for `l04` |
 | False-refusal tests | **Partial** | 0 refusals in every run, but `f01`, `f03` ended as generation failures (timeouts) in runs 002/003 |
 | Report failures honestly | **Met** | Incomplete runs, 3 provider failures (2 timeouts, origin unknown; 1 invalid_response), known limitations and all exclusions reported |
-| §5 measured provider selection (moved to M17) | **Unmet** | Quality and latency measured; cost not; no ADR records a measured selection |
+| §5 measured provider selection (moved to M17) | **Unmet** | Quality and latency measured; cost estimated (sourced, billing unverified); no ADR records a measured selection |
 | Frozen human thresholds (manifest) | **Not evaluated** | Required population (one complete run's responses, human-reviewed) does not exist |
 
 ## Acceptance gaps, checked against the exact rules
@@ -126,10 +155,13 @@ No gate is added here and no approved threshold is waived.
 2. **Measured provider selection (MASTER_PLAN §5).** "is selected in its milestone through an ADR
    from measured quality, latency, and cost; … for M16 the measured quality, latency and cost
    selection of the Gemini provider is moved to M17 … The measurement requirement itself is
-   unchanged and not yet met." Quality and latency are measured; cost is not; no ADR records a
-   measured selection. **Unmet.**
+   unchanged and not yet met." Quality and latency are measured; cost now has a sourced
+   paid-equivalent estimate (billing unverified); no ADR records a measured selection. **Unmet**
+   (the ADR step remains).
 3. **Cost (MASTER_PLAN M17 "Measure: … cost"; evaluation list "latency, tokens, and cost").**
-   Reported as unknown in every run (no operator-supplied price with a stated source). **Unmet.**
+   Sourced paid-equivalent estimates recorded per run (see Cost); runs 002 and 003 are partial
+   (missing usage); actual billing not verified. **Partially met**; whether an estimate satisfies
+   "measure cost" is an owner decision.
 4. **Unsupported-claim rate (MASTER_PLAN M17 "Measure: … unsupported-claim rate").** No metric with
    that definition was predeclared or reported; only proxies exist (0 displayed model/seller prose;
    human "misleading" verdicts). **Unmet as a defined measurement.**
