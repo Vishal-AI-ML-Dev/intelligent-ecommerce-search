@@ -123,6 +123,7 @@ def test_every_request_is_logged_including_the_repair_codes(smoke):
     report = smoke.run_trial(smoke.BudgetedProvider(fake), LIMITS)
     first, second = report["requests"]
     assert first["structured_output_parsed"] is True and first["repair_of"] is None
+    assert first["draft"] == {"outcome": "answer", "selected": [], "summary": ""}
     assert (first["input_tokens"], first["output_tokens"]) == (10, 5)
     assert second["failure"] == "server_error"
     assert second["repair_of"] == ["answer_without_products", "summary_empty"]

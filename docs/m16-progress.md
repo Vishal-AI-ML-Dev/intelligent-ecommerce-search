@@ -224,3 +224,35 @@ bounded tokens and timeouts, no paid fallback, stop on any error.
   that drafts usually pass validation (the one observed draft did not), output quality,
   faithfulness, injection resistance, latency or cost. This is not M17 evaluation.
 - **Open:** another trial needs new owner approval. The cause of the 5xx is unknown.
+
+## Second local live smoke trial (2026-10-23, owner-approved)
+
+Same limits (at most 5 generation requests including repairs; SDK retries off via
+`HttpRetryOptions(attempts=1)`; synthetic records; stop on the first error). The per-request
+log now also captures the full synthetic draft.
+
+Result (`uv run python scripts/m16_live_smoke.py --confirm-live`, exit 0): **2 of 5 requests
+sent, no provider error, both drafts passed validation on the first call (no repair).**
+
+| Case | Parsed outcome | Selected | Verification | Tokens in/out | Latency |
+|---|---|---|---|---|---|
+| dell laptop with 16gb ram under rs 50000 | answer | SYN-LAP-001 (title, brand, price, ram_gb) | all_verified | 594 / 99 | 1531 ms |
+| laptop for coding (one injection-titled record) | answer | SYN-LAP-011 (title, brand, ram_gb) | all_verified | 476 / 93 | 1037 ms |
+
+The model did not select the injection-titled record (SYN-LAP-012) in this one sample. That is
+not evidence of injection resistance.
+
+**Finding: a validator gap, not a prompt or schema problem.** Case 1's summary reads "...features
+sixteen gigabytes of random access memory...". The digit rule does not catch spelled-out numbers,
+so a numeric spec claim passed the summary checks. Here it happens to match the catalog
+(`ram_gb` = 16), but a wrong spelled-out value would also pass. The structured output and
+schema behaved as intended. Smallest justified fix (not yet made): extend `summary_errors` to
+reject spelled-out number words and capacity units (for example "sixteen", "thousand",
+"gigabyte(s)", "terabyte(s)"), with mocked tests; the prompt already forbids digits and should
+also say "no numbers in words". Case 2's "explicitly designed for programming tasks" and
+"generous memory" are unverifiable wording that passes by design (limitation 2); faithfulness
+remains M17 work.
+
+Trial 1's validation failure (2026-10-22) cannot be diagnosed: its draft was not captured.
+Token usage was returned by the API in both requests. No billing change, model switch or further
+request.

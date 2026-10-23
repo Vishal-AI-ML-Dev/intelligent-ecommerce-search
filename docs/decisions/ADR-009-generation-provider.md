@@ -69,6 +69,10 @@ structured-output schema but failed deterministic validation; the repair request
 check; the API does not expose billing. Details: `docs/m16-progress.md`. The ADR stays
 **Proposed**: one parsed response is not a measurement of quality, latency or cost.
 
+A second approved trial (2026-10-23) sent 2 requests; both parsed and passed validation without
+repair (594/99 and 476/93 tokens, 1.5 s and 1.0 s). It exposed a validator gap (spelled-out
+numbers pass the summary checks). Still Proposed: two samples are not a measurement.
+
 ## Required before any live trial (separate owner approval)
 
 1. Confirm in Google AI Studio that the project is on the free tier with no billing account

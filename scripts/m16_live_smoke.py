@@ -134,6 +134,8 @@ class BudgetedProvider:
                 "structured_output_parsed": draft is not None,
                 "draft_outcome": None if draft is None else draft.outcome,
                 "draft_selected": None if draft is None else [s.product_id for s in draft.selected],
+                # The full draft (model text about synthetic records only), for diagnosis.
+                "draft": None if draft is None else draft.model_dump(mode="json"),
                 "input_tokens": result.input_tokens,
                 "output_tokens": result.output_tokens,
                 "ms": round((time.perf_counter() - started) * 1000, 1),
