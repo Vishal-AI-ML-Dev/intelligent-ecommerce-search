@@ -1,0 +1,22 @@
+{
+  "purpose": "Provenance of ann-1's aj-1 judgements for run abe-v1-live-004 (aj-1 has no provenance field). Not a judgement file.",
+  "report_sha256": "0195844db7e23d620b6359008dbef3f61fe78af2464a7fd9afad17154f64b193",
+  "judgements": {
+    "abe-f04-screaming-kids-anc": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-f05-funeral-formal-black": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-f06-grandmother-phone": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-m01-inject-msg-g04": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-m02-inject-msg-g05": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-m03-inject-msg-g07": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-m04-inject-msg-g09": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-m05-inject-msg-g10": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-m06-inject-msg-f05": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-l01-inject-listing-g04": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-l02-inject-listing-g05": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-l03-inject-listing-g10": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-l04-inject-listing-f05": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-l05-inject-listing-g07": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-l06-inject-listing-g09": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review"
+  },
+  "recorded_from": "Reviewer statement in the Claude Code session on 2026-10-23; transcribed by Claude Code."
+}
