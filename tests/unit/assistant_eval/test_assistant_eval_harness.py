@@ -1,4 +1,4 @@
-"""Milestone 17 groundwork: the mocked assistant evaluation harness (`evals/assistant`).
+"""Milestone 17: the mocked assistant evaluation harness (`evals/assistant`).
 
 The mutation tests hand-corrupt a good workflow response and require the named check to fail,
 so the checks are shown to catch bad responses rather than to agree with the rendering code.
@@ -40,10 +40,11 @@ def with_recommendation(response, **update):
 
 
 def test_every_synthetic_case_passes_and_none_is_human_reviewed():
-    results = run_cases(tuple(CASES.values()))
+    results = run_cases(tuple(CASES.values())).results
     assert [r.case.case_id for r in results if not r.passed] == []
     assert {case.authorship for case in CASES.values()} == {"synthetic_test_fixture"}
-    assert {case.review_status for case in CASES.values()} == {"not_reviewed"}
+    assert {case.split for case in CASES.values()} == {"dev"}
+    assert all(case.case_review is None for case in CASES.values())
     tags = {tag for case in CASES.values() for tag in case.tags}
     assert {"prompt_injection", "malicious_listing", "false_refusal"} <= tags
 
@@ -51,7 +52,8 @@ def test_every_synthetic_case_passes_and_none_is_human_reviewed():
 def test_cli_reports_mocked_scope_and_writes_files(tmp_path, capsys):
     assert main(["--out", str(tmp_path)]) == 0
     report = json.loads((tmp_path / "report.json").read_text("utf-8"))
-    assert report["mode"] == "mocked" and report["human_reviewed_cases"] == 0
+    assert report["mode"] == "mocked" and report["case_reviews_recorded"] == {}
+    assert report["metrics"]["faithfulness_human"] == {"kind": "human", "status": "pending"}
     assert report["latency"] == report["tokens"] == report["cost"] == "not_measured_mocked"
     assert "not live-model faithfulness" in capsys.readouterr().out
 
@@ -198,8 +200,11 @@ def test_report_lists_failures_honestly():
     results = run_cases(
         (CASES["grounded-dell-under-budget"], _variant("model-abstains", expect=wrong))
     )
-    report = build_report(results)
-    assert report["cases_passed"] == 1 and report["checks"]["outcome"] == "1/2"
+    report = build_report(results, cases_sha256="0" * 64)
+    assert report["cases_passed"] == 1
+    assert report["checks"]["outcome"] == {"kind": "expectation", "passed": 1, "total": 2}
+    assert report["metrics"]["false_refusal_rate"]["numerator"] == 1
+    assert report["metrics"]["false_refusal_rate"]["denominator"] == 2
     assert report["failures"][0]["case_id"] == "model-abstains"
     assert "model-abstains / outcome" in render_markdown(report)
 
@@ -213,11 +218,29 @@ def _record(**update):
     return record
 
 
-def test_no_case_can_claim_human_review():
+def test_no_case_can_claim_review_without_a_recorded_review():
     with pytest.raises(ValidationError):
         EvalCase.model_validate(_record(review_status="human_reviewed"))
     ai = EvalCase.model_validate(_record(authorship="ai_authored", author="notion-ai"))
-    assert ai.review_status == "not_reviewed"
+    assert ai.case_review is None
+
+
+def test_a_reviewed_ai_authored_case_keeps_ai_authorship():
+    review = {"reviewer_handle": "ann-1", "reviewed_on": "2026-10-23", "decision": "revised"}
+    case = EvalCase.model_validate(
+        _record(authorship="ai_authored", author="claude-code", case_review=review)
+    )
+    assert case.authorship == "ai_authored" and case.case_review.reviewer_handle == "ann-1"
+    with pytest.raises(ValidationError):  # fixtures are never reviewed cases
+        EvalCase.model_validate(_record(case_review=review))
+    with pytest.raises(ValidationError):  # handles have a fixed pseudonymous form
+        EvalCase.model_validate(
+            _record(
+                authorship="ai_authored",
+                author="x",
+                case_review={**review, "reviewer_handle": "Vishal"},
+            )
+        )
 
 
 @pytest.mark.parametrize(

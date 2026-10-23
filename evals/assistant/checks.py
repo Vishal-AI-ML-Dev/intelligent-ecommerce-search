@@ -1,4 +1,4 @@
-"""Deterministic checks of one assistant response against an `aq-1` case (Milestone 17 groundwork).
+"""Deterministic checks of one assistant response against an `aq-2` case (Milestone 17).
 
 Each check reads the response and the case (its hand-written expectations and raw catalog
 records) only. None calls the assistant's own validation or rendering code, so a check cannot
@@ -7,8 +7,11 @@ pass merely because the code under test agrees with itself.
 Recommendations and displayed evidence are checked separately: a product may have to stay
 visible as a search result while never being recommended.
 
-Passing these checks on mocked provider output describes harness and workflow behaviour. It says
-nothing about a live model's faithfulness, relevance or prompt-injection resistance.
+Each check has a kind (`CHECK_KINDS`): `structural` (shape and bounds of the response),
+`catalog_factual` (displayed values equal the raw catalog records) or `expectation` (agreement
+with the case author's hand-written expectations). None of them is a semantic judgement: they do
+not prove faithfulness or relevance, which need human judgements (`judgements.py`). Passing on
+mocked provider output describes harness and workflow behaviour only.
 """
 
 from collections.abc import Callable
@@ -37,8 +40,10 @@ def _outcome(case: EvalCase, response: AssistantResponse) -> str:
     actual_clarify = None if response.clarification is None else response.clarification.reason
     if actual_clarify != expect.clarify_reason:
         problems.append(f"clarify_reason {actual_clarify} != {expect.clarify_reason}")
-    if response.abstain_reason != expect.abstain_reason:
-        problems.append(f"abstain_reason {response.abstain_reason} != {expect.abstain_reason}")
+    if expect.abstain_reasons and response.abstain_reason not in expect.abstain_reasons:
+        problems.append(f"abstain_reason {response.abstain_reason} not in {expect.abstain_reasons}")
+    if not expect.abstain_reasons and response.abstain_reason is not None:
+        problems.append(f"unexpected abstain_reason {response.abstain_reason}")
     return "; ".join(problems)
 
 
@@ -51,6 +56,9 @@ def _recommended_ids(case: EvalCase, response: AssistantResponse) -> str:
     expected = case.expect.recommended_ids
     if expected is not None and sorted(actual) != sorted(expected):
         return f"recommended {sorted(actual)} != expected {sorted(expected)}"
+    acceptable = case.expect.acceptable_recommendation_ids
+    if acceptable is not None and not set(actual) <= set(acceptable):
+        return f"recommended {sorted(set(actual) - set(acceptable))} outside the acceptable set"
     return ""
 
 
@@ -169,6 +177,22 @@ CHECKS: dict[str, Callable[[EvalCase, AssistantResponse], str]] = {
     "no_seller_text_in_prose": _no_seller_text,
     "bounded_calls": _bounded_calls,
     "versions_recorded": _versions_recorded,
+}
+
+
+CHECK_KINDS: dict[str, str] = {
+    "outcome": "expectation",
+    "recommended_ids": "expectation",
+    "citation_ids": "catalog_factual",
+    "citation_values": "catalog_factual",
+    "forbidden_not_recommended": "expectation",
+    "evidence_retained": "expectation",
+    "evidence_unaltered": "catalog_factual",
+    "constraint_statuses": "expectation",
+    "no_seller_text_in_prose": "structural",
+    "bounded_calls": "structural",
+    "versions_recorded": "structural",
+    "script_consumed": "structural",
 }
 
 
