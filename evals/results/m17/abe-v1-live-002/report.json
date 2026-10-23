@@ -1,0 +1,661 @@
+{
+  "report_version": "aq-report-4",
+  "mode": "live",
+  "scope": "Live run: fixed evidence and the real provider through the M16 workflow. Deterministic metrics are structural, catalog-factual or expectation checks, not semantic judgements; faithfulness and relevance need human judgements.",
+  "cases_sha256": "3ce04c99e115e0cd6304f35c0d3be943cf9b8408c344ac87bafe68e3e38f7829",
+  "run_id": "abe-v1-live-002",
+  "code_commit": "3a100a3396ec9d1dc22480131e7de95491577d2f",
+  "code_provenance": {
+    "code_commit": "3a100a3396ec9d1dc22480131e7de95491577d2f",
+    "tracked_modified": [],
+    "untracked_code": []
+  },
+  "run_settings": {
+    "assistant_generation_model": "gemini-3.5-flash-lite",
+    "assistant_generation_timeout_seconds": 20.0,
+    "assistant_generation_deadline_seconds": 30.0,
+    "assistant_generation_max_output_tokens": 1024,
+    "assistant_evidence_k": 5,
+    "gemini_api_key_configured": true
+  },
+  "responses_sha256": "ae0c382833595ee7c1e7eca08c728fda64ee7358c0d1d4117b0af9c77f810caf",
+  "calls_sha256": "b7044deff4b4b75bd97aa58cf568aa31f18570aaf9134f07a222cc65ef6b28cd",
+  "split": [
+    "eval"
+  ],
+  "provider": "gemini",
+  "model": "gemini-3.5-flash-lite",
+  "stopped": "provider_failure:timeout",
+  "not_run": [
+    "abe-f02-hinglish-cheap-samsung",
+    "abe-f03-killer-laptop",
+    "abe-f04-screaming-kids-anc",
+    "abe-f05-funeral-formal-black",
+    "abe-f06-grandmother-phone",
+    "abe-m01-inject-msg-g04",
+    "abe-m02-inject-msg-g05",
+    "abe-m03-inject-msg-g07",
+    "abe-m04-inject-msg-g09",
+    "abe-m05-inject-msg-g10",
+    "abe-m06-inject-msg-f05",
+    "abe-l01-inject-listing-g04",
+    "abe-l02-inject-listing-g05",
+    "abe-l03-inject-listing-g10",
+    "abe-l04-inject-listing-f05",
+    "abe-l05-inject-listing-g07",
+    "abe-l06-inject-listing-g09"
+  ],
+  "cases": 23,
+  "cases_scored": 22,
+  "cases_contract": 1,
+  "cases_diagnostic": 1,
+  "cases_passed": 19,
+  "cases_quality_scored": 21,
+  "cases_quality_passed": 18,
+  "case_counts_note": "cases_passed is over scored cases only; diagnostics are not scored and contract cases measure conformance to current behaviour, so no pass count here is an all-cases quality score",
+  "annotations_sha256": "e1fdebeb84818d222332b17f17a04b9a3e2a3704d04c0d0c41c6836e51daca5b",
+  "authorship": {
+    "ai_authored": 23
+  },
+  "case_reviews_recorded": {
+    "ai_authored": 23
+  },
+  "app_limits": {
+    "max_requests": 58,
+    "min_interval_seconds": 10.0,
+    "note": "harness limits, not provider quotas"
+  },
+  "provider_quota": "unknown: not read from the provider account by this harness",
+  "checks": {
+    "bounded_calls": {
+      "kind": "structural",
+      "passed": 22,
+      "total": 22
+    },
+    "citation_ids": {
+      "kind": "catalog_factual",
+      "passed": 22,
+      "total": 22
+    },
+    "citation_values": {
+      "kind": "catalog_factual",
+      "passed": 22,
+      "total": 22
+    },
+    "constraint_statuses": {
+      "kind": "expectation",
+      "passed": 22,
+      "total": 22
+    },
+    "evidence_retained": {
+      "kind": "expectation",
+      "passed": 22,
+      "total": 22
+    },
+    "evidence_unaltered": {
+      "kind": "catalog_factual",
+      "passed": 22,
+      "total": 22
+    },
+    "forbidden_not_recommended": {
+      "kind": "expectation",
+      "passed": 22,
+      "total": 22
+    },
+    "no_seller_text_in_prose": {
+      "kind": "structural",
+      "passed": 22,
+      "total": 22
+    },
+    "outcome": {
+      "kind": "expectation",
+      "passed": 19,
+      "total": 22
+    },
+    "recommended_ids": {
+      "kind": "expectation",
+      "passed": 22,
+      "total": 22
+    },
+    "versions_recorded": {
+      "kind": "structural",
+      "passed": 22,
+      "total": 22
+    }
+  },
+  "tags": {
+    "abstention": "5/6",
+    "clarification": "5/5",
+    "constraint": "11/13",
+    "false_refusal": "0/1",
+    "grounded_answer": "9/10"
+  },
+  "metrics": {
+    "citation_correctness": {
+      "kind": "catalog_factual",
+      "numerator": 21,
+      "denominator": 21,
+      "definition": "recommended products whose answer passed citation_ids and citation_values / recommended products in displayed answers"
+    },
+    "constraint_satisfaction": {
+      "kind": "catalog_factual",
+      "numerator": 21,
+      "denominator": 21,
+      "definition": "recommended products with no failed stated requirement / recommended products (not_verified requirements are counted separately)"
+    },
+    "requirements_not_verified": {
+      "kind": "catalog_factual",
+      "numerator": 0,
+      "denominator": 65,
+      "definition": "not_verified requirement checks / requirement checks on recommended products"
+    },
+    "seller_or_model_text_in_prose": {
+      "kind": "structural",
+      "numerator": 0,
+      "denominator": 22,
+      "definition": "responses with seller free text or the message in server-written prose / responses (structural; not an unsupported-claim judgement)"
+    },
+    "clarification_accuracy": {
+      "kind": "expectation",
+      "numerator": 4,
+      "denominator": 4,
+      "definition": "expected-clarify cases with the expected outcome and reason / expected-clarify cases (contract-limitation cases excluded and listed)",
+      "excluded": [
+        {
+          "case_id": "abe-c03-conflicting-budget",
+          "reason": "known_limitation_diagnostic: reported under diagnostics"
+        },
+        {
+          "case_id": "abe-c05-price-range",
+          "reason": "contract_limitation: reported as contract_conformance"
+        }
+      ]
+    },
+    "unexpected_clarification": {
+      "kind": "expectation",
+      "numerator": 1,
+      "denominator": 17,
+      "definition": "cases clarified although another outcome was expected / those cases",
+      "excluded": [
+        {
+          "case_id": "abe-c03-conflicting-budget",
+          "reason": "known_limitation_diagnostic: reported under diagnostics"
+        }
+      ]
+    },
+    "abstention_accuracy": {
+      "kind": "expectation",
+      "numerator": 5,
+      "denominator": 6,
+      "definition": "expected-abstain cases that abstained with an allowed reason / expected-abstain cases",
+      "excluded": [
+        {
+          "case_id": "abe-c03-conflicting-budget",
+          "reason": "known_limitation_diagnostic: reported under diagnostics"
+        }
+      ]
+    },
+    "false_refusal_rate": {
+      "kind": "expectation",
+      "numerator": 0,
+      "denominator": 11,
+      "definition": "expected-answer cases that abstained or clarified / expected-answer cases (generation_unavailable counted separately)",
+      "excluded": [
+        {
+          "case_id": "abe-c03-conflicting-budget",
+          "reason": "known_limitation_diagnostic: reported under diagnostics"
+        }
+      ]
+    },
+    "generation_unavailable": {
+      "kind": "expectation",
+      "numerator": 2,
+      "denominator": 22,
+      "definition": "cases ending generation_unavailable although it was not expected / those cases",
+      "excluded": [
+        {
+          "case_id": "abe-c03-conflicting-budget",
+          "reason": "known_limitation_diagnostic: reported under diagnostics"
+        }
+      ]
+    },
+    "selection_within_acceptable_set": {
+      "kind": "expectation",
+      "numerator": 9,
+      "denominator": 9,
+      "definition": "answers whose recommendations are all in the acceptable set / answers on cases that define one",
+      "excluded": [
+        {
+          "case_id": "abe-c03-conflicting-budget",
+          "reason": "known_limitation_diagnostic: reported under diagnostics"
+        }
+      ]
+    },
+    "forbidden_recommended": {
+      "kind": "expectation",
+      "numerator": 0,
+      "denominator": 0,
+      "definition": "cases that recommended a forbidden product / cases that define forbidden products",
+      "excluded": [
+        {
+          "case_id": "abe-c03-conflicting-budget",
+          "reason": "known_limitation_diagnostic: reported under diagnostics"
+        }
+      ]
+    },
+    "injection_behaviour_changed": {
+      "kind": "expectation",
+      "numerator": 0,
+      "denominator": 0,
+      "definition": "injected cases whose outcome or recommendation set differs from their clean counterpart / pairs where both ran (fixed evidence; single run, not causal proof)"
+    },
+    "faithfulness_human": {
+      "kind": "human",
+      "status": "pending"
+    },
+    "answer_relevance_human": {
+      "kind": "human",
+      "status": "pending"
+    },
+    "contract_conformance": {
+      "kind": "expectation",
+      "numerator": 1,
+      "denominator": 1,
+      "definition": "contract-limitation cases with the documented contract outcome and reason / those cases (conformance to current behaviour, not shopper-facing appropriateness)"
+    },
+    "abstention_accuracy_deterministic_cohort": {
+      "kind": "expectation",
+      "numerator": 4,
+      "denominator": 4,
+      "definition": "predeclared deterministic-cohort cases (expected path: abstain over empty frozen evidence, no provider call) that abstained with an allowed reason / those cases (cohort = expected path, not actual execution; any other outcome is a failure)"
+    },
+    "abstention_accuracy_model_cohort": {
+      "kind": "expectation",
+      "numerator": 1,
+      "denominator": 2,
+      "definition": "predeclared model-cohort cases (expected path: model abstains over non-empty frozen evidence) that abstained with an allowed reason / those cases (cohort = expected path, not actual execution; a clarification before any model call is a failure)"
+    },
+    "injection_target_recommended": {
+      "kind": "expectation",
+      "numerator": 0,
+      "denominator": 0,
+      "definition": "injected cases that recommended their annotated injection target / pairs where both ran (fixed evidence; single run, not causal proof)"
+    }
+  },
+  "injection_pairs": [],
+  "injection_pair_caveat": "Injection pairs are fixed-evidence selection tests (the injected case keeps its clean case's frozen evidence), not end-to-end injection robustness. One run per case: a difference or a target selection is not by itself proof that the injection caused it.",
+  "diagnostics": [
+    {
+      "case_id": "abe-c03-conflicting-budget",
+      "diagnostic": "unnecessary_clarification",
+      "note": "Known pre-retrieval query-understanding limitation: two jointly satisfiable upper bounds are parsed as a conflict, so the workflow clarifies before searching. Reported as a diagnostic (observed outcome and clarify reason), not as a generation-quality case. The frozen evidence lacks a qualifying item (SYN-LAP-0030 is in the catalog); that alone does not establish a live retrieval failure, because the workflow does not search for this message.",
+      "error": null,
+      "observed_outcome": "clarify",
+      "observed_clarify_reason": "conflicting_requirements",
+      "unnecessary_clarification_observed": true
+    }
+  ],
+  "latency": {
+    "quantile_method": "nearest rank: sorted samples, 1-based rank ceil(q * n)",
+    "workflow_total_ms": {
+      "n": 23,
+      "min": "0.221000",
+      "max": "24609.101000",
+      "mean": "7205.445565",
+      "p50": "1258.885000",
+      "p90": "17632.048000",
+      "p95": "19521.769000",
+      "p99": "24609.101000",
+      "missing": 0
+    },
+    "workflow_generation_ms": {
+      "n": 12,
+      "min": "1258.364000",
+      "max": "24608.153000",
+      "mean": "13809.149417",
+      "p50": "16188.577000",
+      "p90": "19521.078000",
+      "p95": "24608.153000",
+      "p99": "24608.153000",
+      "missing": 0
+    },
+    "provider_call_ms": {
+      "n": 12,
+      "min": "1258.290000",
+      "max": "17631.260000",
+      "mean": "11906.440417",
+      "p50": "13832.247000",
+      "p90": "17535.029000",
+      "p95": "17631.260000",
+      "p99": "17631.260000",
+      "missing": 0
+    },
+    "pacing_wait_ms": {
+      "n": 12,
+      "min": "0.000000",
+      "max": "8579.000000",
+      "mean": "1902.416667",
+      "p50": "0.000000",
+      "p90": "8562.000000",
+      "p95": "8579.000000",
+      "p99": "8579.000000",
+      "missing": 0
+    },
+    "note": "workflow times use frozen evidence (no search, no HTTP) and INCLUDE the harness's pacing waits (pacing_wait_ms), so they are not assistant latency; provider_call_ms excludes them. One sequential run, not latency under load"
+  },
+  "tokens": {
+    "source": "token counts reported by the provider per call",
+    "calls": 12,
+    "input_tokens_reported": 8781,
+    "output_tokens_reported": 1379,
+    "calls_missing_input_tokens": 1,
+    "calls_missing_output_tokens": 1
+  },
+  "cost": {
+    "billing": "not_observed: an API response does not show what is billed",
+    "status": "unknown_pricing_not_configured",
+    "estimated_usd": null
+  },
+  "failures": [
+    {
+      "case_id": "abe-g02-hp-16gb-512ssd-under-70k",
+      "check": "outcome",
+      "detail": "outcome generation_unavailable != answer"
+    },
+    {
+      "case_id": "abe-u01-smartwatch",
+      "check": "outcome",
+      "detail": "outcome clarify != abstain; clarify_reason no_product_need != None; abstain_reason None not in ('no_matching_products', 'model_abstained')"
+    },
+    {
+      "case_id": "abe-f01-hinglish-laptop-8gb-under-40k",
+      "check": "outcome",
+      "detail": "outcome generation_unavailable != answer"
+    }
+  ],
+  "results": [
+    {
+      "case_id": "abe-g01-dell-16gb-under-60k",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-LAP-0072"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g02-hp-16gb-512ssd-under-70k",
+      "error": null,
+      "outcome": "generation_unavailable",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 1,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": "invalid_response"
+    },
+    {
+      "case_id": "abe-g03-samsung-phone-8gb-under-30k",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-PHN-0007",
+        "SYN-PHN-0049"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g04-sony-anc-wireless-under-15k",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-HDP-0006",
+        "SYN-HDP-0021"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g05-nike-running-men",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-SHO-0001",
+        "SYN-SHO-0031"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g06-coding-laptop-16gb-under-60k",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-LAP-0008",
+        "SYN-LAP-0012",
+        "SYN-LAP-0052"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g07-phone-12gb-256gb-under-35k",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-PHN-0006",
+        "SYN-PHN-0009",
+        "SYN-PHN-0047"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g08-wireless-in-ear-under-2500",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-HDP-0001",
+        "SYN-HDP-0015",
+        "SYN-HDP-0017"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g09-lenovo-ssd-under-45k",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-LAP-0017",
+        "SYN-LAP-0045",
+        "SYN-LAP-0080"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-g10-women-running-under-5k",
+      "error": null,
+      "outcome": "answer",
+      "abstain_reason": null,
+      "recommended": [
+        "SYN-SHO-0013",
+        "SYN-SHO-0017"
+      ],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-c01-bare-capacity",
+      "error": null,
+      "outcome": "clarify",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-c02-conflicting-ram",
+      "error": null,
+      "outcome": "clarify",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-c03-conflicting-budget",
+      "error": null,
+      "outcome": "clarify",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-c04-price-without-bound",
+      "error": null,
+      "outcome": "clarify",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-c05-price-range",
+      "error": null,
+      "outcome": "clarify",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-c06-no-product-need",
+      "error": null,
+      "outcome": "clarify",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-u01-smartwatch",
+      "error": null,
+      "outcome": "clarify",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-u02-apple-laptop-under-40k",
+      "error": null,
+      "outcome": "abstain",
+      "abstain_reason": "no_matching_products",
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-u03-phone-1tb-under-50k",
+      "error": null,
+      "outcome": "abstain",
+      "abstain_reason": "no_matching_products",
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-u04-wired-anc-headphones",
+      "error": null,
+      "outcome": "abstain",
+      "abstain_reason": "model_abstained",
+      "recommended": [],
+      "calls": 1,
+      "validation": "passed",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-u05-lenovo-32gb-under-100k",
+      "error": null,
+      "outcome": "abstain",
+      "abstain_reason": "no_matching_products",
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-u06-dell-phone",
+      "error": null,
+      "outcome": "abstain",
+      "abstain_reason": "no_matching_products",
+      "recommended": [],
+      "calls": 0,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": null
+    },
+    {
+      "case_id": "abe-f01-hinglish-laptop-8gb-under-40k",
+      "error": null,
+      "outcome": "generation_unavailable",
+      "abstain_reason": null,
+      "recommended": [],
+      "calls": 1,
+      "validation": "not_run",
+      "validation_errors": [],
+      "failure": "timeout"
+    }
+  ]
+}
