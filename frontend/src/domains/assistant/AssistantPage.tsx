@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { type HttpFailure, RequestAborted } from '../../shared/http/client';
-import { askAssistant } from './api';
+import { askAssistant, fetchAssistantStatus } from './api';
 import { buildComparison, MAX_COMPARED } from './comparison';
 import type {
   AssistantResponse,
@@ -316,6 +316,24 @@ export function AssistantPage() {
 
   useEffect(() => () => inFlight.current?.abort(), []);
 
+  // Whether this server generates answers at all; null until known (or if the check fails).
+  const [generationEnabled, setGenerationEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchAssistantStatus(controller.signal)
+      .then((result) => {
+        if (result.ok) {
+          setGenerationEnabled(result.data.generation_enabled);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof RequestAborted)) {
+          throw error;
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = message.trim();
@@ -354,6 +372,13 @@ export function AssistantPage() {
   return (
     <section aria-labelledby="assistant-heading">
       <h1 id="assistant-heading">Shopping assistant</h1>
+      {generationEnabled === false && (
+        <p className="assistant-notice generation-disabled" data-testid="generation-disabled">
+          AI generation is disabled on this public demo. The assistant can still ask a
+          clarifying question, show catalog search results and compare products from catalog
+          data.
+        </p>
+      )}
       <form className="search-form" onSubmit={onSubmit} noValidate>
         <label htmlFor={inputId}>Describe what you need</label>
         <p id={hintId} className="input-hint">

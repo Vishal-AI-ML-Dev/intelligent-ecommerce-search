@@ -2,12 +2,21 @@
 
 ## Status
 
-**Proposed (owner direction, 2026-10-22). Unmeasured. Default off.** The adapter exists behind a
-typed interface and is tested only against fake clients. No live call has been made. No
-quality, latency, cost, structured-output or free-tier-limit claim is made here. The master
-plan (§5) requires the generation-provider ADR to rest on measured quality, latency and cost.
-Those measurements belong to a separately approved local live trial and to M17. Until then this
-ADR is not Accepted.
+**Accepted for LOCAL DEVELOPMENT ONLY (owner decision, 2026-10-23).** Not a production-provider
+selection. Default off.
+
+- **Shown:** technical compatibility. Three owner-approved local smoke trials (synthetic data, at
+  most 5 requests each) confirmed model access, structured-output parsing and acceptance of the
+  asst-policy-3 schema. Observed per-request generation latency was 0.9–1.5 s over the 7
+  successful requests. That is a handful of local samples, not a latency measurement.
+- **Not shown, still pending:** the master plan (§5) requires the provider to be selected from
+  measured quality, latency and cost. That requirement is **not waived**: quality and cost
+  evaluation remains pending (M17), and no measured production-provider selection is claimed.
+- **Public use:** generation stays OFF on every public deployment, and no Gemini key is placed on
+  the AWS server. The free-tier terms do not allow an open public demo with generation on (see
+  "Free-tier terms and public use" below).
+
+History: Proposed 2026-10-22 (initially unmeasured and with mocked tests only).
 
 ## Date
 
@@ -31,12 +40,12 @@ Provider history in this milestone, recorded for transparency:
   the Gemini Developer API free tier. The Anthropic adapter and its SDK were removed from the
   working tree and never committed. No Anthropic key was set up or used.
 
-## Decision (proposed)
+## Decision (accepted for local development only)
 
 | Concern | Decision |
 |---|---|
 | Provider | Gemini Developer API, **free tier only**: no paid billing, no paid fallback |
-| Model | `gemini-3.5-flash-lite`: listed as stable and with a free tier on the official pages read on 2026-10-22. Proposed, not selected by measurement. |
+| Model | `gemini-3.5-flash-lite`: listed as stable and with a free tier on the official pages read on 2026-10-22. Not selected by measurement. |
 | SDK | `google-genai==2.32.0` (exact pin), imported only by `generation/gemini_provider.py`, which is imported only when `ASSISTANT_GENERATION_PROVIDER=gemini` |
 | Default | `ASSISTANT_GENERATION_PROVIDER=none` everywhere, including the staging demo |
 | Credentials | `GEMINI_API_KEY`, only in a developer's git-ignored `.env`; passed explicitly to the client, so `GOOGLE_API_KEY` and ambient Google credentials are not read. Never requested in chat. None exists yet. |
@@ -66,16 +75,16 @@ Owner-approved, at most 5 requests, synthetic data. Model access was confirmed b
 request. 2 generation requests were sent: the first returned a draft that parsed into the
 structured-output schema but failed deterministic validation; the repair request got a provider
 5xx (`server_error`), and the trial stopped. Free-tier status rests on the owner's AI Studio
-check; the API does not expose billing. Details: `docs/m16-progress.md`. The ADR stays
-**Proposed**: one parsed response is not a measurement of quality, latency or cost.
+check; the API does not expose billing. Details: `docs/m16-progress.md`. The ADR stayed
+Proposed at that point: one parsed response is not a measurement of quality, latency or cost.
 
 A second approved trial (2026-10-23) sent 2 requests; both parsed and passed validation without
 repair (594/99 and 476/93 tokens, 1.5 s and 1.0 s). It exposed a validator gap (spelled-out
-numbers pass the summary checks). Still Proposed: two samples are not a measurement.
+numbers pass the summary checks). Two samples are not a measurement.
 
 Since policy asst-policy-3 (2026-10-23) the provider returns no text: only outcome, product IDs
 and cited field names (`response_json_schema` without `summary`). Explanations are rendered from
-catalog data. A third approved trial (2026-10-23, 3 requests) showed the live API accepts this schema; all three drafts passed validation. The model selected an injection-titled synthetic record once (rendered text stayed clean). Still Proposed.
+catalog data. A third approved trial (2026-10-23, 3 requests) showed the live API accepts this schema; all three drafts passed validation. The model selected an injection-titled synthetic record once (rendered text stayed clean). 
 
 ## Free-tier terms and public use (read 2026-10-23)
 
@@ -85,8 +94,8 @@ which Google may use and have humans review. They require adult users. An open p
 generation on therefore does not comply on the free tier. Generation stays off on any public
 deployment; see `docs/m16-progress.md`.
 
-Decision needed from the owner: accept this ADR as **technically compatible for local development
-only**, deferring quality, latency and cost selection to M17, or keep it Proposed.
+Owner decision (2026-10-23): accepted as technically compatible for local development only;
+quality, latency and cost selection deferred to M17 (see Status).
 
 ## Required before any live trial (separate owner approval)
 

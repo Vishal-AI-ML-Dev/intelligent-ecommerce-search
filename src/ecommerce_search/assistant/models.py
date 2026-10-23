@@ -147,5 +147,13 @@ class AssistantResponse(_Frozen):
     latency_ms: AssistantLatency
 
 
+class AssistantStatus(_Frozen):
+    """Public, secret-free configuration fact for the UI (no provider, model or key details)."""
+
+    generation_enabled: bool = Field(
+        description="False when answer generation is turned off on this server (the default)."
+    )
+
+
 class AssistantUnavailable(_Frozen):
     detail: Literal["assistant unavailable"]

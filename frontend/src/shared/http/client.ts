@@ -56,8 +56,27 @@ function logRequest(entry: RequestLog): void {
   }
 }
 
-export async function postJson<T>(
+export function postJson<T>(
   path: string,
+  body: unknown,
+  isValid: (value: unknown) => value is T,
+  signal?: AbortSignal,
+): Promise<HttpResult<T>> {
+  return requestJson(path, 'POST', body, isValid, signal);
+}
+
+/** Same logging, request-ID and error handling as `postJson`, for a body-less GET. */
+export function getJson<T>(
+  path: string,
+  isValid: (value: unknown) => value is T,
+  signal?: AbortSignal,
+): Promise<HttpResult<T>> {
+  return requestJson(path, 'GET', undefined, isValid, signal);
+}
+
+async function requestJson<T>(
+  path: string,
+  method: 'GET' | 'POST',
   body: unknown,
   isValid: (value: unknown) => value is T,
   signal?: AbortSignal,
@@ -65,16 +84,19 @@ export async function postJson<T>(
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
   const sentId = newRequestId();
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    [REQUEST_ID_HEADER]: sentId,
+  };
+  if (method === 'POST') {
+    headers['Content-Type'] = 'application/json';
+  }
   let response: Response;
   try {
     response = await fetch(path, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        [REQUEST_ID_HEADER]: sentId,
-      },
-      body: JSON.stringify(body),
+      method,
+      headers,
+      body: method === 'POST' ? JSON.stringify(body) : undefined,
       credentials: 'same-origin',
       signal,
     });

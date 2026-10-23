@@ -1,4 +1,4 @@
-import { type HttpResult, postJson } from '../../shared/http/client';
+import { getJson, type HttpResult, postJson } from '../../shared/http/client';
 import {
   ASSISTANT_OUTCOMES,
   type AssistantRequest,
@@ -8,6 +8,7 @@ import {
 } from './types';
 
 export const ASSISTANT_PATH = '/assistant/answer';
+export const ASSISTANT_STATUS_PATH = '/assistant/status';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -87,4 +88,16 @@ export function askAssistant(
 ): Promise<HttpResult<AssistantResponse>> {
   const body: AssistantRequest = { message };
   return postJson(ASSISTANT_PATH, body, isAssistantResponse, signal);
+}
+
+export interface AssistantStatus {
+  generation_enabled: boolean;
+}
+
+export function isAssistantStatus(value: unknown): value is AssistantStatus {
+  return isRecord(value) && typeof value.generation_enabled === 'boolean';
+}
+
+export function fetchAssistantStatus(signal?: AbortSignal): Promise<HttpResult<AssistantStatus>> {
+  return getJson(ASSISTANT_STATUS_PATH, isAssistantStatus, signal);
 }

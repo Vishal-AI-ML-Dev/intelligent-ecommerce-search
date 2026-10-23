@@ -56,6 +56,7 @@ def answer_draft(pid="P1"):
 def test_route_is_in_the_openapi_contract(make_settings):
     paths = create_app(make_settings()).openapi()["paths"]
     assert set(paths[PATH]) == {"post"}
+    assert set(paths["/assistant/status"]) == {"get"}
 
 
 def test_generation_is_off_by_default(make_settings):
@@ -295,3 +296,16 @@ def test_evidence_depth_is_capped_by_the_search_candidate_limit(client_for):
     ) as client:
         client.post(PATH, json={"message": "laptop for coding"})
     assert retriever.calls == [("laptop for coding", 3)]
+
+
+def test_status_reports_generation_off_by_default_without_provider_details(client_for):
+    with client_for() as client:
+        response = client.get("/assistant/status")
+    assert response.status_code == 200
+    assert response.json() == {"generation_enabled": False}
+    assert response.headers["X-Request-ID"]
+
+
+def test_status_reports_generation_on_when_a_provider_is_configured(client_for):
+    with client_for(generator=FakeGenerator()) as client:
+        assert client.get("/assistant/status").json() == {"generation_enabled": True}

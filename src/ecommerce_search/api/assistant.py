@@ -31,6 +31,7 @@ from ecommerce_search.api.reranked import run_reranked_search
 from ecommerce_search.assistant.models import (
     AssistantRequest,
     AssistantResponse,
+    AssistantStatus,
     AssistantUnavailable,
     EvidenceProduct,
 )
@@ -158,6 +159,19 @@ def limits_from(settings: Settings) -> AssistantLimits:
         input_usd_per_mtok=settings.assistant_input_usd_per_mtok,
         output_usd_per_mtok=settings.assistant_output_usd_per_mtok,
     )
+
+
+@router.get(
+    "/assistant/status",
+    response_model=AssistantStatus,
+    summary="Whether answer generation is enabled on this server",
+    description="Lets the UI state up front that AI generation is disabled. Carries no provider, "
+    "model or credential details and makes no provider call.",
+)
+def assistant_status(
+    generator: Annotated[GenerationProvider | None, Depends(get_generation_provider)],
+) -> AssistantStatus:
+    return AssistantStatus(generation_enabled=generator is not None)
 
 
 @router.post(

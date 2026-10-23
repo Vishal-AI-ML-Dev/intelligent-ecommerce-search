@@ -1563,7 +1563,13 @@ def test_frozen_operations_and_components_are_byte_identical_to_head(make_settin
     blob = json.dumps(frozen, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     assert hashlib.sha256(blob.encode()).hexdigest() == HEAD_FROZEN_DIGEST
     # + experimental V4 and the M16 assistant
-    assert set(schema["paths"]) == {*FROZEN_PATHS, PATH, "/search/routed", "/assistant/answer"}
+    assert set(schema["paths"]) == {
+        *FROZEN_PATHS,
+        PATH,
+        "/search/routed",
+        "/assistant/answer",
+        "/assistant/status",
+    }
     v3_only = {
         "RerankedSearchRequest",
         "RerankedSearchResponse",

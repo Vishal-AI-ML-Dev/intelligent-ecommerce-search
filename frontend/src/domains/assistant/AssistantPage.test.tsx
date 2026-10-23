@@ -6,10 +6,19 @@ import { App } from '../../app/App';
 import { isAssistantResponse } from './api';
 import { AssistantPage } from './AssistantPage';
 
-function respondWith(status: number, body: unknown) {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify(body), { status }));
+// GET /assistant/status answers with `generationEnabled`; every other request gets `body`.
+function respondWith(status: number, body: unknown, generationEnabled = false) {
+  const fetchMock = vi.fn(async (path: string) =>
+    path === '/assistant/status'
+      ? new Response(JSON.stringify({ generation_enabled: generationEnabled }), { status: 200 })
+      : new Response(JSON.stringify(body), { status }),
+  );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
+}
+
+function answerCalls(fetchMock: ReturnType<typeof respondWith>) {
+  return fetchMock.mock.calls.filter(([path]) => path === '/assistant/answer');
 }
 
 async function ask(text: string) {
@@ -44,7 +53,7 @@ describe('AssistantPage', () => {
     render(<AssistantPage />);
     await ask('  dell laptop under rs 50000  ');
     await result();
-    const [path, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [path, init] = answerCalls(fetchMock)[0] as unknown as [string, RequestInit];
     expect(path).toBe('/assistant/answer');
     expect(JSON.parse(init.body as string)).toEqual({ message: 'dell laptop under rs 50000' });
   });
@@ -56,7 +65,7 @@ describe('AssistantPage', () => {
     expect(screen.getByText('Describe what you are looking for.')).toBeInTheDocument();
     await ask('x'.repeat(201));
     expect(screen.getByText('Use at most 200 characters.')).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(answerCalls(fetchMock)).toHaveLength(0);
   });
 
   it('shows a grounded answer: unverified summary, catalog facts and evidence references', async () => {
@@ -118,7 +127,7 @@ describe('AssistantPage', () => {
     expect(ram).toHaveTextContent('RAM16 GBnot given'); // one known value: no "highest" note
     await user.click(toggles[1] as HTMLElement);
     expect(table.getAllByRole('columnheader')).toHaveLength(4);
-    expect(fetchMock).toHaveBeenCalledTimes(1); // no new request: nothing is retrieved again
+    expect(answerCalls(fetchMock)).toHaveLength(1); // no new request: nothing is retrieved again
   });
 
   it('caps the comparison at 3 and resets the selection for a new answer', async () => {
@@ -249,6 +258,48 @@ describe('AssistantPage', () => {
     expect(logged).toContain('/assistant/answer');
     expect(logged).not.toContain('dell laptop');
     expect(logged).not.toContain('Fixture Dell');
+  });
+});
+
+describe('generation status banner', () => {
+  it('states up front that AI generation is disabled', async () => {
+    const fetchMock = respondWith(200, assistantFixtures.generationOff);
+    render(<AssistantPage />);
+    expect(await screen.findByTestId('generation-disabled')).toHaveTextContent(
+      'AI generation is disabled on this public demo.',
+    );
+    const [path, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(path).toBe('/assistant/status');
+    expect(init.method).toBe('GET');
+    expect(init.body).toBeUndefined();
+  });
+
+  it('shows no banner when generation is enabled or the status is unknown', async () => {
+    const fetchMock = respondWith(200, assistantFixtures.answer, true);
+    const { unmount } = render(<AssistantPage />);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByTestId('generation-disabled')).toBeNull();
+    unmount();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 503 })),
+    );
+    render(<AssistantPage />); // status check fails: unknown, so no claim either way
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByTestId('generation-disabled')).toBeNull();
+  });
+
+  it('keeps comparison and catalog results available with generation off', async () => {
+    respondWith(200, assistantFixtures.generationOff);
+    render(<AssistantPage />);
+    const user = userEvent.setup();
+    await ask('dell laptop under rs 50000');
+    expect(await result()).toHaveAttribute('data-outcome', 'generation_unavailable');
+    const toggles = screen.getAllByTestId('compare-toggle');
+    await user.click(toggles[0] as HTMLElement);
+    await user.click(toggles[1] as HTMLElement);
+    expect(screen.getByTestId('comparison')).toBeInTheDocument();
   });
 });
 

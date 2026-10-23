@@ -22,6 +22,14 @@ async function setup(page: Page, handler: (route: Route) => Promise<void>): Prom
   // Every assistant or search API call is answered here; none reaches the server.
   await page.route(/\/(assistant|search)\//, async (route) => {
     const request = route.request();
+    if (request.method() === 'GET' && new URL(request.url()).pathname === '/assistant/status') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ generation_enabled: false }),
+      });
+      return;
+    }
     if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/assistant/answer') {
       captured.pageErrors.push(`unexpected request ${request.method()} ${request.url()}`);
       await route.abort();
@@ -127,6 +135,9 @@ test('honest abstention when nothing matches', async ({ page }) => {
 
 test('generation off is labelled as plain search results', async ({ page }) => {
   const captured = await setup(page, json(assistantFixtures.generationOff));
+  await expect(page.getByTestId('generation-disabled')).toContainText(
+    'AI generation is disabled on this public demo.',
+  );
   await ask(page);
   await expect(page.getByRole('heading', { name: 'No generated answer available' })).toBeVisible();
   await expect(
@@ -159,9 +170,11 @@ test('HTTP 503 shows a fixed message, never the body', async ({ page }) => {
     'The assistant is temporarily unavailable. Please try again shortly.',
   );
   await expect(page.locator('body')).not.toContainText('assistant unavailable');
-  expect(captured.console).toEqual([
+  // Ignores the info line of the assistant's status check (M16); every line is still checked
+  // by expectClean below.
+  expect(captured.console.filter((line) => !line.startsWith('info '))).toEqual([
     'error Failed to load resource: the server responded with a status of 503 (Service Unavailable)',
     expect.stringMatching(/^warning \[api\] .*status\W+503.*http_error/),
   ]);
-  expectClean({ ...captured, console: captured.console.slice(1) });
+  expectClean({ ...captured, console: captured.console.filter((line) => !line.startsWith('error ')) });
 });

@@ -130,9 +130,11 @@ test('HTTP 503 shows a fixed message, never the body', async ({ page }) => {
   await expect(page.getByTestId('product-card')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('search unavailable');
   // The browser itself reports the failed resource; the app adds one request line.
-  expect(captured.console).toEqual([
+  // Ignores the info line of the assistant's status check (M16); every line is still checked
+  // by expectClean below.
+  expect(captured.console.filter((line) => !line.startsWith('info '))).toEqual([
     'error Failed to load resource: the server responded with a status of 503 (Service Unavailable)',
     expect.stringMatching(/^warning \[api\] .*status\W+503.*http_error/),
   ]);
-  expectClean({ ...captured, console: captured.console.slice(1) });
+  expectClean({ ...captured, console: captured.console.filter((line) => !line.startsWith('error ')) });
 });
