@@ -75,6 +75,41 @@ records; counterparts were reassigned to clean cases with a non-fitting record (
 provider call); `abe-u01` ("smartwatch …") is clarified before retrieval rather than abstained.
 Five cases carry flags for the owner.
 
+## ESCI suitability check (inspection only; not integrated) — 2026-10-23
+
+Source: `github.com/amazon-science/esci-data` (official, Apache-2.0 per repository LICENSE and
+GitHub metadata; NOTICE "Copyright Amazon.com, Inc. or its affiliates"). Inspected without
+downloading rows: README, LICENSE, Git LFS pointers, the two parquet footers (HTTP range reads,
+5,731 + 8,118 bytes, decoded with a stdlib reader outside the repo) and the 1.7 MB sources CSV
+(scratchpad only; nothing in git).
+
+| File | Size | Rows | Columns |
+|---|---|---|---|
+| `shopping_queries_dataset_examples.parquet` | 51.3 MB | 2,621,288 (1 row group) | example_id, query, query_id, product_id, product_locale, esci_label, small_version, large_version, split |
+| `shopping_queries_dataset_products.parquet` | 1.11 GB | 1,814,924 (1 row group) | product_id, product_title, product_description, product_bullet_point, product_brand, product_color, product_locale |
+| `shopping_queries_dataset_sources.csv` | 1.7 MB | 130,652 queries | query_id, source (other 113,656; negations 6,964; parse_pattern 6,083; behavioral 3,780; nlqec 169) |
+
+Findings:
+
+- **Not usable as the M17 answer set.** ESCI has no price, currency, availability, category,
+  RAM or storage. M16 evidence requires price, currency and availability, and the assistant's
+  constraint checks use the other fields; they may not be invented (§10). Locales are us/es/jp;
+  no Hinglish, no INR.
+- **What its labels support:** query–product relevance of a ranked list on the ESCI corpus,
+  i.e. retrieval/ranking metrics (nDCG@k, Precision/Recall@k, MRR) with a documented, versioned
+  E/S/C/I mapping (Complement not relevant by default, §10), and, at most, an answer-relevance
+  proxy ("is a recommended product E/S for the query") if the assistant ran over an ESCI corpus.
+- **What it does not support:** faithfulness, citation correctness, unsupported-claim rate,
+  explanations, constraint satisfaction, clarification or abstention accuracy, prompt-injection,
+  malicious-listing and false-refusal behaviour, or the end-to-end pipeline. ESCI labels judge a
+  query–product pair, not an answer.
+- **Cost of a real sample:** each file is a single row group, so even one labelled row needs the
+  whole 51.3 MB examples file; titles need the 1.11 GB products file; reading parquet needs a new
+  dependency (no pyarrow/pandas/polars/duckdb is installed). None of this was downloaded.
+- Under §10 ESCI remains an optional, separately versioned search-relevance track with its own
+  corpus adapter, provenance, metrics and report, never mixed into the synthetic catalog. It does
+  not replace the human review of `abe-v1`.
+
 ## Proposed eval set `abe-v1` (drafted as above; owner review pending)
 
 40 `eval` cases over the local seed catalog, evidence captured with the V3 retriever:
