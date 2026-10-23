@@ -2,14 +2,14 @@
 
 A production-oriented e-commerce search and bounded-decision system, built milestone by
 milestone. The search engine and its buyer Search UI are implemented and run on a staging demo.
-A grounded shopping assistant (M16) is in progress and is not deployed. Return intelligence is
-planned. The catalog is synthetic, and nothing here is production-ready.
+A grounded shopping assistant (M16, accepted for its development and staging scope) runs on
+the demo with country-gated AI generation. Return intelligence is planned. The catalog is synthetic, and nothing here is production-ready.
 
 See `docs/MASTER_PLAN.md` for the complete engineering plan.
 
 ## At a glance
 
-**Live staging demo (Search and Shopping assistant, AI generation off):**
+**Live staging demo (Search and Shopping assistant, country-gated AI generation):**
 <https://intelligent-ecommerce-search.duckdns.org/>
 
 This is a staging demo on a synthetic 240-product catalog. It runs on temporary cloud credits
@@ -19,8 +19,7 @@ testing, so it is not production-ready (`docs/m26a-progress.md`).
 | | What | Where documented |
 |---|---|---|
 | **Deployed** (staging) | Buyer Search page over V3 reranked search (`POST /search/reranked`) | `docs/m26a-progress.md` |
-| **Deployed** (staging, generation OFF) | Shopping assistant tab (M16, in progress): clarification questions, labelled catalog search results, evidence references, deterministic comparison and structured RAM/storage data. The page states that AI generation is disabled. | `docs/m16-progress.md` |
-| **Implemented, local only** | Optional Gemini generation (free tier, off by default; three small local smoke trials) | `docs/m16-progress.md` |
+| **Deployed** (staging) | Shopping assistant tab (M16, accepted for this scope). It shows clarification questions, evidence references, deterministic comparison and structured RAM/storage checks. Gemini free-tier generation is limited to eligible countries: the model only selects products, explanations are server templates over catalog data, and other visitors get labelled catalog search results. | `docs/m16-progress.md`, ADR-009 |
 | **Implemented, local only** | V0–V2 search endpoints, experimental V4 (`/search/routed`), listing normalization (M13), listing decisions (M14, blocked) | sections below |
 | **Planned** | Assistant evaluation (M17), return intelligence (M18–M22), review queue (M21), production AWS stack (M26B) and the rest of `docs/MASTER_PLAN.md` | `docs/MASTER_PLAN.md` |
 
@@ -146,11 +145,13 @@ The managed-stack Terraform in `infra/staging/` is not applied.
 - M26A (Search staging demo): **accepted (2026-10-22)** with documented limitations: a
   single-EC2 demo at the URL above, not production-ready. M26B remains. See
   `docs/m26a-progress.md`.
-- M16 (grounded shopping assistant): **IN PROGRESS, not accepted.** Deployed to the staging demo
-  with AI generation off (2026-10-23). See
-  "Shopping assistant (Milestone 16, in progress)" below and `docs/m16-progress.md`.
-- M15, M17–M22, M23B, M24B, M25B and M26B: not started. This includes policy-risk triage,
-  assistant evaluation, return intelligence and human review (HITL).
+- M16 (grounded shopping assistant): **accepted (2026-10-23)** for the implemented development
+  and country-gated staging scope. M17 evaluation and production hardening remain. See
+  "Shopping assistant (Milestone 16)" below and `docs/m16-progress.md`.
+- M17 (assistant evaluation): in progress; mocked harness groundwork only. Systematic quality,
+  safety and provider quality, latency and cost evaluation are pending.
+- M15, M18–M22, M23B, M24B, M25B and M26B: not started. This includes policy-risk triage,
+  return intelligence and human review (HITL).
 - M27 (authorized marketplace integration): excluded from the current scope. The original
   milestone definition in `docs/MASTER_PLAN.md` is unchanged.
 
@@ -769,10 +770,12 @@ development only). It does not proxy `/assistant`, so use the FastAPI-served bui
 assistant tab. Fixture and live browser results are reported separately; see
 `docs/m25a-progress.md`.
 
-## Shopping assistant (Milestone 16, in progress)
+## Shopping assistant (Milestone 16)
 
-Status: **in progress, not accepted.** Deployed to the staging demo on 2026-10-23 (commit
-`e057d00`, with the country-eligibility and personal-data checks) with **AI generation OFF**. Details, limitations and the
+Status: **accepted (owner, 2026-10-23) for the implemented development and country-gated staging
+scope.** Deployed to the staging demo on 2026-10-23 (commit `e057d00`). Gemini free-tier
+generation is on for eligible countries only, with the personal-data screen and usage limits.
+Not a production or quality claim: systematic evaluation is M17. Details, limitations and the
 remaining gaps are in `docs/m16-progress.md`, and the provider decision is in ADR-009
 (`docs/decisions/ADR-009-generation-provider.md`, **Proposed**).
 
@@ -792,12 +795,17 @@ What is implemented, behind `POST /assistant/answer` and the "Shopping assistant
 - **Generation is off by default.** With it off, or when it fails, the assistant says that no
   generated answer is available and labels the products as ordinary search results.
 
-Local only: the optional Gemini adapter (Gemini Developer API free tier, `gemini-3.5-flash-lite`)
-was exercised in three small, owner-approved local smoke trials on synthetic data. These checked
-technical compatibility only; quality, latency and cost evaluation is M17 work.
-The free-tier terms do not allow an open public demo with generation on (for example, no users
-in the EEA, Switzerland or UK, and no personal data). So generation stays off on any public
-deployment. This controls which claims are displayed. It does not show that the model picks the
+Provider: Gemini Developer API free tier (`gemini-3.5-flash-lite`), ADR-009, accepted for local
+development and the country-gated staging demo. Evidence so far is limited smoke evidence: three
+local trials on synthetic data and three online answers. Quality, latency and cost evaluation is
+M17 work.
+- **Region gate:** the free-tier terms allow no free-tier use for users in the EEA, Switzerland
+  or the UK. On the demo, generation runs only for eligible countries (DB-IP offline data,
+  best-effort), and other visitors get labelled catalog search results.
+- **Privacy:** messages with emails or long numbers are never sent, and the provider privacy
+  notice is shown.
+
+This controls which claims are displayed. It does not show that the model picks the
 best products or resists prompt injection.
 
 ```bash

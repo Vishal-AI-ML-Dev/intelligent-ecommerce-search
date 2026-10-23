@@ -280,6 +280,10 @@ Do not introduce Elasticsearch, OpenSearch, Qdrant, Pinecone, Kafka, Airflow, Ku
 Generation models (M16, M19–M21) are not part of the locked stack. Each generation provider:
 
 - is selected in its milestone through an ADR from measured quality, latency, and cost;
+  sequencing amendment (owner, 2026-10-23): for M16 the measured quality, latency and cost
+  selection of the Gemini provider is moved to M17. ADR-009 accepts the provider only for
+  local development and the country-gated staging demo on limited smoke evidence. The
+  measurement requirement itself is unchanged and not yet met;
 - sits behind a typed, provider-isolated interface;
 - has its output validated through Pydantic.
 
@@ -1087,7 +1091,7 @@ M14 -> M15 -> M21 -> M22 -> M25B -> M23B -> M24B -> M26B
 | M23A | M25A and its Playwright smoke path; existing test suites | CI never requires live Jev or any live generation provider |
 | M24A | Existing search path; M25A for UI-to-API request correlation | Logs never contain unredacted PII |
 | M26A | M23A and M24A; local stability (Milestone 26) | Owner approval before any chargeable action; cloud account and billing are owner decisions. Blocks only M26B. |
-| M16 | M10 prerequisite (the development-scoped M10 closure does not by itself satisfy it; the owner decides); generation-provider ADR | IN PROGRESS (2026-10-22): the owner accepted M10's reduced-scope closure for M16 development only (no gate waived); ADR-009 proposes the Gemini Developer API free tier (Proposed, unmeasured, default off). First slice built with mocked generation only; gaps in `docs/m16-progress.md` |
+| M16 | M10 prerequisite (the development-scoped M10 closure does not by itself satisfy it; the owner decides); generation-provider ADR | **ACCEPTED (owner, 2026-10-23) for the implemented development and country-gated staging scope.** M10's reduced-scope closure accepted for M16 only (no gate waived). ADR-009 accepts the Gemini free tier for local development and the country-gated staging demo. The §5 measured provider selection is moved to M17 (§5 sequencing amendment), not met. Evidence: `docs/m16-progress.md` |
 | M17 | M16; a separate human-reviewed answer set | Real human reviewers |
 | M18 | Return data source with recorded provenance and rights; PII redaction | Data source not chosen |
 | M19 | M18; a separate human-reviewed return-reason set; generation-provider ADR | Real human reviewers |
@@ -1650,9 +1654,9 @@ deferrals recorded in §"Repository status at
 this revision", and M14 is BLOCKED. M25A, the first item of §28, "Execution order (amended 2026-10-22)", was
 accepted on 2026-10-22, and M23A was completed on 2026-10-22 (`docs/m23a-progress.md`). M24A was
 completed on 2026-10-22 (`docs/m24a-progress.md`). M26A was accepted on 2026-10-22 (single-EC2
-staging demo; `docs/m26a-progress.md`). M16 is IN PROGRESS (2026-10-22): the owner accepted M10's
-reduced-scope closure for M16 development only, ADR-009 is Proposed, and the first slice uses
-mocked generation only (`docs/m16-progress.md`).
+staging demo; `docs/m26a-progress.md`). M16 was accepted on 2026-10-23 for the
+implemented development and country-gated staging scope (`docs/m16-progress.md`). M17 and the
+production work remain pending.
 
 Historical text:
 

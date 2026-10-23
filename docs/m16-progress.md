@@ -1,8 +1,8 @@
 # M16 progress: grounded shopping assistant (first slice)
 
-**Status: IN PROGRESS.** The first slice is implemented and tested with mocked generation only.
-M16 is not complete: the acceptance gaps are listed below. Mocked tests are not live-provider
-validation.
+**Status: ACCEPTED / COMPLETE (owner, 2026-10-23) for the implemented development and
+country-gated staging scope.** See "Acceptance" at the end. The sections below are the
+chronological record; earlier "in progress" statements are historical.
 
 ## Owner decisions (2026-10-22)
 
@@ -531,3 +531,27 @@ not for consumer use" clause for this demo.
   deployment): clarification, labelled fallback, evidence anchors and the comparison table
   passed a browser check. Mocked tests cover refused regions, personal data, usage limits,
   provider failures and repair.
+
+## Acceptance (owner, 2026-10-23)
+
+M16 is **accepted and complete for the implemented development and country-gated staging scope**.
+It covers:
+- the bounded workflow over V3 search;
+- deterministic clarification and abstention;
+- typed ID and field selection, with explanations rendered from catalog data;
+- constraint and citation re-checks, including RAM and storage on typed catalog fields;
+- deterministic comparison;
+- the honest fallback and usage limits;
+- the country-eligibility and personal-data checks;
+- the deployed staging demo (commit `e057d00`, image `m16-geo-e057d00`) with Gemini free-tier
+  generation on.
+
+ADR-009 was amended the same day: accepted for local development and this staging demo.
+
+Not claimed and still pending:
+- **M17:** systematic answer quality, faithfulness, safety and prompt-injection evaluation, and
+  the comprehensive provider quality, latency and cost evaluation. The §5 requirement is moved
+  to M17 by a sequencing amendment, not met.
+- **Production hardening:** M23B, M24B, M25B and M26B.
+- **Not claimed:** any production readiness, or that geolocation or personal-data screening
+  guarantees compliance.

@@ -2,21 +2,36 @@
 
 ## Status
 
-**Accepted for LOCAL DEVELOPMENT ONLY (owner decision, 2026-10-23).** Not a production-provider
-selection. Default off.
+**Accepted for local development and the existing country-gated staging demo, Gemini API free
+tier only (owner decision, scoped amendment, 2026-10-23).** Not a production-provider selection.
+Default off everywhere unless explicitly enabled.
 
-- **Shown:** technical compatibility. Three owner-approved local smoke trials (synthetic data, at
-  most 5 requests each) confirmed model access, structured-output parsing and acceptance of the
-  asst-policy-3 schema. Observed per-request generation latency was 0.9–1.5 s over the 7
-  successful requests. That is a handful of local samples, not a latency measurement.
-- **Not shown, still pending:** the master plan (§5) requires the provider to be selected from
-  measured quality, latency and cost. That requirement is **not waived**: quality and cost
-  evaluation remains pending (M17), and no measured production-provider selection is claimed.
-- **Public use:** generation stays OFF on every public deployment, and no Gemini key is placed on
-  the AWS server. The free-tier terms do not allow an open public demo with generation on (see
-  "Free-tier terms and public use" below).
+- **Scope:** local development, and the single-EC2 staging demo
+  (<https://intelligent-ecommerce-search.duckdns.org/>) with these controls kept in force:
+  - generation runs only for visitors in eligible countries: Gemini's available regions minus
+    the paid-only EEA, Switzerland and UK, plus conservative extra exclusions. This uses the
+    offline DB-IP Lite data; restricted or unknown regions get the fallback;
+  - messages that look like they contain personal data are never sent;
+  - the provider privacy and use notice is shown, adults only;
+  - usage caps of 2 in flight, 10 per minute and 200 per day; SDK retries off; at most one
+    repair; bounded output and timeouts;
+  - the kill switch `ASSISTANT_GENERATION_PROVIDER=none`;
+  - the key exists only in the server's root-only `.env`.
+  IP geolocation is best-effort; these controls lower the risk but do not guarantee compliance.
+- **Observed evidence (limited smoke evidence only, not systematic quality or production
+  validation):**
+  - three local trials on synthetic data (7 successful requests, 0.9–1.5 s each);
+  - on the staging demo, 3 online answers with one call each, validation passed, 860–1043
+    input and 71–186 output tokens, 1.14–1.37 s generation latency;
+  - the asst-policy-3 structured-output schema is accepted by the live API.
+- **Sequencing amendment, not a waiver:** the master plan (§5) requires the provider to be
+  selected from measured quality, latency and cost. That measurement has **not** been done. The
+  owner moved it to M17, where comprehensive provider quality, latency and cost evaluation
+  remains pending. No measured provider selection is claimed.
+- **Not approved:** paid billing, paid fallback, other providers or production use.
 
-History: Proposed 2026-10-22 (initially unmeasured and with mocked tests only).
+History: Proposed 2026-10-22 (mocked tests only); accepted for local development only on
+2026-10-23; amended the same day to add the country-gated staging demo.
 
 ## Date
 
@@ -40,7 +55,7 @@ Provider history in this milestone, recorded for transparency:
   the Gemini Developer API free tier. The Anthropic adapter and its SDK were removed from the
   working tree and never committed. No Anthropic key was set up or used.
 
-## Decision (accepted for local development only)
+## Decision (accepted for local development and the country-gated staging demo)
 
 | Concern | Decision |
 |---|---|
@@ -91,11 +106,15 @@ catalog data. A third approved trial (2026-10-23, 3 requests) showed the live AP
 The Gemini API Additional Terms allow only Paid Services for API clients offered to users in the
 EEA, Switzerland or the UK. They forbid submitting personal or sensitive data to unpaid services,
 which Google may use and have humans review. They require adult users. An open public demo with
-generation on therefore does not comply on the free tier. Generation stays off on any public
-deployment; see `docs/m16-progress.md`.
+generation on and no restrictions therefore does not comply on the free tier.
 
-Owner decision (2026-10-23): accepted as technically compatible for local development only;
-quality, latency and cost selection deferred to M17 (see Status).
+Owner decisions (2026-10-23):
+1. Accepted as technically compatible for local development only, with quality, latency and
+   cost selection deferred to M17.
+2. Later the same day, amended to include the staging demo with generation on, under the country
+   gate, the personal-data screen, the provider notice and the usage limits (see Status). The
+   demo does not offer generation to EEA, Swiss or UK visitors or to unknown regions. These
+   controls are best-effort and are not a compliance guarantee.
 
 ## Required before any live trial (separate owner approval)
 
