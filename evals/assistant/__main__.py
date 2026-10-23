@@ -6,11 +6,15 @@ Usage:
         --max-requests N --min-interval-seconds S --out DIR [--confirm-live] \\
         [--input-usd-per-mtok X --output-usd-per-mtok Y --price-source TEXT]
     uv run python -m evals.assistant judgements --report REPORT.json --judgements FILE.jsonl
+    uv run python -m evals.assistant draft --spec SPEC.json --out DIR
 
 `mocked` sends nothing. `live` without `--confirm-live` is a dry run that prints the plan and
 sends nothing; with it, it sends real provider requests and is run only with explicit owner
 approval of the case file (by SHA-256), the request cap and the interval. `--max-requests` and
 `--min-interval-seconds` are this harness's limits, not the provider account's quotas.
+`draft` captures frozen V3 evidence for an unsealed draft eval set from the local database and
+cached models (read-only, offline, no provider) and writes `cases.draft.jsonl`,
+`provenance.json` and `review-packet.md`; it reviews nothing and seals nothing.
 Exit status 1 when any case fails or the run stopped early.
 """
 
@@ -140,12 +144,53 @@ def _judgements(args: argparse.Namespace) -> int:
     return 0
 
 
+def _draft(args: argparse.Namespace) -> int:
+    from evals.assistant.capture import capture
+    from evals.assistant.draft import DraftSpec, build, render_packet
+
+    spec = DraftSpec.model_validate_json(args.spec.read_text("utf-8"))
+    clean = {c.case_id: c.message for c in spec.cases if c.counterpart is None}
+    run = capture(clean)
+    cases, details = build(spec, run)
+    args.out.mkdir(parents=True, exist_ok=True)
+    path = args.out / "cases.draft.jsonl"
+    # LF on every platform, so the SHA-256 matches the committed blob (.gitattributes eol=lf).
+    path.write_text("".join(c.model_dump_json() + "\n" for c in cases), "utf-8", newline="\n")
+    load_cases(path)  # the draft must satisfy the aq-2 contract
+    sha256 = file_sha256(path)
+    provenance = {
+        "status": spec.status,
+        "spec_version": spec.spec_version,
+        "set_name": spec.set_name,
+        "authorship_note": spec.authorship_note,
+        "reviewed": False,
+        "sealed": False,
+        "cases_file": path.name,
+        "cases_sha256_draft": sha256,
+        "captured_at": run.captured_at.isoformat(),
+        "top_k": run.top_k,
+        "environment": run.environment,
+        "catalog_extras_used_for_fit": run.extras,
+        "cases": details,
+    }
+    (args.out / "provenance.json").write_text(
+        json.dumps(provenance, indent=2, default=str) + "\n", "utf-8", newline="\n"
+    )
+    (args.out / "review-packet.md").write_text(
+        render_packet(spec, cases, details, run, sha256), "utf-8", newline="\n"
+    )
+    flagged = sum(bool(d["flags"]) for d in details.values())
+    print(json.dumps({"cases": len(cases), "flagged": flagged, "cases_sha256_draft": sha256}))
+    return 0
+
+
 def main(argv: list[str] | None = None, provider_factory: ProviderFactory = _gemini) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals.assistant", description=__doc__)
     sub = parser.add_subparsers(dest="command")
     mocked = sub.add_parser("mocked")
     live = sub.add_parser("live")
     judge = sub.add_parser("judgements")
+    draft = sub.add_parser("draft")
     for p in (parser, mocked):
         p.add_argument("--cases", type=Path, default=DEFAULT_CASES)
         p.add_argument("--out", type=Path)
@@ -160,6 +205,8 @@ def main(argv: list[str] | None = None, provider_factory: ProviderFactory = _gem
     live.add_argument("--price-source")
     judge.add_argument("--report", type=Path, required=True)
     judge.add_argument("--judgements", type=Path, required=True)
+    draft.add_argument("--spec", type=Path, required=True)
+    draft.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.command == "live":
         if args.max_requests < 1 or args.min_interval_seconds < 0:
@@ -167,6 +214,8 @@ def main(argv: list[str] | None = None, provider_factory: ProviderFactory = _gem
         return _live(args, provider_factory)
     if args.command == "judgements":
         return _judgements(args)
+    if args.command == "draft":
+        return _draft(args)
     cases = load_cases(args.cases)
     report = build_report(run_cases(cases), cases_sha256=file_sha256(args.cases))
     sys.stdout.write(_write(args.out, report))

@@ -3,3 +3,4 @@ data/labels/* text eol=lf
 evals/goldens/** text eol=lf
 evals/weaksets/** text eol=lf
 evals/results/** text eol=lf
+evals/assistant/drafts/** text eol=lf

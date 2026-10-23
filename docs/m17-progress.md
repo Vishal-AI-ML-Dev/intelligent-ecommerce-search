@@ -54,7 +54,28 @@ Mocked run: 20/20 dev cases pass. That describes harness and workflow behaviour 
   Cost is an estimate only from operator-supplied prices with a stated source; otherwise unknown.
   The report never states what was billed.
 
-## Proposed eval set `abe-v1` (not built; Step B needs approval)
+## Step B draft (unsealed, not reviewed) — 2026-10-23
+
+`evals/assistant/drafts/abe-v1/`: `spec.json` (AI-written messages, stated requirements, proposed
+outcomes, injection templates; written before capture), `cases.draft.jsonl` (40 `aq-2` `eval`
+cases, all `ai_authored`, `case_review: null`, so `live` refuses the file), `provenance.json`
+(capture environment, per-case fit reasons, pre-retrieval decisions, mutations) and
+`review-packet.md` (the owner's review form). Built by `python -m evals.assistant draft`
+(`evals/assistant/draft.py`, `evals/assistant/capture.py`): V3 top-5 (the live `evidence_k`)
+captured once from the local synthetic seed catalog (240 records, migration 0004) with the cached
+embedder and reranker, offline, read-only transactions, deterministic decision provider, no
+generation provider. Proposed outcomes are provisional; acceptable recommendations are a
+catalog-field comparison, not a judgement. The draft SHA-256 identifies the draft only; it is not
+an approval or seal. Every case needs an explicit owner decision (`approved`, `revised` or
+`drop`); a blank decision is not approval and leaves the case unreviewed.
+
+Capture findings: V3 hard-filters explicit constraints, so 5 clean captures hold only fitting
+records; counterparts were reassigned to clean cases with a non-fitting record (recorded in
+`spec.json` `revision_notes`). Four "cannot support" messages retrieve nothing (abstain with no
+provider call); `abe-u01` ("smartwatch …") is clarified before retrieval rather than abstained.
+Five cases carry flags for the owner.
+
+## Proposed eval set `abe-v1` (drafted as above; owner review pending)
 
 40 `eval` cases over the local seed catalog, evidence captured with the V3 retriever:
 
