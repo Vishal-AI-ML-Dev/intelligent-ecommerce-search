@@ -66,8 +66,9 @@ def test_budget_is_five_and_counts_repairs(smoke):
     fake = Fake([bad(), bad(), bad(), bad(), bad(), bad()])
     report = smoke.run_trial(smoke.BudgetedProvider(fake), LIMITS)
     assert smoke.MAX_GENERATION_REQUESTS == 5
-    assert fake.calls == 4  # 2 cases x (call + repair); never more than the budget
-    assert report["requests_sent"] == 4
+    assert fake.calls == 5  # 2 cases x (call + repair) + 1; never more than the budget
+    assert report["requests_sent"] == 5
+    assert report["stopped"] == "budget_exhausted"
 
 
 def test_the_budget_refuses_the_request_past_the_limit(smoke):
@@ -90,12 +91,17 @@ def test_first_provider_failure_stops_everything(smoke):
 
 
 def test_successful_cases_record_compatibility_facts(smoke):
-    fake = Fake([ok("SYN-LAP-001"), ok("SYN-LAP-011")])
+    fake = Fake([ok("SYN-LAP-001"), ok("SYN-LAP-011"), ok("SYN-LAP-021")])
     report = smoke.run_trial(smoke.BudgetedProvider(fake), LIMITS)
-    assert report["stopped"] is None and report["requests_sent"] == 2
-    first = report["cases"][0]
+    assert report["stopped"] is None and report["requests_sent"] == 3
+    first, _, third = report["cases"]
     assert first["outcome"] == "answer" and first["validation"] == "passed"
     assert first["selected"] == [{"product_id": "SYN-LAP-001", "verification": "all_verified"}]
+    assert third["selected"] == [{"product_id": "SYN-LAP-021", "verification": "not_all_verified"}]
+    assert (
+        "Not verified, not given in the catalog: storage 512 GB, storage type SSD."
+        in (third["explanations"][0])
+    )
 
 
 def test_synthetic_records_only(smoke):

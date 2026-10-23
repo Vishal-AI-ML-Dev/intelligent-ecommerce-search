@@ -75,7 +75,7 @@ numbers pass the summary checks). Still Proposed: two samples are not a measurem
 
 Since policy asst-policy-3 (2026-10-23) the provider returns no text: only outcome, product IDs
 and cited field names (`response_json_schema` without `summary`). Explanations are rendered from
-catalog data. This new schema has not been sent to the live API yet.
+catalog data. A third approved trial (2026-10-23, 3 requests) showed the live API accepts this schema; all three drafts passed validation. The model selected an injection-titled synthetic record once (rendered text stayed clean). Still Proposed.
 
 ## Required before any live trial (separate owner approval)
 
