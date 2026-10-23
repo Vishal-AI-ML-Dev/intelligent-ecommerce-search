@@ -10,7 +10,14 @@ from decimal import Decimal
 import pytest
 from evals.assistant import __main__ as cli
 from evals.assistant.__main__ import DEFAULT_CASES, live_refusal
-from evals.assistant.contracts import EvalCase, file_sha256, load_cases
+from evals.assistant.annotations import (
+    AnnotationApproval,
+    AnnotationSet,
+    CaseAnnotation,
+    derived_cohort,
+    eligibility_sha256,
+)
+from evals.assistant.contracts import EvalCase, case_sha256, file_sha256, load_cases
 from evals.assistant.judgements import load_judgements, summarize_judgements
 from evals.assistant.report import BILLING, build_report
 from evals.assistant.runner import run_live
@@ -255,12 +262,47 @@ def test_live_refuses_dev_cases_unreviewed_cases_and_unapproved_files(tmp_path):
     assert "SHA-256" in live_refusal(unreviewed, "x", "y")
 
 
+def write_annotations(tmp_path, path, approved=True):
+    """Test-built `aa-1` annotations (approvals here are test data, not owner approvals)."""
+    cases = load_cases(path)
+    annotations = []
+    for case in cases:
+        target = None if case.counterpart is None else case.counterpart.injected_product_ids[0]
+        annotation = CaseAnnotation(
+            case_id=case.case_id,
+            case_sha256=case_sha256(case),
+            abstention_cohort=derived_cohort(case),
+            injection_target=target,
+        )
+        if approved and target is not None:
+            approval = AnnotationApproval(
+                case_id=case.case_id,
+                reviewer_handle="ann-1",
+                reviewed_on="2026-10-23",
+                eligibility_sha256=eligibility_sha256(annotation),
+                recorded_from="test",
+            )
+            annotation = annotation.model_copy(update={"approval": approval})
+        annotations.append(annotation)
+    out = tmp_path / "annotations.json"
+    aset = AnnotationSet(
+        annotation_version="aa-1", cases_sha256=file_sha256(path), annotations=annotations
+    )
+    out.write_text(aset.model_dump_json(), "utf-8")
+    return out
+
+
 def test_live_dry_run_and_refusals_send_nothing(tmp_path, capsys):
     path = write(tmp_path, EVAL_RECORDS)
+    annotations = write_annotations(tmp_path, path)
     base = [
         "live",
         "--cases",
         str(path),
+        "--annotations",
+        str(annotations),
+        "--expected-annotations-sha256",
+        file_sha256(annotations),
         "--max-requests",
         "4",
         "--min-interval-seconds",
@@ -283,6 +325,27 @@ def test_live_dry_run_and_refusals_send_nothing(tmp_path, capsys):
         "--confirm-live",
     ]
     assert cli.main(priced, _refusing_factory) == 2
+
+
+def test_live_refuses_mismatched_or_unapproved_annotations(tmp_path, capsys):
+    path = write(tmp_path, EVAL_RECORDS)
+    approved = write_annotations(tmp_path, path)
+    sha = file_sha256(approved)
+    base = ["live", "--cases", str(path), "--expected-sha256", file_sha256(path)]
+    limits = ["--max-requests", "4", "--min-interval-seconds", "10", "--out", str(tmp_path)]
+    wrong_sha = [*base, "--annotations", str(approved), "--expected-annotations-sha256", "0" * 64]
+    assert cli.main([*wrong_sha, *limits], _refusing_factory) == 2
+    unapproved = write_annotations(tmp_path, path, approved=False)
+    pending = [
+        *base,
+        "--annotations",
+        str(unapproved),
+        "--expected-annotations-sha256",
+        file_sha256(unapproved),
+    ]
+    assert cli.main([*pending, *limits], _refusing_factory) == 2
+    assert "not approved" in capsys.readouterr().err
+    assert sha != file_sha256(unapproved)
 
 
 # ---- human judgements ---------------------------------------------------------------------------

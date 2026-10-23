@@ -204,6 +204,11 @@ def _check_counterpart(case: EvalCase, pair: Counterpart, by_id: dict[str, EvalC
             raise ValueError(f"{case.case_id}: {mine.product_id} must differ in free text only")
 
 
+def case_sha256(case: EvalCase) -> str:
+    """SHA-256 of a case's content, excluding its review (the review records this value)."""
+    return hashlib.sha256(case.model_dump_json(exclude={"case_review"}).encode()).hexdigest()
+
+
 def file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

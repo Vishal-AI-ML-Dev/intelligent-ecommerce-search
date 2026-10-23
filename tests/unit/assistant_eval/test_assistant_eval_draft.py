@@ -11,17 +11,25 @@ from pathlib import Path
 
 import pytest
 from evals.assistant.__main__ import live_refusal
-from evals.assistant.contracts import FREE_TEXT_FIELDS, file_sha256, load_cases
+from evals.assistant.annotations import AnnotationApproval, eligibility_sha256
+from evals.assistant.contracts import FREE_TEXT_FIELDS, EvalCase, file_sha256, load_cases
 from evals.assistant.draft import (
     Capture,
     CaptureRun,
     DraftSpec,
     Requirements,
+    Review,
+    apply_reviews,
     build,
+    build_annotations,
+    case_sha256,
     choose_target,
+    load_reviews,
     render_packet,
     unmet,
+    visibility,
 )
+from evals.assistant.runner import run_case
 
 from ecommerce_search.assistant.models import EvidenceProduct
 
@@ -209,7 +217,7 @@ def test_build_refuses_a_counterpart_without_a_non_fitting_target():
 def test_packet_marks_draft_status_and_leaves_corrections_blank():
     cases, details = build(spec(), run())
     packet = render_packet(spec(), cases, details, run(), "0" * 64)
-    assert "UNSEALED DRAFT. Not reviewed." in packet
+    assert "UNSEALED DRAFT. Owner decisions recorded for 0 of 4 cases." in packet
     assert "not an approval or seal" in packet
     assert packet.count("*AI-authored · provisional · not reviewed*") == len(cases)
     decision = (
@@ -224,7 +232,10 @@ def test_committed_abe_v1_draft_is_unreviewed_and_refused_for_live_runs():
     cases = load_cases(path)
     assert len(cases) == 40
     assert all(c.split == "eval" and c.authorship == "ai_authored" for c in cases)
-    assert all(c.case_review is None for c in cases)
+    reviews = load_reviews(DRAFT_DIR / "reviews.jsonl")
+    reviewed = {c.case_id: c.case_review for c in cases if c.case_review is not None}
+    assert set(reviewed) == {r.case_id for r in reviews if r.decision != "drop"}
+    assert all(r.reviewer_handle == "ann-1" for r in reviewed.values())
     assert live_refusal(cases, file_sha256(path), file_sha256(path)) == (
         "every eval case needs a recorded case review"
     )
@@ -234,6 +245,136 @@ def test_committed_abe_v1_draft_hash_is_line_ending_stable():
     path = DRAFT_DIR / "cases.draft.jsonl"
     assert b"\r" not in path.read_bytes()
     provenance = json.loads((DRAFT_DIR / "provenance.json").read_text("utf-8"))
-    assert provenance["sealed"] is False and provenance["reviewed"] is False
+    assert provenance["sealed"] is False and provenance["all_reviewed"] is False
+    assert provenance["reviews_recorded"] == len(load_reviews(DRAFT_DIR / "reviews.jsonl"))
     assert provenance["cases_sha256_draft"] == file_sha256(path)
     assert file_sha256(path) in (DRAFT_DIR / "review-packet.md").read_text("utf-8")
+
+
+def test_visibility_marks_what_the_model_receives_not_the_spec_table():
+    record = product(1, "SYN-H", "5000", None).model_copy(
+        update={"title": "Sony Aura Over-ear Wireless Headphones", "description": None}
+    )
+    req = Requirements(brand="Dell", max_price=Decimal("9000"), wireless=True, anc=True)
+    assert visibility(record, {"wireless": True, "anc": False}, req) == {
+        "brand": "typed",
+        "max_price": "typed",
+        "wireless": "text",
+        "anc": "missing",
+    }
+    shoe = record.model_copy(update={"title": "Nike Strato Running Shoes for Men - Black"})
+    assert visibility(shoe, {"color": "Black"}, Requirements(color="Black", gender=("men",))) == {
+        "gender": "text",
+        "color": "text",
+    }
+    assert visibility(record, {}, Requirements(ram_gb=16)) == {"ram_gb": "missing"}
+
+
+def test_gaps_are_recorded_separately_and_keep_the_case():
+    cases, details = build(spec(), run())
+    assert [c.case_id for c in cases] == [c.case_id for c in spec().cases]
+    assert details["abe-g01-clean"]["evidence_gaps"] == []
+    no_ram = tuple(p.model_copy(update={"ram_gb": None}) for p in EVIDENCE)
+    clean_only = spec(cases=[c for c in spec().model_dump()["cases"] if not c["counterpart"]])
+    cases, details = build(clean_only, run(no_ram))
+    assert len(cases) == 2
+    assert details["abe-g01-clean"]["evidence_gaps"] == [
+        f"{p.product_id}: ram_gb not visible to the model" for p in no_ram
+    ]
+    packet = render_packet(clean_only, cases, details, run(no_ram), "0" * 64)
+    assert "Evidence-sufficiency gaps** (not solely model failures)" in packet
+
+
+def test_out_of_stock_fit_is_labelled_as_comparison_only():
+    cases, details = build(spec(), run())
+    packet = render_packet(spec(), cases, details, run(), "0" * 64)
+    assert "comparison only: out_of_stock (not acceptable)" in packet
+    assert "SYN-B" not in cases[0].expect.acceptable_recommendation_ids
+
+
+def review(case, decision="approved"):
+    return Review(
+        case_id=case.case_id,
+        reviewer_handle="ann-1",
+        reviewed_on="2026-10-23",
+        decision=decision,
+        case_sha256=case_sha256(case),
+        recorded_from="test",
+    )
+
+
+def test_reviews_are_recorded_only_for_reviewed_cases_and_bound_to_content():
+    cases, _ = build(spec(), run())
+    kept, dropped = apply_reviews(cases, (review(cases[0]), review(cases[1], "drop")))
+    assert dropped == ["abe-c01-clarify"]
+    assert kept[0].case_review.decision == "approved"
+    assert kept[0].authorship == "ai_authored"
+    assert all(c.case_review is None for c in kept[1:])
+    changed = cases[0].model_copy(update={"message": "dell laptop"})
+    with pytest.raises(ValueError, match="changed after its review"):
+        apply_reviews([changed, *cases[1:]], (review(cases[0]),))
+    with pytest.raises(ValueError, match="more than one review"):
+        apply_reviews(cases, (review(cases[0]), review(cases[0])))
+
+
+def test_a_pick_outside_the_acceptable_set_fails_even_without_forbidden_ids():
+    fixture = next(
+        EvalCase.model_validate_json(line)
+        for line in (
+            Path(__file__).parents[3] / "evals/assistant/fixtures/synthetic-v1/cases.jsonl"
+        )
+        .read_text("utf-8")
+        .splitlines()
+        if '"grounded-dell-under-budget"' in line
+    )
+    expect = fixture.expect.model_copy(
+        update={
+            "recommended_ids": None,
+            "acceptable_recommendation_ids": ("SYN-LAP-002",),
+            "forbidden_recommendation_ids": (),
+        }
+    )
+    result = run_case(fixture.model_copy(update={"expect": expect}))  # scripted pick: SYN-LAP-001
+    checks = {c.check: c for c in result.checks}
+    assert not checks["recommended_ids"].passed
+    assert "outside the acceptable set" in checks["recommended_ids"].detail
+    assert checks["forbidden_not_recommended"].passed
+    assert not result.passed
+
+
+def test_not_assessed_parts_are_reported_and_do_not_change_the_case():
+    base = spec().model_dump()
+    noted = spec(
+        cases=[
+            {**c, "not_assessed": ["coding suitability"]} if c["case_id"] == "abe-g01-clean" else c
+            for c in base["cases"]
+        ]
+    )
+    plain, _ = build(spec(), run())
+    cases, details = build(noted, run())
+    assert [case_sha256(c) for c in cases] == [case_sha256(c) for c in plain]
+    assert details["abe-g01-clean"]["not_assessed"] == ["coding suitability"]
+    packet = render_packet(noted, cases, details, run(), "0" * 64)
+    assert "**Not assessed (not verified by any check or label):** coding suitability" in packet
+
+
+def test_annotations_attach_only_matching_owner_approvals():
+    cases, details = build(spec(), run())
+    aset = build_annotations(spec(), cases, details, (), (), "0" * 64)
+    by_id = {a.case_id: a for a in aset.annotations}
+    assert by_id["abe-m01-msg"].injection_target == "SYN-C"
+    assert by_id["abe-g01-clean"].abstention_cohort is None
+    assert all(a.approval is None for a in aset.annotations)
+    target = by_id["abe-m01-msg"]
+    approval = AnnotationApproval(
+        case_id=target.case_id,
+        reviewer_handle="ann-1",
+        reviewed_on="2026-10-23",
+        eligibility_sha256=eligibility_sha256(target),
+        recorded_from="test",
+    )
+    approved = build_annotations(spec(), cases, details, (), (approval,), "0" * 64)
+    assert {a.case_id for a in approved.annotations if a.approval} == {"abe-m01-msg"}
+    stale = approval.model_copy(update={"eligibility_sha256": "1" * 64})
+    with pytest.raises(ValueError, match="changed after its approval"):
+        build_annotations(spec(), cases, details, (), (stale,), "0" * 64)

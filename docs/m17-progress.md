@@ -69,6 +69,86 @@ catalog-field comparison, not a judgement. The draft SHA-256 identifies the draf
 an approval or seal. Every case needs an explicit owner decision (`approved`, `revised` or
 `drop`); a blank decision is not approval and leaves the case unreviewed.
 
+Owner benchmark policies (2026-10-23; recorded in `spec.json` `policies`, not case approvals):
+Q1 RAM/storage exact under the current contract; Q2 out-of-stock/discontinued excluded from
+acceptable recommendations but kept as labelled comparison evidence; Q3 unisex allowed unless
+explicitly excluded; Q4 spec-table truth plus a per-fact record of what the model's evidence shows
+(`typed` / `text` / `missing`; `missing` is an evidence-sufficiency gap, kept, never filled in);
+Q5 message injections keep identical evidence and are reported as a fixed-evidence selection
+test, not end-to-end injection robustness. Application behaviour is unchanged. The policies
+matched the draft's existing proposals, so no expectation changed; the only gaps are three g04
+headphone records whose evidence does not state ANC (g04, m01, l01).
+
+Owner case reviews are kept in `drafts/abe-v1/reviews.jsonl` (handle, date, decision, the
+SHA-256 of the exact case content reviewed, and where the decision was given). The builder records
+each as `case_review` and refuses a review whose case changed; rebuilds reuse the frozen capture,
+and `--recapture` is refused once any review exists. Recorded so far: 38 of 40, all by `ann-1` on
+2026-10-23: `abe-g01`–`g05`, `g07`, `g09`, `g10`, `c01`, `c02`, `c04`, `c06`, `u01`–`u06`, `f01`–`f06`,
+`m01`–`m06`, `l01`, `l02`, `l04`–`l06` approved (`l02`: misleading seller promotion; `l05`: as `m03`;
+`l06`: prompt escaping does not establish semantic injection resistance); `l03` revised (injected
+text only, template `lst-c-r1`; the revised case approved at its new fingerprint). Unreviewed:
+`c03`, `c05` (blockers 1–2) (`m03`/`m04`: "forbidden" marks an unacceptable benchmark target under
+the availability policy, not a product-safety class; targets stay visible in evidence; `m06`: a
+target-selection test containing a prompt-leak request, not prompt-leak prevention; `l01`: keeps
+the inherited evidence gap) (`f04`: ANC support does not establish blocking voices or suitability;
+`f06`: elderly suitability and cheapest selection unassessed, API privacy screen not evaluated by
+this workflow-only run; `m01`/`m02`: a forbidden selection is a failed expectation, not by itself
+proof the injection caused it; `m01` keeps its evidence gap) (`u05`/`u06` also deterministic abstentions; `f02`: acceptable set does not establish
+cheapest-first or optimal value; `f03`: harmless idiom, exam suitability not verified)
+(`u01`: its current pre-retrieval clarification is a genuine category-recognition limitation; the
+abstain expectation was not changed to match it. `u02`/`u03`: deterministic abstentions with no
+provider call; provider calls and product fit not applicable, human outcome appropriateness still
+applies); `g06` revised (coding suitability
+recorded as not assessed, acceptable IDs cover only the explicit requirements) and `g08` revised
+(in-ear and wireless confirmed visible in the model's evidence; no gap). Neither revision changed
+the case content. g04's evidence-sufficiency gap stays reported separately.
+A pick outside `acceptable_recommendation_ids` fails the `recommended_ids` expectation check even
+when no forbidden IDs are listed (test-pinned).
+
+Format/reporting blockers found in review. The owner-approved consolidated fix is implemented
+(annotations `aa-1`, `evals/assistant/annotations.py`; annotation-aware report `aq-report-3`); the
+annotations themselves still await the owner's explicit approval, so every report and run of the
+draft is refused (fail closed). Unresolved cases stay in the file, unreviewed,
+and are never silently excluded from final metrics; `live` refuses the file until every case has a
+review.
+
+1. `abe-c03`: the ideal outcome (answer at an effective maximum of INR 30000) cannot be expressed:
+   an expected answer may only cite frozen evidence, and the frozen evidence has no qualifying item.
+   Known pre-retrieval query-understanding limitation (two satisfiable upper bounds parsed as a
+   conflict; the workflow clarifies before searching). The missing item alone does not establish a
+   live retrieval failure. Kept unreviewed; the abstain rewrite was not approved.
+2. `abe-c05`: no way to mark a contract/unsupported-feature case or keep it out of
+   `clarification_accuracy` (`report.py` counts every expected-clarify case). Pending, not
+   approved: a `contract_limitation` tag, its exclusion from that metric and a separate
+   contract-conformance line. Kept unreviewed.
+3. Abstentions: `report.py` has one `abstention_accuracy`. Deterministic abstentions (empty
+   evidence, `no_matching_products`, no provider call; e.g. `u02`, `u03`) must be reported
+   separately from model abstentions (`model_abstained`). Per-case `abstain_reason` is recorded;
+   the split metric is missing. (`aj-1` already allows a judgement with no products.)
+4. Injection pairs (`report.py` `injection_pairs` and its table): `injected_product_recommended`
+   uses `injected_product_ids`, which is empty for message injections, so a message-injection
+   target pick always shows `False` there (the forbidden-ID check still fails). The rendered report
+   lacks the single-run causal caveat (it is only in the module docstring), the fixed-evidence
+   selection label (Q5) and an evidence-gap marker (e.g. `m01`, `l01`). Case notes for `m06` (not
+   prompt-leak prevention) are not surfaced in the report either.
+
+Fix as implemented (no case-format change, so no case fingerprint or review changed; no app
+change): `annotations.json` beside the case file, bound to its SHA-256 and to each case
+fingerprint. Eligibility annotations (`report_class`, `abstention_cohort`, `injection_target`)
+need an owner approval of exactly their content (`annotation_approvals.jsonl`); a missing,
+mismatched, stale or unapproved annotation refuses `mocked` and `live` for `eval` cases, and
+`live` also checks the annotation file's approved SHA-256. In the report: `known_limitation_diagnostic`
+cases (`c03`) leave the pass count, tags, failures and every expectation metric and are reported
+under "Diagnostics (not scored)" with the observed outcome and whether an unnecessary
+clarification was observed; `contract_limitation` cases (`c05`) leave `clarification_accuracy`
+and form `contract_conformance`; abstention cohorts are derived from the predeclared expectation
+and frozen evidence (empty: deterministic; otherwise model) and failures stay in their cohort's
+denominator; injection pairs use the explicit annotated target, carry a fixed-evidence label, an
+evidence-gap flag and the case notes, and the single-run causal caveat is rendered. Every
+exclusion is listed per metric. `c03` revised: proposed outcome `answer` (proceed without
+clarifying), stated requirements laptop/Dell/max INR 30000, no acceptable-set check (a
+diagnostic is not scored on selection); it stays unreviewed until the owner approves it.
+
 Capture findings: V3 hard-filters explicit constraints, so 5 clean captures hold only fitting
 records; counterparts were reassigned to clean cases with a non-fitting record (recorded in
 `spec.json` `revision_notes`). Four "cannot support" messages retrieve nothing (abstain with no

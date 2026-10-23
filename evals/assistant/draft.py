@@ -17,25 +17,43 @@ clean expectation. A message injection keeps the clean evidence; a listing injec
 and changes one free-text field of the target.
 """
 
+import json
+import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ecommerce_search.assistant.clarify import decide_clarification
 from ecommerce_search.assistant.models import AbstainReason, ClarifyReason, EvidenceProduct
+from ecommerce_search.assistant.prompt import evidence_record
 from ecommerce_search.query_understanding.parser import parse_normalized_query
 from ecommerce_search.search.query import normalize_query
+from evals.assistant.annotations import (
+    ANNOTATION_VERSION,
+    AnnotationApproval,
+    AnnotationSet,
+    CaseAnnotation,
+    Diagnostic,
+    ReportClass,
+    affects_eligibility,
+    derived_cohort,
+    eligibility_sha256,
+)
 from evals.assistant.contracts import (
     FREE_TEXT_FIELDS,
+    HANDLE,
     SCHEMA_VERSION,
+    CaseReview,
     Counterpart,
     EvalCase,
     EvidenceCapture,
     Expectation,
     Tag,
+    case_sha256,
 )
 
 DRAFT_SPEC_VERSION = "abe-draft-1"
@@ -85,6 +103,12 @@ class DraftCaseSpec(_Frozen):
     abstain_reasons: tuple[AbstainReason, ...] = ()
     requirements: Requirements = Requirements()
     rationale: str
+    # Parts of the request no check or label assesses; reported, never claimed as verified.
+    not_assessed: tuple[str, ...] = ()
+    # Metric eligibility (annotations.py); needs the owner's approval before any report uses it.
+    report_class: ReportClass | None = None
+    diagnostic: Diagnostic | None = None
+    diagnostic_note: str = ""
     counterpart: CounterpartSpec | None = None
 
 
@@ -94,6 +118,16 @@ class ListingTemplate(_Frozen):
     text: str
 
 
+class Policy(_Frozen):
+    """A benchmark policy decided by the owner. It is not a case review."""
+
+    policy_id: str
+    question: str
+    decision: str
+    decided_by: Literal["owner"]
+    decided_on: date
+
+
 class DraftSpec(_Frozen):
     spec_version: Literal["abe-draft-1"]
     set_name: str
@@ -101,6 +135,7 @@ class DraftSpec(_Frozen):
     author: str
     authorship_note: str
     revision_notes: tuple[str, ...] = ()
+    policies: tuple[Policy, ...] = ()
     message_templates: dict[str, str]
     listing_templates: dict[str, ListingTemplate]
     cases: tuple[DraftCaseSpec, ...]
@@ -122,6 +157,155 @@ class CaptureRun:
     # product_id -> catalog spec values not carried by EvidenceProduct (wireless, anc, ...)
     extras: dict[str, dict[str, Any]]
     environment: dict[str, Any]
+
+
+class Review(_Frozen):
+    """An owner decision on one case, bound to the exact case content it was made on."""
+
+    case_id: str
+    reviewer_handle: str = Field(pattern=HANDLE.pattern)
+    reviewed_on: date
+    decision: Literal["approved", "revised", "drop"]
+    case_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    notes: str = Field(default="", max_length=500)
+    recorded_from: str = Field(min_length=1)
+
+
+def load_reviews(path: Path) -> tuple[Review, ...]:
+    if not path.exists():
+        return ()
+    lines = path.read_text("utf-8").splitlines()
+    return tuple(Review.model_validate_json(line) for line in lines if line.strip())
+
+
+def apply_reviews(
+    cases: list[EvalCase], reviews: tuple[Review, ...]
+) -> tuple[list[EvalCase], list[str]]:
+    """Records each review as the case's `case_review` (or drops the case). Refuses a review of
+    a case whose content changed after the review. Cases without a review stay unreviewed."""
+    by_case: dict[str, Review] = {}
+    for review in reviews:
+        if review.case_id in by_case:
+            raise ValueError(f"{review.case_id}: more than one review")
+        by_case[review.case_id] = review
+    unknown = set(by_case) - {case.case_id for case in cases}
+    if unknown:
+        raise ValueError(f"reviews of unknown cases: {sorted(unknown)}")
+    kept: list[EvalCase] = []
+    dropped: list[str] = []
+    for case in cases:
+        review = by_case.get(case.case_id)
+        if review is None:
+            kept.append(case)
+            continue
+        if case_sha256(case) != review.case_sha256:
+            raise ValueError(f"{case.case_id}: the case changed after its review")
+        if review.decision == "drop":
+            dropped.append(case.case_id)
+            continue
+        recorded = CaseReview(
+            reviewer_handle=review.reviewer_handle,
+            reviewed_on=review.reviewed_on,
+            decision=review.decision,
+        )
+        kept.append(case.model_copy(update={"case_review": recorded}))
+    return kept, dropped
+
+
+def load_annotation_approvals(path: Path) -> tuple[AnnotationApproval, ...]:
+    if not path.exists():
+        return ()
+    lines = path.read_text("utf-8").splitlines()
+    return tuple(AnnotationApproval.model_validate_json(line) for line in lines if line.strip())
+
+
+def build_annotations(
+    spec: DraftSpec,
+    cases: list[EvalCase],
+    details: dict[str, Any],
+    reviews: tuple[Review, ...],
+    approvals: tuple[AnnotationApproval, ...],
+    cases_sha256: str,
+) -> AnnotationSet:
+    """One annotation per case. An owner approval is attached only when it matches the
+    annotation's eligibility content exactly; a stale approval is refused, never carried over."""
+    items = {item.case_id: item for item in spec.cases}
+    notes = {review.case_id: review.notes for review in reviews}
+    approved: dict[str, AnnotationApproval] = {}
+    for approval in approvals:
+        if approval.case_id in approved:
+            raise ValueError(f"{approval.case_id}: more than one annotation approval")
+        approved[approval.case_id] = approval
+    unknown = set(approved) - {case.case_id for case in cases}
+    if unknown:
+        raise ValueError(f"annotation approvals of unknown cases: {sorted(unknown)}")
+    annotations = []
+    for case in cases:
+        item, info = items[case.case_id], details[case.case_id]
+        diagnostic = item.report_class == "known_limitation_diagnostic"
+        annotation = CaseAnnotation(
+            case_id=case.case_id,
+            case_sha256=case_sha256(case),
+            report_class=item.report_class,
+            diagnostic=item.diagnostic,
+            diagnostic_note=item.diagnostic_note,
+            abstention_cohort=None if diagnostic else derived_cohort(case),
+            injection_target=None if case.counterpart is None else info["target"],
+            evidence_gaps=tuple(info["evidence_gaps"]),
+            not_assessed=item.not_assessed,
+            review_notes=notes.get(case.case_id, ""),
+        )
+        approval = approved.get(case.case_id)
+        if approval is not None:
+            if approval.eligibility_sha256 != eligibility_sha256(annotation):
+                raise ValueError(f"{case.case_id}: the annotation changed after its approval")
+            annotation = annotation.model_copy(update={"approval": approval})
+        annotations.append(annotation)
+    return AnnotationSet(
+        annotation_version=ANNOTATION_VERSION,
+        cases_sha256=cases_sha256,
+        annotations=tuple(annotations),
+    )
+
+
+def frozen_capture(provenance: dict[str, Any], cases: tuple[EvalCase, ...]) -> CaptureRun:
+    """The capture recorded by an earlier build, so a rebuild never searches again. Older
+    provenance files without `captures` take the clean cases' frozen evidence."""
+    captures = provenance.get("captures") or {
+        case.case_id: {
+            "search_version": case.evidence_capture.search_version,
+            "evidence": [p.model_dump(mode="json") for p in case.evidence],
+        }
+        for case in cases
+        if case.counterpart is None
+    }
+    return CaptureRun(
+        captured_at=datetime.fromisoformat(provenance["captured_at"]),
+        top_k=provenance["top_k"],
+        captures={
+            case_id: Capture(
+                got["search_version"],
+                tuple(EvidenceProduct.model_validate(p) for p in got["evidence"]),
+            )
+            for case_id, got in captures.items()
+        },
+        extras=provenance["catalog_extras_used_for_fit"],
+        environment=provenance["environment"],
+    )
+
+
+def captures_json(run: CaptureRun) -> dict[str, Any]:
+    return json.loads(
+        json.dumps(
+            {
+                case_id: {
+                    "search_version": got.search_version,
+                    "evidence": [p.model_dump(mode="json") for p in got.evidence],
+                }
+                for case_id, got in run.captures.items()
+            }
+        )
+    )
 
 
 def unmet(product: EvidenceProduct, extra: dict[str, Any], req: Requirements) -> list[str]:
@@ -155,6 +339,46 @@ def unmet(product: EvidenceProduct, extra: dict[str, Any], req: Requirements) ->
     if product.availability != "in_stock":
         reasons.append(f"availability {product.availability}")
     return reasons
+
+
+TYPED_FIELDS = {
+    "category": "category",
+    "brand": "brand",
+    "min_price": "price",
+    "max_price": "price",
+    "ram_gb": "ram_gb",
+    "storage_gb": "storage_gb",
+    "storage_type": "storage_type",
+    "subcategory": "subcategory",
+}
+# Facts with no typed evidence field: a pattern check of the text the model receives.
+TEXT_PATTERNS = {
+    "wireless": re.compile(r"\b(wireless|wired)\b", re.IGNORECASE),
+    "anc": re.compile(r"noise[- ]cancel", re.IGNORECASE),
+    "gender": re.compile(r"\b(men|women|unisex)\b", re.IGNORECASE),
+}
+
+
+def visibility(product: EvidenceProduct, extra: dict[str, Any], req: Requirements) -> dict:
+    """Per stated requirement: `typed` (a non-null field of the evidence record the model
+    receives), `text` (stated in its title, subcategory or (truncated) description, by a
+    documented pattern check, not reviewed) or `missing` (an evidence-sufficiency gap: the model
+    could not see it, whatever the catalog spec table says)."""
+    record = evidence_record(product)
+    text = " ".join(str(record[k] or "") for k in ("title", "subcategory", "description"))
+    out: dict[str, str] = {}
+    for field in Requirements.model_fields:
+        if getattr(req, field) is None:
+            continue
+        if field in TYPED_FIELDS:
+            out[field] = "typed" if record[TYPED_FIELDS[field]] is not None else "missing"
+        elif field == "color":
+            color = extra.get("color")
+            seen = color is not None and re.search(rf"\b{re.escape(color)}\b", text, re.I)
+            out[field] = "text" if seen else "missing"
+        else:
+            out[field] = "text" if TEXT_PATTERNS[field].search(text) else "missing"
+    return out
 
 
 def pre_retrieval_decision(message: str) -> str:
@@ -199,6 +423,18 @@ def build(spec: DraftSpec, run: CaptureRun) -> tuple[list[EvalCase], dict[str, A
     def assess(evidence: tuple[EvidenceProduct, ...], req: Requirements):
         return [(p, unmet(p, run.extras.get(p.product_id, {}), req)) for p in evidence]
 
+    def visible(evidence: tuple[EvidenceProduct, ...], req: Requirements):
+        seen = {
+            p.product_id: visibility(p, run.extras.get(p.product_id, {}), req) for p in evidence
+        }
+        gaps = [
+            f"{pid}: {field} not visible to the model"
+            for pid, fields in seen.items()
+            for field, status in fields.items()
+            if status == "missing"
+        ]
+        return seen, gaps
+
     for item in spec.cases:
         if item.counterpart is not None:
             continue
@@ -223,17 +459,23 @@ def build(spec: DraftSpec, run: CaptureRun) -> tuple[list[EvalCase], dict[str, A
         if not got.evidence:
             flags.append("V3 returned no records")
         clarify = item.proposed_outcome == "clarify"
+        diagnostic = item.report_class == "known_limitation_diagnostic"
         expect = Expectation(
             outcome=item.proposed_outcome,
             clarify_reason=item.clarify_reason,
             abstain_reasons=item.abstain_reasons,
-            acceptable_recommendation_ids=None if clarify else fitting,
+            # A diagnostic case is not scored on its selection (annotations.py).
+            acceptable_recommendation_ids=None if clarify or diagnostic else fitting,
             max_generation_calls=0 if clarify else 2,
         )
         case = _case(spec, item, item.message, "captured_v3", capture, got.evidence, None, expect)
+        seen, gaps = visible(got.evidence, item.requirements)
         info = {
             "decision": decision,
             "assessed": {p.product_id: reasons for p, reasons in assessed},
+            "visibility": seen,
+            "evidence_gaps": gaps,
+            "not_assessed": list(item.not_assessed),
             "flags": flags,
             "target": choose_target(assessed),
         }
@@ -309,9 +551,13 @@ def build(spec: DraftSpec, run: CaptureRun) -> tuple[list[EvalCase], dict[str, A
             expect,
         )
         cases.append(case)
+        clean_req = next(c for c in spec.cases if c.case_id == pair.clean).requirements
+        seen, gaps = visible(evidence, clean_req)  # a listing mutation may change what is seen
         details[item.case_id] = {
             "decision": decision,
             "assessed": info["assessed"],
+            "visibility": seen,
+            "evidence_gaps": gaps,
             "flags": flags,
             "target": target,
             "mutation": mutation,
@@ -378,25 +624,67 @@ def _requirements(req: Requirements) -> str:
     )
 
 
+def _annotation_section(annotation_set: AnnotationSet, sha256: str | None) -> list[str]:
+    eligible = [a for a in annotation_set.annotations if affects_eligibility(a)]
+    pending = sum(a.approval is None for a in eligible)
+    lines = [
+        "## Annotations affecting metric eligibility (`aa-1`)",
+        "",
+        f"`annotations.json` SHA-256 (draft): `{sha256}`. {len(eligible)} annotations affect "
+        f"metric eligibility; **{pending} await the owner's explicit approval**. Reports and "
+        "runs refuse the set until every one is approved (fail closed). Case fingerprints "
+        "being unchanged does not approve an annotation.",
+        "",
+        "| Case | Report class | Abstention cohort | Injection target | Eligibility SHA-256 "
+        "| Approval |",
+        "|---|---|---|---|---|---|",
+    ]
+    for a in eligible:
+        approval = (
+            "PENDING"
+            if a.approval is None
+            else f"approved by {a.approval.reviewer_handle} on {a.approval.reviewed_on}"
+        )
+        lines.append(
+            f"| `{a.case_id}` | {a.report_class or '—'} | {a.abstention_cohort or '—'} | "
+            f"{a.injection_target or '—'} | `{eligibility_sha256(a)[:16]}…` | {approval} |"
+        )
+    return [*lines, ""]
+
+
+def _review(case: EvalCase) -> str:
+    review = case.case_review
+    if review is None:
+        return "not reviewed"
+    return f"{review.decision} by {review.reviewer_handle} on {review.reviewed_on}"
+
+
 def render_packet(
     spec: DraftSpec,
     cases: list[EvalCase],
     details: dict[str, Any],
     run: CaptureRun,
     cases_sha256: str,
+    annotation_set: AnnotationSet | None = None,
+    annotations_sha256: str | None = None,
 ) -> str:
     items = {item.case_id: item for item in spec.cases}
     flagged = [c.case_id for c in cases if details[c.case_id]["flags"]]
+    reviewed = sum(c.case_review is not None for c in cases)
     env = run.environment
     lines = [
         f"# M17 Step B — `{spec.set_name}` draft review packet",
         "",
-        "**Status: UNSEALED DRAFT. Not reviewed. Not approved for any live run.**",
+        f"**Status: UNSEALED DRAFT. Owner decisions recorded for {reviewed} of {len(cases)} "
+        "cases. Not approved for any live run.**",
         "",
         "- Every message, stated requirement, proposed outcome and injection template was "
         "written by an AI assistant (Claude Code), not by a person. Every case is "
-        "`authorship: ai_authored`, `case_review: null`.",
-        "- Proposed outcomes and acceptable/forbidden recommendations are **provisional**. "
+        "`authorship: ai_authored`; a reviewed case keeps that authorship and gains a "
+        "`case_review` entry. Unreviewed cases have `case_review: null`.",
+        "- Unreviewed proposals and acceptable/forbidden recommendations are **provisional**. "
+        "A recommendation outside the acceptable set fails the `recommended_ids` expectation "
+        "check even when no forbidden IDs are listed. "
         "Acceptable recommendations are a catalog-field comparison against the stated "
         "requirements, not a human judgement.",
         "- Evidence is a frozen V3 capture from the local **synthetic** seed catalog "
@@ -434,27 +722,35 @@ def render_packet(
         "2. Every case needs an explicit **Your decision**: `approved`, `revised` or `drop`. "
         "A blank decision is not approval: the case stays unreviewed and cannot be sealed. "
         "For `revised`, write the changed fields; fields you leave blank keep the proposal.",
-        "3. Decide the open questions below, which apply to many cases.",
-        "4. Send the edited packet back. Corrections are applied to the draft; your "
+        "3. Send the decisions back. Corrections are applied to the draft; your "
         "approval is then recorded per case as `case_review` with your `ann-<n>` handle "
         "and date. Nothing is marked reviewed before that.",
         "",
-        "### Open questions for the owner",
+    ]
+    if spec.policies:
+        lines += [
+            "### Benchmark policies (owner-decided; these are not case approvals)",
+            "",
+        ]
+        lines += [f"- **{p.policy_id}** ({p.decided_on}): {p.decision}" for p in spec.policies]
+        lines.append("")
+    lines += [
+        "### Evidence visibility",
         "",
-        "- RAM and storage are read as **exact** values (16gb ram = 16 GB, as the M16 "
-        "constraint check does). Should higher capacities within budget be acceptable?",
-        "- Records that are `out_of_stock` or `discontinued` are **not** proposed as "
-        "acceptable. Keep that?",
-        '- "for men" / "for women" accept `unisex` records. Keep that?',
-        "- Wireless, ANC, gender and colour are not server-checked constraint fields; "
-        "the fit column uses the catalog spec table for them.",
-        "- Message injections keep the clean evidence (frozen). Live V3 search would "
-        "retrieve differently for the longer message; that is not measured here.",
+        "Fit uses typed catalog spec-table truth. Separately, each stated requirement is marked "
+        "for what the model actually receives: `typed` (a field of its evidence record), `text` "
+        "(stated in title, subcategory or truncated description; pattern check, not reviewed) "
+        "or `missing`. A `missing` fact is an **evidence-sufficiency gap**, not solely a model "
+        "failure; such cases are kept and nothing is filled in.",
         "",
+    ]
+    if annotation_set is not None:
+        lines += _annotation_section(annotation_set, annotations_sha256)
+    lines += [
         "## Summary",
         "",
-        "| # | Case | Group | Proposed | Pre-retrieval | Acceptable | Forbidden | Flags |",
-        "|---|---|---|---|---|---|---|---|",
+        "| # | Case | Group | Proposed | Pre-retrieval | Acceptable | Forbidden | Flags | Review |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for n, case in enumerate(cases, start=1):
         e = case.expect
@@ -463,9 +759,15 @@ def render_packet(
             f"| {n} | `{case.case_id}` | {items[case.case_id].group} | {e.outcome} | "
             f"{details[case.case_id]['decision']} | "
             f"{'—' if acc is None else len(acc)} | {len(e.forbidden_recommendation_ids)} | "
-            f"{len(details[case.case_id]['flags']) or ''} |"
+            f"{len(details[case.case_id]['flags']) or ''} | "
+            f"{_review(case)} |"
         )
-    lines += ["", f"Cases with flags: {len(flagged)} of {len(cases)}.", ""]
+    lines += [
+        "",
+        f"Cases with flags: {len(flagged)} of {len(cases)}. "
+        f"Owner decisions recorded: {reviewed} of {len(cases)}.",
+        "",
+    ]
 
     number = {case.case_id: n for n, case in enumerate(cases, start=1)}
     for group, title in GROUP_TITLES.items():
@@ -504,7 +806,11 @@ def render_packet(
                         "",
                     ]
                 else:
-                    lines += ["Evidence: identical to the clean case (frozen).", ""]
+                    lines += [
+                        "Evidence: identical to the clean case (frozen). This is a "
+                        "fixed-evidence selection test, not end-to-end injection robustness.",
+                        "",
+                    ]
                 req = items[item.counterpart.clean].requirements
             else:
                 req = item.requirements
@@ -514,6 +820,12 @@ def render_packet(
                     f"**Author rationale:** {item.rationale}",
                     "",
                 ]
+                if item.not_assessed:
+                    lines += [
+                        "**Not assessed (not verified by any check or label):** "
+                        + "; ".join(item.not_assessed),
+                        "",
+                    ]
             lines += [
                 f"**Pre-retrieval decision (code under test):** {info['decision']}",
                 "",
@@ -521,8 +833,8 @@ def render_packet(
             if item.counterpart is None or item.counterpart.site == "listing":
                 lines += [
                     "| Rank | ID | Title | Brand | Price (INR) | Availability | RAM | Storage "
-                    "| Spec extras | Fits stated requirements? |",
-                    "|---|---|---|---|---|---|---|---|---|---|",
+                    "| Spec extras | Fits stated requirements? | Visible to model |",
+                    "|---|---|---|---|---|---|---|---|---|---|---|",
                 ]
                 for p in case.evidence:
                     extra = run.extras.get(p.product_id, {})
@@ -536,15 +848,20 @@ def render_packet(
                     )
                     reasons = info["assessed"][p.product_id]
                     fit = "yes" if not reasons else "no: " + "; ".join(reasons)
+                    if reasons and all(r.startswith("availability") for r in reasons):
+                        fit = f"comparison only: {p.availability} (not acceptable)"
+                    seen = info["visibility"].get(p.product_id, {})
+                    shown = ", ".join(f"{k}: {v}" for k, v in seen.items() if v != "typed")
                     if not req.model_dump(exclude_none=True):
-                        fit = "n/a"
+                        fit = shown = "n/a"
                     lines.append(
                         f"| {p.search_rank} | `{p.product_id}` | {_cell(p.title)} | {p.brand} | "
                         f"{p.price} | {p.availability} | {_cell(p.ram_gb)} | "
-                        f"{_cell(storage and storage.strip())} | {_cell(extras)} | {_cell(fit)} |"
+                        f"{_cell(storage and storage.strip())} | {_cell(extras)} | {_cell(fit)} | "
+                        f"{_cell(shown or 'all typed')} |"
                     )
                 if not case.evidence:
-                    lines.append("| — | V3 returned no records | | | | | | | | |")
+                    lines.append("| — | V3 returned no records | | | | | | | | | |")
                 lines.append("")
             outcome = e.outcome + (
                 f" ({e.clarify_reason})"
@@ -566,6 +883,13 @@ def render_packet(
                 lines += ["**Flags for review:**", ""]
                 lines += [f"- ⚠ {flag}" for flag in info["flags"]]
                 lines.append("")
+            if info["evidence_gaps"]:
+                lines += ["**Evidence-sufficiency gaps** (not solely model failures):", ""]
+                lines += [f"- {gap}" for gap in info["evidence_gaps"]]
+                lines.append("")
+            if case.case_review is not None:
+                lines += [f"**Owner decision recorded:** {_review(case)}", "", "---", ""]
+                continue
             lines += [
                 "**Your decision (required; blank = not reviewed):** "
                 "`approved` / `revised` / `drop`: ",

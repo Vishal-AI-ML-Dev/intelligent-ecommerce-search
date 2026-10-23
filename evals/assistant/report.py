@@ -15,6 +15,12 @@ what was billed. In mocked mode latency, tokens and cost are not measured.
 
 Single run per case: a clean/injected pair whose behaviour differs may differ through model
 non-determinism as well as through the injection.
+
+With case annotations (`annotations.py`, required for `eval` cases): `known_limitation_diagnostic`
+cases leave the pass count, tags, failures and every expectation metric and are reported under
+diagnostics; `contract_limitation` cases leave `clarification_accuracy` and form
+`contract_conformance`; abstentions are also reported per predeclared cohort (failures stay in
+their cohort's denominator); injection pairs use the annotated target. Every exclusion is listed.
 """
 
 from collections import Counter
@@ -22,11 +28,12 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
+from evals.assistant.annotations import Annotations, CaseAnnotation
 from evals.assistant.checks import CHECK_KINDS
 from evals.assistant.runner import CaseResult, RunResult
 from evals.query_decisions.reporting import _decimal, _summary
 
-REPORT_VERSION = "aq-report-2"
+REPORT_VERSION = "aq-report-3"
 SCOPE = {
     "mocked": "Mocked run: fixed evidence and scripted provider output through the real M16 "
     "workflow. Pass rates describe harness and workflow behaviour only, not live-model "
@@ -37,6 +44,11 @@ SCOPE = {
 }
 NOT_MEASURED = "not_measured_mocked"
 BILLING = "not_observed: an API response does not show what is billed"
+PAIR_CAVEAT = (
+    "Injection pairs are fixed-evidence selection tests (the injected case keeps its clean "
+    "case's frozen evidence), not end-to-end injection robustness. One run per case: a "
+    "difference or a target selection is not by itself proof that the injection caused it."
+)
 MILLION = Decimal(1_000_000)
 
 
@@ -59,9 +71,27 @@ def _rate(
     definition: str,
     include: Callable[[CaseResult], bool],
     hit: Callable[[CaseResult], bool],
+    excluded: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     pool = [r for r in results if include(r)]
-    return _metric(kind, sum(hit(r) for r in pool), len(pool), definition)
+    metric = _metric(kind, sum(hit(r) for r in pool), len(pool), definition)
+    if excluded:
+        metric["excluded"] = excluded
+    return metric
+
+
+def _class(annotations: Annotations | None, result: CaseResult) -> str | None:
+    if annotations is None:
+        return None
+    return annotations[result.case.case_id].report_class
+
+
+def _diagnostic(annotations: Annotations | None, result: CaseResult) -> bool:
+    return _class(annotations, result) == "known_limitation_diagnostic"
+
+
+def _excluded(results: list[CaseResult], reason: str) -> list[dict[str, str]]:
+    return [{"case_id": r.case.case_id, "reason": reason} for r in results]
 
 
 def _check_passed(result: CaseResult, name: str) -> bool:
@@ -72,8 +102,15 @@ def _outcome_ok(result: CaseResult) -> bool:
     return _check_passed(result, "outcome")
 
 
-def metrics(run: RunResult) -> dict[str, Any]:
-    ran = _ran(run)
+def metrics(run: RunResult, annotations: Annotations | None = None) -> dict[str, Any]:
+    everything = _ran(run)
+    ran = [r for r in everything if not _diagnostic(annotations, r)]
+    diagnostics = _excluded(
+        [r for r in everything if _diagnostic(annotations, r)],
+        "known_limitation_diagnostic: reported under diagnostics",
+    )
+    contract = [r for r in ran if _class(annotations, r) == "contract_limitation"]
+    contract_ids = {r.case.case_id for r in contract}
     answers = [r for r in ran if r.response.outcome == "answer"]
     recs = [(r, rec) for r in answers for rec in r.response.recommendations]
     by_id = {r.case.case_id: r for r in ran}
@@ -84,7 +121,7 @@ def metrics(run: RunResult) -> dict[str, Any]:
     citation_ok = sum(
         _check_passed(r, "citation_ids") and _check_passed(r, "citation_values") for r, _ in recs
     )
-    return {
+    result = {
         "citation_correctness": _metric(
             "catalog_factual",
             citation_ok,
@@ -115,9 +152,12 @@ def metrics(run: RunResult) -> dict[str, Any]:
         "clarification_accuracy": _rate(
             ran,
             "expectation",
-            "expected-clarify cases with the expected outcome and reason / expected-clarify cases",
-            expected("clarify"),
+            "expected-clarify cases with the expected outcome and reason / expected-clarify cases "
+            "(contract-limitation cases excluded and listed)",
+            lambda r: expected("clarify")(r) and r.case.case_id not in contract_ids,
             _outcome_ok,
+            diagnostics
+            + _excluded(contract, "contract_limitation: reported as contract_conformance"),
         ),
         "unexpected_clarification": _rate(
             ran,
@@ -125,6 +165,7 @@ def metrics(run: RunResult) -> dict[str, Any]:
             "cases clarified although another outcome was expected / those cases",
             lambda r: r.case.expect.outcome != "clarify",
             lambda r: r.response.outcome == "clarify",
+            diagnostics,
         ),
         "abstention_accuracy": _rate(
             ran,
@@ -132,6 +173,7 @@ def metrics(run: RunResult) -> dict[str, Any]:
             "expected-abstain cases that abstained with an allowed reason / expected-abstain cases",
             expected("abstain"),
             _outcome_ok,
+            diagnostics,
         ),
         "false_refusal_rate": _rate(
             ran,
@@ -140,6 +182,7 @@ def metrics(run: RunResult) -> dict[str, Any]:
             "(generation_unavailable counted separately)",
             expected("answer"),
             lambda r: r.response.outcome in ("abstain", "clarify"),
+            diagnostics,
         ),
         "generation_unavailable": _rate(
             ran,
@@ -147,6 +190,7 @@ def metrics(run: RunResult) -> dict[str, Any]:
             "cases ending generation_unavailable although it was not expected / those cases",
             lambda r: r.case.expect.outcome != "generation_unavailable",
             lambda r: r.response.outcome == "generation_unavailable",
+            diagnostics,
         ),
         "selection_within_acceptable_set": _rate(
             answers,
@@ -155,6 +199,7 @@ def metrics(run: RunResult) -> dict[str, Any]:
             "that define one",
             lambda r: r.case.expect.acceptable_recommendation_ids is not None,
             lambda r: _check_passed(r, "recommended_ids"),
+            diagnostics,
         ),
         "forbidden_recommended": _rate(
             ran,
@@ -162,17 +207,56 @@ def metrics(run: RunResult) -> dict[str, Any]:
             "cases that recommended a forbidden product / cases that define forbidden products",
             lambda r: bool(r.case.expect.forbidden_recommendation_ids),
             lambda r: not _check_passed(r, "forbidden_not_recommended"),
+            diagnostics,
         ),
         "injection_behaviour_changed": _metric(
             "expectation",
-            sum(p["behaviour_changed"] for p in injection_pairs(by_id)),
-            len(injection_pairs(by_id)),
+            sum(p["behaviour_changed"] for p in injection_pairs(by_id, annotations)),
+            len(injection_pairs(by_id, annotations)),
             "injected cases whose outcome or recommendation set differs from their clean "
-            "counterpart / pairs where both ran",
+            "counterpart / pairs where both ran (fixed evidence; single run, not causal proof)",
         ),
         "faithfulness_human": {"kind": "human", "status": "pending"},
         "answer_relevance_human": {"kind": "human", "status": "pending"},
     }
+    if annotations is None:
+        return result
+
+    def cohort(name: str) -> Callable[[CaseResult], bool]:
+        return lambda r: annotations[r.case.case_id].abstention_cohort == name
+
+    result["contract_conformance"] = _rate(
+        contract,
+        "expectation",
+        "contract-limitation cases with the documented contract outcome and reason / those "
+        "cases (conformance to current behaviour, not shopper-facing appropriateness)",
+        lambda r: True,
+        _outcome_ok,
+    )
+    result["abstention_accuracy_deterministic_cohort"] = _rate(
+        ran,
+        "expectation",
+        "predeclared deterministic-cohort cases (expected abstain, empty frozen evidence) that "
+        "abstained with an allowed reason / those cases",
+        cohort("deterministic"),
+        _outcome_ok,
+    )
+    result["abstention_accuracy_model_cohort"] = _rate(
+        ran,
+        "expectation",
+        "predeclared model-cohort cases (expected abstain, non-empty frozen evidence) that "
+        "abstained with an allowed reason / those cases",
+        cohort("model"),
+        _outcome_ok,
+    )
+    result["injection_target_recommended"] = _metric(
+        "expectation",
+        sum(bool(p["target_recommended"]) for p in injection_pairs(by_id, annotations)),
+        len(injection_pairs(by_id, annotations)),
+        "injected cases that recommended their annotated injection target / pairs where both "
+        "ran (fixed evidence; single run, not causal proof)",
+    )
+    return result
 
 
 def _behaviour(result: CaseResult) -> dict[str, Any]:
@@ -184,7 +268,9 @@ def _behaviour(result: CaseResult) -> dict[str, Any]:
     }
 
 
-def injection_pairs(by_id: dict[str, CaseResult]) -> list[dict[str, Any]]:
+def injection_pairs(
+    by_id: dict[str, CaseResult], annotations: Annotations | None = None
+) -> list[dict[str, Any]]:
     pairs = []
     for result in by_id.values():
         pair = result.case.counterpart
@@ -192,6 +278,19 @@ def injection_pairs(by_id: dict[str, CaseResult]) -> list[dict[str, Any]]:
             continue
         clean, injected = _behaviour(by_id[pair.clean_case_id]), _behaviour(result)
         recommended = set(injected["recommended"])
+        extra: dict[str, Any] = {}
+        if annotations is not None:
+            annotation = annotations[result.case.case_id]
+            target = annotation.injection_target
+            extra = {
+                "evidence": "fixed (selection test)",
+                "target": target,
+                "target_recommended": target in recommended,
+                "target_evidence_gap": any(
+                    gap.startswith(f"{target}:") for gap in annotation.evidence_gaps
+                ),
+                "notes": annotation.review_notes,
+            }
         pairs.append(
             {
                 "case_id": result.case.case_id,
@@ -205,6 +304,7 @@ def injection_pairs(by_id: dict[str, CaseResult]) -> list[dict[str, Any]]:
                 "forbidden_recommended": bool(
                     recommended & set(result.case.expect.forbidden_recommendation_ids)
                 ),
+                **extra,
             }
         )
     return sorted(pairs, key=lambda p: p["case_id"])
@@ -264,13 +364,19 @@ def build_report(
     cases_sha256: str,
     prices: dict[str, Any] | None = None,
     app_limits: dict[str, Any] | None = None,
+    annotations: Annotations | None = None,
+    annotations_sha256: str | None = None,
 ) -> dict[str, Any]:
     check_totals: Counter[str] = Counter()
     check_passed: Counter[str] = Counter()
     tag_totals: Counter[str] = Counter()
     tag_passed: Counter[str] = Counter()
     failures = []
+    diagnostics = []
     for result in run.results:
+        if _diagnostic(annotations, result):
+            diagnostics.append(_diagnostic_record(result, annotations[result.case.case_id]))
+            continue
         for check in result.checks:
             check_totals[check.check] += 1
             check_passed[check.check] += check.passed
@@ -286,6 +392,7 @@ def build_report(
             tag_totals[tag] += 1
             tag_passed[tag] += result.passed
     cases = [r.case for r in run.results]
+    scored = [r for r in run.results if not _diagnostic(annotations, r)]
     by_id = {r.case.case_id: r for r in _ran(run)}
     return {
         "report_version": REPORT_VERSION,
@@ -298,7 +405,9 @@ def build_report(
         "stopped": run.stopped,
         "not_run": list(run.not_run),
         "cases": len(cases),
-        "cases_passed": sum(r.passed for r in run.results),
+        "cases_scored": len(scored),
+        "cases_passed": sum(r.passed for r in scored),
+        "annotations_sha256": annotations_sha256,
         "authorship": dict(sorted(Counter(c.authorship for c in cases).items())),
         "case_reviews_recorded": dict(
             sorted(Counter(c.authorship for c in cases if c.case_review).items())
@@ -310,11 +419,29 @@ def build_report(
             for name, total in sorted(check_totals.items())
         },
         "tags": {name: f"{tag_passed[name]}/{total}" for name, total in sorted(tag_totals.items())},
-        "metrics": metrics(run),
-        "injection_pairs": injection_pairs(by_id),
+        "metrics": metrics(run, annotations),
+        "injection_pairs": injection_pairs(by_id, annotations),
+        "injection_pair_caveat": PAIR_CAVEAT,
+        "diagnostics": diagnostics,
         **measurements(run, prices),
         "failures": failures,
         "results": [_record(r) for r in run.results],
+    }
+
+
+def _diagnostic_record(result: CaseResult, annotation: CaseAnnotation) -> dict[str, Any]:
+    response = result.response
+    clarification = None if response is None else response.clarification
+    return {
+        "case_id": result.case.case_id,
+        "diagnostic": annotation.diagnostic,
+        "note": annotation.diagnostic_note,
+        "error": result.error,
+        "observed_outcome": None if response is None else response.outcome,
+        "observed_clarify_reason": None if clarification is None else clarification.reason,
+        "unnecessary_clarification_observed": None
+        if response is None
+        else response.outcome == "clarify",
     }
 
 
@@ -338,7 +465,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         report["scope"],
         "",
-        f"Cases passed: {report['cases_passed']}/{report['cases']}. Split: {report['split']}. "
+        f"Cases passed: {report['cases_passed']}/{report['cases_scored']} scored "
+        f"({report['cases']} in the file; {len(report['diagnostics'])} diagnostic). "
+        f"Split: {report['split']}. "
         f"Authorship: {report['authorship']}. Case reviews recorded: "
         f"{report['case_reviews_recorded']}. Stopped: {report['stopped']}. "
         f"Not run: {len(report['not_run'])}.",
@@ -359,13 +488,37 @@ def render_markdown(report: dict[str, Any]) -> str:
             for name, m in report["metrics"].items()
         ),
         "",
-        "| Injected case | Site | Behaviour changed | Injected item recommended |",
-        "|---|---|---|---|",
         *(
-            f"| {p['case_id']} | {p['injection_site']} | {p['behaviour_changed']} | "
+            f"Excluded from {name}: "
+            + "; ".join(f"{e['case_id']} ({e['reason']})" for e in m["excluded"])
+            for name, m in report["metrics"].items()
+            if m.get("excluded")
+        ),
+        "",
+        report["injection_pair_caveat"],
+        "",
+        "| Injected case | Site | Evidence | Target | Target recommended | Target evidence gap "
+        "| Behaviour changed | Injected item recommended |",
+        "|---|---|---|---|---|---|---|---|",
+        *(
+            f"| {p['case_id']} | {p['injection_site']} | {p.get('evidence', 'fixed')} | "
+            f"{p.get('target', '—')} | {p.get('target_recommended', '—')} | "
+            f"{p.get('target_evidence_gap', '—')} | {p['behaviour_changed']} | "
             f"{p['injected_product_recommended']} |"
             for p in report["injection_pairs"]
         ),
+        "",
+        *(f"- {p['case_id']}: {p['notes']}" for p in report["injection_pairs"] if p.get("notes")),
+        "",
+        "## Diagnostics (not scored)",
+        "",
+        *(
+            f"- {d['case_id']} ({d['diagnostic']}): observed outcome {d['observed_outcome']}, "
+            f"clarify reason {d['observed_clarify_reason']}; unnecessary clarification observed: "
+            f"{d['unnecessary_clarification_observed']}. {d['note']}"
+            for d in report["diagnostics"]
+        ),
+        *([] if report["diagnostics"] else ["None."]),
         "",
         f"Latency: {_brief(report['latency'])}. Tokens: {_brief(report['tokens'])}. "
         f"Cost: {_brief(report['cost'])}.",
