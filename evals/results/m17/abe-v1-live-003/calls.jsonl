@@ -1,0 +1,2 @@
+{"run_id": "abe-v1-live-003", "seq": 1, "case_id": "abe-f02-hinglish-cheap-samsung", "failure": null, "input_tokens": 692, "output_tokens": 170, "provider_ms": 1454.604, "started_utc": "2026-10-23T15:43:23.229+00:00", "pacing_wait_ms": 0.0}
+{"run_id": "abe-v1-live-003", "seq": 2, "case_id": "abe-f03-killer-laptop", "failure": "timeout", "input_tokens": null, "output_tokens": null, "provider_ms": 20235.834, "started_utc": "2026-10-23T15:43:33.223+00:00", "pacing_wait_ms": 8343.0}
