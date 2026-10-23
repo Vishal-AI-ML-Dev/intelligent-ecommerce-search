@@ -82,12 +82,14 @@ headphone records whose evidence does not state ANC (g04, m01, l01).
 Owner case reviews are kept in `drafts/abe-v1/reviews.jsonl` (handle, date, decision, the
 SHA-256 of the exact case content reviewed, and where the decision was given). The builder records
 each as `case_review` and refuses a review whose case changed; rebuilds reuse the frozen capture,
-and `--recapture` is refused once any review exists. Recorded so far: 38 of 40, all by `ann-1` on
+and `--recapture` is refused once any review exists. Recorded: 40 of 40, all by `ann-1` on
 2026-10-23: `abe-g01`–`g05`, `g07`, `g09`, `g10`, `c01`, `c02`, `c04`, `c06`, `u01`–`u06`, `f01`–`f06`,
 `m01`–`m06`, `l01`, `l02`, `l04`–`l06` approved (`l02`: misleading seller promotion; `l05`: as `m03`;
 `l06`: prompt escaping does not establish semantic injection resistance); `l03` revised (injected
-text only, template `lst-c-r1`; the revised case approved at its new fingerprint). Unreviewed:
-`c03`, `c05` (blockers 1–2) (`m03`/`m04`: "forbidden" marks an unacceptable benchmark target under
+text only, template `lst-c-r1`; the revised case approved at its new fingerprint); `c03` revised
+(approved as the unscored diagnostic, not evidence of correct product selection or a live
+retrieval failure); `c05` approved as contract conformance (not successful ambiguity resolution
+or proof of shopper-facing appropriateness) (`m03`/`m04`: "forbidden" marks an unacceptable benchmark target under
 the availability policy, not a product-safety class; targets stay visible in evidence; `m06`: a
 target-selection test containing a prompt-leak request, not prompt-leak prevention; `l01`: keeps
 the inherited evidence gap) (`f04`: ANC support does not establish blocking voices or suitability;
@@ -107,10 +109,15 @@ when no forbidden IDs are listed (test-pinned).
 
 Format/reporting blockers found in review. The owner-approved consolidated fix is implemented
 (annotations `aa-1`, `evals/assistant/annotations.py`; annotation-aware report `aq-report-3`); the
-annotations themselves still await the owner's explicit approval, so every report and run of the
-draft is refused (fail closed). Unresolved cases stay in the file, unreviewed,
-and are never silently excluded from final metrics; `live` refuses the file until every case has a
-review.
+20 eligibility annotations were approved by `ann-1` on 2026-10-23 at their exact eligibility
+hashes (`drafts/abe-v1/annotation_approvals.jsonl`, full SHA-256 values). Abstention cohorts
+describe the predeclared expected path, not actual execution: `u01` (model cohort) may clarify
+before any model call and then remains a failed expected-abstention case. Reports state total,
+scored, contract-conformance and diagnostic cases separately; pass counts are over scored cases
+only (also shown excluding contract cases), so no figure is an all-cases quality score. No case
+is silently excluded. The draft is **not sealed**. With every case reviewed, `live` no longer
+refuses on review grounds; it still needs the owner-approved case-file and annotation SHA-256
+values, `--confirm-live` and a key. No separate seal step exists yet.
 
 1. `abe-c03`: the ideal outcome (answer at an effective maximum of INR 30000) cannot be expressed:
    an expected answer may only cite frozen evidence, and the frozen evidence has no qualifying item.

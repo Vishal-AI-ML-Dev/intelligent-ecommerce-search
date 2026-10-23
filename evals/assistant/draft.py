@@ -647,7 +647,7 @@ def _annotation_section(annotation_set: AnnotationSet, sha256: str | None) -> li
         )
         lines.append(
             f"| `{a.case_id}` | {a.report_class or '—'} | {a.abstention_cohort or '—'} | "
-            f"{a.injection_target or '—'} | `{eligibility_sha256(a)[:16]}…` | {approval} |"
+            f"{a.injection_target or '—'} | `{eligibility_sha256(a)}` | {approval} |"
         )
     return [*lines, ""]
 

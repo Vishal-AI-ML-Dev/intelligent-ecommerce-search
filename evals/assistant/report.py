@@ -236,16 +236,18 @@ def metrics(run: RunResult, annotations: Annotations | None = None) -> dict[str,
     result["abstention_accuracy_deterministic_cohort"] = _rate(
         ran,
         "expectation",
-        "predeclared deterministic-cohort cases (expected abstain, empty frozen evidence) that "
-        "abstained with an allowed reason / those cases",
+        "predeclared deterministic-cohort cases (expected path: abstain over empty frozen "
+        "evidence, no provider call) that abstained with an allowed reason / those cases "
+        "(cohort = expected path, not actual execution; any other outcome is a failure)",
         cohort("deterministic"),
         _outcome_ok,
     )
     result["abstention_accuracy_model_cohort"] = _rate(
         ran,
         "expectation",
-        "predeclared model-cohort cases (expected abstain, non-empty frozen evidence) that "
-        "abstained with an allowed reason / those cases",
+        "predeclared model-cohort cases (expected path: model abstains over non-empty frozen "
+        "evidence) that abstained with an allowed reason / those cases (cohort = expected path, "
+        "not actual execution; a clarification before any model call is a failure)",
         cohort("model"),
         _outcome_ok,
     )
@@ -393,6 +395,8 @@ def build_report(
             tag_passed[tag] += result.passed
     cases = [r.case for r in run.results]
     scored = [r for r in run.results if not _diagnostic(annotations, r)]
+    contract = [r for r in scored if _class(annotations, r) == "contract_limitation"]
+    quality = [r for r in scored if _class(annotations, r) != "contract_limitation"]
     by_id = {r.case.case_id: r for r in _ran(run)}
     return {
         "report_version": REPORT_VERSION,
@@ -406,7 +410,14 @@ def build_report(
         "not_run": list(run.not_run),
         "cases": len(cases),
         "cases_scored": len(scored),
+        "cases_contract": len(contract),
+        "cases_diagnostic": len(cases) - len(scored),
         "cases_passed": sum(r.passed for r in scored),
+        "cases_quality_scored": len(quality),
+        "cases_quality_passed": sum(r.passed for r in quality),
+        "case_counts_note": "cases_passed is over scored cases only; diagnostics are not scored "
+        "and contract cases measure conformance to current behaviour, so no pass count here is "
+        "an all-cases quality score",
         "annotations_sha256": annotations_sha256,
         "authorship": dict(sorted(Counter(c.authorship for c in cases).items())),
         "case_reviews_recorded": dict(
@@ -465,8 +476,14 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         report["scope"],
         "",
-        f"Cases passed: {report['cases_passed']}/{report['cases_scored']} scored "
-        f"({report['cases']} in the file; {len(report['diagnostics'])} diagnostic). "
+        f"Cases: {report['cases']} total; {report['cases_scored']} scored, of which "
+        f"{report['cases_contract']} contract-conformance; {report['cases_diagnostic']} "
+        "diagnostic (not scored).",
+        "",
+        f"Passed: {report['cases_passed']}/{report['cases_scored']} scored; "
+        f"{report['cases_quality_passed']}/{report['cases_quality_scored']} excluding contract "
+        f"cases. {report['case_counts_note']}.",
+        "",
         f"Split: {report['split']}. "
         f"Authorship: {report['authorship']}. Case reviews recorded: "
         f"{report['case_reviews_recorded']}. Stopped: {report['stopped']}. "

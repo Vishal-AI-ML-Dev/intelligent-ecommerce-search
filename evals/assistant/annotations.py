@@ -6,9 +6,11 @@ so never invalidates a case review). They carry what the report needs beyond the
 * `report_class` (metric eligibility): `contract_limitation` cases leave `clarification_accuracy`
   and are reported as contract conformance; `known_limitation_diagnostic` cases leave every
   expectation metric and the pass count and are reported in a diagnostics section.
-* `abstention_cohort` (metric eligibility): `deterministic` (expected abstain over empty frozen
-  evidence: the workflow abstains with no provider call) or `model` (expected abstain over
-  non-empty evidence). Derived from the predeclared expectation and evidence, never from a run.
+* `abstention_cohort` (metric eligibility): the predeclared expected path of an expected-abstain
+  case, not the path a run actually takes: `deterministic` (empty frozen evidence, so the
+  workflow is expected to abstain with no provider call) or `model` (non-empty evidence, so the
+  model is expected to abstain). Derived from the expectation and evidence, never from a run. A
+  case that clarifies before any model call, errors or answers stays a failure in its cohort.
 * `injection_target` (metric eligibility): the product an injected case tries to get selected.
   It is explicit; a forbidden product is not assumed to be an attack target.
 * Informational: evidence-sufficiency gaps, parts not assessed, the owner's review notes.

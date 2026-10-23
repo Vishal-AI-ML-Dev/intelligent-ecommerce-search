@@ -210,7 +210,12 @@ def report_for(tmp_path, update=None):
 def test_report_separates_diagnostics_and_contract_cases_and_lists_exclusions(tmp_path):
     report = report_for(tmp_path)
     assert report["cases"] == 7 and report["cases_scored"] == 6
+    assert report["cases_contract"] == 1 and report["cases_diagnostic"] == 1
     assert report["cases_passed"] == 6
+    assert (report["cases_quality_passed"], report["cases_quality_scored"]) == (5, 5)
+    header = render_markdown(report)
+    assert "Cases: 7 total; 6 scored, of which 1 contract-conformance; 1 diagnostic" in header
+    assert "Passed: 6/6 scored; 5/5 excluding contract cases." in header
     (diagnostic,) = report["diagnostics"]
     assert diagnostic["case_id"] == "grounded-dell-under-budget"
     assert diagnostic["observed_outcome"] == "answer"
@@ -269,7 +274,7 @@ def test_eval_cases_without_annotations_are_refused(tmp_path, capsys):
     assert "need their annotations" in capsys.readouterr().err
 
 
-def test_committed_draft_annotations_are_bound_but_not_yet_approved():
+def test_committed_draft_annotations_are_bound_and_fail_closed():
     cases_path = DRAFT_DIR / "cases.draft.jsonl"
     cases = load_cases(cases_path)
     aset = AnnotationSet.model_validate_json((DRAFT_DIR / "annotations.json").read_text("utf-8"))
@@ -280,7 +285,34 @@ def test_committed_draft_annotations_are_bound_but_not_yet_approved():
     for case in cases:
         if case.counterpart is not None:
             assert by_id[case.case_id].injection_target in case.expect.forbidden_recommendation_ids
-    approvals = DRAFT_DIR / "annotation_approvals.jsonl"
-    if not approvals.exists():
-        with pytest.raises(AnnotationError, match="not approved"):
-            check_annotations(aset, cases, file_sha256(cases_path))
+    sha = file_sha256(cases_path)
+    approved = check_annotations(aset, cases, sha)  # every eligibility annotation approved
+    assert sum(a.approval is not None for a in approved.values()) == 20
+    unapproved = aset.model_copy(
+        update={
+            "annotations": tuple(a.model_copy(update={"approval": None}) for a in aset.annotations)
+        }
+    )
+    with pytest.raises(AnnotationError, match="not approved"):
+        check_annotations(unapproved, cases, sha)
+
+
+def test_a_model_cohort_case_that_clarifies_first_stays_a_failure(tmp_path):
+    records = {
+        json.loads(line)["case_id"]: json.loads(line)
+        for line in FIXTURES.read_text("utf-8").splitlines()
+    }
+    # "hello there" is clarified before retrieval, so no model call happens; its predeclared
+    # path is still a model abstention over non-empty evidence.
+    record = records["clarify-no-product-need"]
+    record["evidence"] = records["grounded-dell-under-budget"]["evidence"]
+    record["expect"] = {"outcome": "abstain", "abstain_reasons": ["model_abstained"]}
+    path = tmp_path / "cases.jsonl"
+    path.write_text(json.dumps(record) + "\n", "utf-8")
+    cases, sha = load_cases(path), file_sha256(path)
+    annotations = check_annotations(annotation_set(cases, sha), cases, sha)
+    assert annotations["clarify-no-product-need"].abstention_cohort == "model"
+    report = build_report(run_cases(cases), cases_sha256=sha, annotations=annotations)
+    model = report["metrics"]["abstention_accuracy_model_cohort"]
+    assert (model["numerator"], model["denominator"]) == (0, 1)
+    assert report["results"][0]["outcome"] == "clarify" and report["results"][0]["calls"] == 0

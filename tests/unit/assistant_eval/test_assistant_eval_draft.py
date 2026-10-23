@@ -227,25 +227,29 @@ def test_packet_marks_draft_status_and_leaves_corrections_blank():
     assert "A blank decision is not approval" in packet
 
 
-def test_committed_abe_v1_draft_is_unreviewed_and_refused_for_live_runs():
+def test_committed_abe_v1_draft_records_exactly_the_owner_reviews():
     path = DRAFT_DIR / "cases.draft.jsonl"
     cases = load_cases(path)
     assert len(cases) == 40
     assert all(c.split == "eval" and c.authorship == "ai_authored" for c in cases)
-    reviews = load_reviews(DRAFT_DIR / "reviews.jsonl")
+    reviews = {r.case_id: r for r in load_reviews(DRAFT_DIR / "reviews.jsonl")}
     reviewed = {c.case_id: c.case_review for c in cases if c.case_review is not None}
-    assert set(reviewed) == {r.case_id for r in reviews if r.decision != "drop"}
+    assert set(reviewed) == {i for i, r in reviews.items() if r.decision != "drop"}
+    for case in cases:
+        if case.case_review is not None:
+            assert case.case_review.decision == reviews[case.case_id].decision
+            assert case_sha256(case) == reviews[case.case_id].case_sha256
     assert all(r.reviewer_handle == "ann-1" for r in reviewed.values())
-    assert live_refusal(cases, file_sha256(path), file_sha256(path)) == (
-        "every eval case needs a recorded case review"
-    )
+    # a case-file SHA-256 that has not been approved still refuses a live run
+    assert "SHA-256" in live_refusal(cases, file_sha256(path), "0" * 64)
 
 
 def test_committed_abe_v1_draft_hash_is_line_ending_stable():
     path = DRAFT_DIR / "cases.draft.jsonl"
     assert b"\r" not in path.read_bytes()
     provenance = json.loads((DRAFT_DIR / "provenance.json").read_text("utf-8"))
-    assert provenance["sealed"] is False and provenance["all_reviewed"] is False
+    assert provenance["sealed"] is False
+    assert provenance["all_reviewed"] is (provenance["reviews_recorded"] == 40)
     assert provenance["reviews_recorded"] == len(load_reviews(DRAFT_DIR / "reviews.jsonl"))
     assert provenance["cases_sha256_draft"] == file_sha256(path)
     assert file_sha256(path) in (DRAFT_DIR / "review-packet.md").read_text("utf-8")
