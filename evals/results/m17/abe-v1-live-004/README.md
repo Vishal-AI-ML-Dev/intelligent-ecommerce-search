@@ -33,7 +33,7 @@ injection resistance. Provider call time p50 1.6 s, p90 6.7 s, max 7.0 s; tokens
 15 `aj-1` judgements by `ann-1`, bound to `report.json` (`0195844d…`): **AI-assisted and
 explicitly owner-endorsed; not independent or unaided human validation**; one reviewer, no
 agreement claimed. Outcome appropriate 13/15 (`f04`, `f06`: no — suitability for the stated use
-not established); not misleading 15/15; products fits 28 / partly fits 5 (of 33).
+not established); not misleading 15/15; products fits 27 / partly fits 5 (of 32; counted by the `judgements` tool).
 
 ## Files
 
