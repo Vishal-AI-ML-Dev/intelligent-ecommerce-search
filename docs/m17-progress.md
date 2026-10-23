@@ -250,5 +250,15 @@ metric and denominator defined above. Existing requirements are not lowered.
   without a same-run clean counterpart are reported as "same-run comparison unavailable" but keep
   their target checks; populations are the selected cases; full-dataset thresholds are not converted
   or applied (no subset threshold, no full-dataset verdict).
+  Run `abe-v1-live-003` (17-case subset) stopped on a provider `timeout` at call 2: 2 processed,
+  15 not run (no injection case); 2 judgements by `ann-1` (AI-assisted, owner-endorsed). Timeout
+  finding: SDK units and settings are correct (20 s sent as 20000 ms to the HTTP client and as
+  `X-Server-Timeout: 20` to the server; one attempt; the 30 s deadline only gates repairs, and
+  pacing cannot produce a timeout). A client timeout and an HTTP 408/504 both map to `timeout` and
+  the origin was not recorded; elapsed time alone cannot establish it, so the cause is unknown.
+  Diagnostics since added: providers set an allowlisted `failure_detail` (`client_timeout`,
+  `http_<status>`, `http_other`, invalid-response sub-causes; never raw error text), recorded per
+  call in `calls.jsonl`. Timeouts, model, retries and thresholds unchanged; no further live run
+  approved.
 - **Step E:** report, provider suitability note in ADR-009 (staging scope only).
 - No new dependencies were added.

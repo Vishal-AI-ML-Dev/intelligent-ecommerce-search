@@ -51,6 +51,27 @@ GenerationFailure = Literal[
     "local_rate_limit",
     "local_daily_cap",
 ]
+# Diagnostics only: an allowlisted origin of a failure (never raw error text). A timeout from the
+# HTTP client and an HTTP 408/504 from the server share the code `timeout`; this tells them apart.
+FailureDetail = Literal[
+    "client_timeout",
+    "client_transport_error",
+    "http_400",
+    "http_401",
+    "http_403",
+    "http_404",
+    "http_408",
+    "http_429",
+    "http_500",
+    "http_502",
+    "http_503",
+    "http_504",
+    "http_other",
+    "no_candidates",
+    "no_candidate_text",
+    "unparsable_json",
+    "schema_invalid",
+]
 
 
 class _Frozen(BaseModel):
@@ -85,10 +106,13 @@ class GenerationResult:
     failure: GenerationFailure | None
     input_tokens: int | None
     output_tokens: int | None
+    failure_detail: FailureDetail | None = None
 
     def __post_init__(self) -> None:
         if (self.draft is None) == (self.failure is None):
             raise ValueError("exactly one of draft and failure must be set")
+        if self.failure_detail is not None and self.failure is None:
+            raise ValueError("failure_detail is only set with a failure")
 
 
 @runtime_checkable

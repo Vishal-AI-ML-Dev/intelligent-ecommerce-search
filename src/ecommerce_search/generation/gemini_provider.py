@@ -20,6 +20,7 @@ from pydantic import SecretStr, ValidationError
 
 from ecommerce_search.generation.provider import (
     FACT_FIELDS,
+    FailureDetail,
     GenerationFailure,
     GenerationRequest,
     GenerationResult,
@@ -101,14 +102,14 @@ class GeminiGenerationProvider:
                 ),
             )
         except (errors.APIError, httpx.HTTPError) as exc:
-            return _failed(_error_code(exc), None, None)
+            return _failed(_error_code(exc), None, None, _error_detail(exc))
         input_tokens, output_tokens = _usage(response)
         feedback = getattr(response, "prompt_feedback", None)
         if getattr(feedback, "block_reason", None):
             return _failed("refused", input_tokens, output_tokens)
         candidates = getattr(response, "candidates", None) or ()
         if not candidates:
-            return _failed("invalid_response", input_tokens, output_tokens)
+            return _failed("invalid_response", input_tokens, output_tokens, "no_candidates")
         finish = _name(getattr(candidates[0], "finish_reason", None))
         if finish in _REFUSED:
             return _failed("refused", input_tokens, output_tokens)
@@ -116,21 +117,32 @@ class GeminiGenerationProvider:
             return _failed("truncated", input_tokens, output_tokens)
         text = _text(candidates[0])
         if text is None:
-            return _failed("invalid_response", input_tokens, output_tokens)
+            return _failed("invalid_response", input_tokens, output_tokens, "no_candidate_text")
         try:
-            draft = GroundedDraft.model_validate(json.loads(text))
-        except (ValueError, ValidationError):
-            return _failed("invalid_response", input_tokens, output_tokens)
+            parsed = json.loads(text)
+        except ValueError:
+            return _failed("invalid_response", input_tokens, output_tokens, "unparsable_json")
+        try:
+            draft = GroundedDraft.model_validate(parsed)
+        except ValidationError:
+            return _failed("invalid_response", input_tokens, output_tokens, "schema_invalid")
         return GenerationResult(
             draft=draft, failure=None, input_tokens=input_tokens, output_tokens=output_tokens
         )
 
 
 def _failed(
-    code: GenerationFailure, input_tokens: int | None, output_tokens: int | None
+    code: GenerationFailure,
+    input_tokens: int | None,
+    output_tokens: int | None,
+    detail: FailureDetail | None = None,
 ) -> GenerationResult:
     return GenerationResult(
-        draft=None, failure=code, input_tokens=input_tokens, output_tokens=output_tokens
+        draft=None,
+        failure=code,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        failure_detail=detail,
     )
 
 
@@ -165,6 +177,30 @@ def _usage(response: Any) -> tuple[int | None, int | None]:
     if candidates is None or (thoughts is not None and _count(thoughts) is None):
         return prompt, None
     return prompt, candidates + (thoughts or 0)
+
+
+_HTTP_DETAILS: dict[int, FailureDetail] = {
+    400: "http_400",
+    401: "http_401",
+    403: "http_403",
+    404: "http_404",
+    408: "http_408",
+    429: "http_429",
+    500: "http_500",
+    502: "http_502",
+    503: "http_503",
+    504: "http_504",
+}
+
+
+def _error_detail(error: Exception) -> FailureDetail:
+    """Allowlisted origin only: never the exception message or response body."""
+    if isinstance(error, httpx.TimeoutException):
+        return "client_timeout"
+    if isinstance(error, httpx.HTTPError):
+        return "client_transport_error"
+    code = getattr(error, "code", None)
+    return _HTTP_DETAILS.get(code, "http_other") if isinstance(code, int) else "http_other"
 
 
 def _error_code(error: Exception) -> GenerationFailure:

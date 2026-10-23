@@ -89,6 +89,7 @@ class CallRecord:
     provider_ms: float
     started_utc: str | None = None
     pacing_wait_ms: float = 0.0
+    failure_detail: str | None = None
 
 
 @dataclass
@@ -137,6 +138,7 @@ class RecordingProvider:
                 elapsed,
                 started_utc,
                 waited,
+                getattr(result, "failure_detail", None),
             )
         )
         if result.failure in STOP_FAILURES:

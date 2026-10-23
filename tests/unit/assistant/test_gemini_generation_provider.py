@@ -18,7 +18,7 @@ from ecommerce_search.generation.gemini_provider import (
     GeminiConfig,
     GeminiGenerationProvider,
 )
-from ecommerce_search.generation.provider import GenerationRequest
+from ecommerce_search.generation.provider import GenerationRequest, GenerationResult, GroundedDraft
 
 KEY = "gm-test-not-a-real-key"  # noqa: S105 - fake test value
 REQUEST = GenerationRequest(instructions="rules", user_content="data", max_output_tokens=512)
@@ -152,3 +152,64 @@ def test_missing_thinking_count_means_no_thinking():
     usage = {"prompt_token_count": 120, "candidates_token_count": 30, "thoughts_token_count": None}
     provider, _ = provider_with(response(usage=usage))
     assert provider.generate(REQUEST).output_tokens == 30
+
+
+# ---- diagnostics: allowlisted failure detail (no raw error text) --------------------------------
+
+
+@pytest.mark.parametrize(
+    ("error", "code", "detail"),
+    [
+        (httpx.ReadTimeout("secret body text"), "timeout", "client_timeout"),
+        (httpx.ConnectError("secret body text"), "transport_error", "client_transport_error"),
+        (
+            errors.ServerError(504, {"error": {"message": "secret body text"}}),
+            "timeout",
+            "http_504",
+        ),
+        (
+            errors.ClientError(408, {"error": {"message": "secret body text"}}),
+            "timeout",
+            "http_408",
+        ),
+        (errors.ClientError(429, {}), "rate_limited", "http_429"),
+        (errors.ServerError(503, {}), "server_error", "http_503"),
+        (errors.ClientError(418, {}), "request_rejected", "http_other"),
+    ],
+)
+def test_failure_detail_separates_client_and_server_origins(error, code, detail):
+    provider, _ = provider_with(error)
+    result = provider.generate(REQUEST)
+    assert (result.failure, result.failure_detail) == (code, detail)
+    assert "secret body text" not in repr(result)
+
+
+@pytest.mark.parametrize(
+    ("text", "detail"),
+    [
+        (None, "no_candidate_text"),
+        ("not json", "unparsable_json"),
+        (json.dumps(VALID | {"outcome": "buy"}), "schema_invalid"),
+    ],
+)
+def test_invalid_response_detail(text, detail):
+    provider, _ = provider_with(response(text=text))
+    result = provider.generate(REQUEST)
+    assert (result.failure, result.failure_detail) == ("invalid_response", detail)
+
+
+def test_no_candidates_detail_and_successes_carry_none():
+    reply = response()
+    reply.candidates = []
+    provider, _ = provider_with(reply)
+    assert provider.generate(REQUEST).failure_detail == "no_candidates"
+    provider, _ = provider_with(response())
+    assert provider.generate(REQUEST).failure_detail is None
+    with pytest.raises(ValueError, match="only set with a failure"):
+        GenerationResult(
+            draft=GroundedDraft.model_validate(VALID),
+            failure=None,
+            input_tokens=None,
+            output_tokens=None,
+            failure_detail="client_timeout",
+        )

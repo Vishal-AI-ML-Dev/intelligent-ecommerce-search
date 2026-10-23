@@ -301,3 +301,16 @@ def test_run_001_artifacts_are_unchanged():
     for name in ("report.json", "report.md", "calls.jsonl", "calls.raw.jsonl", "run_script.py"):
         digest = hashlib.sha256((RUN_001 / name).read_bytes()).hexdigest()
         assert f"`{name}` | `{digest}`" in readme
+
+
+def test_calls_record_the_failure_detail(tmp_path):
+    timed_out = GenerationResult(
+        draft=None,
+        failure="timeout",
+        input_tokens=None,
+        output_tokens=None,
+        failure_detail="http_504",
+    )
+    _, out, _ = live(tmp_path, ["grounded-dell-under-budget"], Fake(timed_out))
+    (call,) = [json.loads(line) for line in (out / "calls.jsonl").read_text("utf-8").splitlines()]
+    assert (call["failure"], call["failure_detail"]) == ("timeout", "http_504")
