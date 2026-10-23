@@ -22,6 +22,7 @@ from ecommerce_search.api.reranked import router as reranked_router
 from ecommerce_search.api.routed import LazyJevProvider
 from ecommerce_search.api.routed import router as routed_router
 from ecommerce_search.api.search import router as search_router
+from ecommerce_search.assistant.eligibility import LazyEligibility
 from ecommerce_search.config import Settings, get_settings
 from ecommerce_search.db.engine import create_db_engine, create_session_factory
 from ecommerce_search.decision import DeterministicDecisionProvider
@@ -55,6 +56,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 settings.embedding_spec(), models_dir, batch_size=settings.embedding_batch_size
             )
         )
+        if app.state.eligibility is not None:
+            app.state.eligibility.start()  # background load; checks fail closed until done
         logger.info(
             "starting ecommerce-search %s env=%s db=%s:%s",
             __version__,
@@ -95,6 +98,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.v4_jev_provider = None if v4_config is None else LazyJevProvider(v4_config)
     # Milestone 16: the assistant's optional generator. None unless explicitly configured.
     app.state.generation_provider = build_generation_provider(settings)
+    # Country eligibility, only with generation on; loaded in the background at start-up.
+    app.state.eligibility = (
+        None
+        if app.state.generation_provider is None
+        else LazyEligibility(settings.assistant_country_db_path, settings.assistant_country_db_sha1)
+    )
     app.include_router(health_router)
     app.include_router(search_router)
     app.include_router(dense_router)

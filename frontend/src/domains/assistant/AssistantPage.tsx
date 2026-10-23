@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { type HttpFailure, RequestAborted } from '../../shared/http/client';
-import { askAssistant, fetchAssistantStatus } from './api';
+import { type AssistantStatus, askAssistant, fetchAssistantStatus } from './api';
 import { buildComparison, MAX_COMPARED } from './comparison';
 import type {
   AssistantResponse,
@@ -317,13 +317,14 @@ export function AssistantPage() {
   useEffect(() => () => inFlight.current?.abort(), []);
 
   // Whether this server generates answers at all; null until known (or if the check fails).
-  const [generationEnabled, setGenerationEnabled] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<AssistantStatus | null>(null);
+  const generationEnabled = status === null ? null : status.generation_enabled;
   useEffect(() => {
     const controller = new AbortController();
     fetchAssistantStatus(controller.signal)
       .then((result) => {
         if (result.ok) {
-          setGenerationEnabled(result.data.generation_enabled);
+          setStatus(result.data);
         }
       })
       .catch((error: unknown) => {
@@ -377,6 +378,25 @@ export function AssistantPage() {
           AI generation is disabled on this public demo. The assistant can still ask a
           clarifying question, show catalog search results and compare products from catalog
           data.
+        </p>
+      )}
+      {generationEnabled === true && status?.provider_notice && (
+        <p className="assistant-notice provider-notice" data-testid="provider-notice">
+          {status.provider_notice}
+          {status.geolocation_attribution && (
+            <>
+              {' '}
+              Eligibility uses{' '}
+              {status.geolocation_attribution_url?.startsWith('https://') ? (
+                <a href={status.geolocation_attribution_url} rel="noopener noreferrer">
+                  {status.geolocation_attribution}
+                </a>
+              ) : (
+                status.geolocation_attribution
+              )}
+              .
+            </>
+          )}
         </p>
       )}
       <form className="search-form" onSubmit={onSubmit} noValidate>

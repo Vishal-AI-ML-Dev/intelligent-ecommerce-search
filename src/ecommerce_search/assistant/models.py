@@ -19,7 +19,7 @@ EVIDENCE_VERSION = "asst-evidence-2"
 Outcome = Literal["answer", "clarify", "abstain", "generation_unavailable"]
 ClarifyReason = Literal["conflicting_requirements", "ambiguous_requirement", "no_product_need"]
 AbstainReason = Literal["no_matching_products", "model_abstained", "validation_failed"]
-GenerationStatus = Literal["not_needed", "disabled", "used", "failed"]
+GenerationStatus = Literal["not_needed", "disabled", "skipped", "used", "failed"]
 ValidationStatus = Literal["not_run", "passed", "repaired", "failed"]
 CostStatus = Literal[
     "not_applicable", "estimated", "unknown_pricing_not_configured", "unknown_usage"
@@ -148,11 +148,19 @@ class AssistantResponse(_Frozen):
 
 
 class AssistantStatus(_Frozen):
-    """Public, secret-free configuration fact for the UI (no provider, model or key details)."""
+    """Public, secret-free configuration facts for the UI (no model or key details)."""
 
     generation_enabled: bool = Field(
         description="False when answer generation is turned off on this server (the default)."
     )
+    provider_notice: str | None = Field(
+        default=None,
+        description="When generation is on: the provider privacy and use notice to display.",
+    )
+    geolocation_attribution: str | None = Field(
+        default=None, description="When generation is on: the required dataset attribution text."
+    )
+    geolocation_attribution_url: str | None = None
 
 
 class AssistantUnavailable(_Frozen):

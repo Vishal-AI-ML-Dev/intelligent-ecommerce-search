@@ -455,3 +455,41 @@ not for consumer use" clause for this demo.
   IP geolocation), plus a no-personal-data notice and a skip for messages containing an email
   address or phone number. Then the owner adds `GEMINI_API_KEY` to the root-only server `.env`
   over SSM, and the compose app service gets the two variables.
+
+## Slice 5 (2026-10-23): country eligibility and personal-data screen (owner-approved)
+
+- **Country check before every provider request** (`assistant/eligibility.py`):
+  - Data: the offline DB-IP "IP to Country Lite" CSV (CC BY 4.0). The October 2026 file has
+    710,834 rows; its decompressed SHA-1 `c8ad1dfe98cb29bcacd82a5c3ec361c880e5bb59` and MD5
+    `4c77817b…` match DB-IP's published values.
+  - Eligible countries: Gemini's available-regions page (230 entries, last updated 2026-10-22,
+    transcribed to ISO codes and count-checked) minus the paid-only EEA, Switzerland and UK.
+    Conservatively also minus Åland, French Guiana, Réunion, Jersey, Guernsey, Isle of Man and
+    Gibraltar.
+  - Restricted, unknown, unlisted, private or loopback addresses get the existing fallback with
+    an honest notice. So does every visitor while the dataset is still loading or after it fails
+    to load or verify (fail closed).
+  - The dataset loads in a background thread at start-up: 1.3 s locally, about 22 MB retained
+    and a transient peak near 200 MB.
+  - Logs carry only a fixed code (`region_restricted` or `region_unknown`), never the IP or
+    country.
+- **Trusted client IP:** Caddy sets `X-Client-IP {remote_host}` (the direct TCP peer), replacing
+  any value a client sends. The app uses that header only when the TCP peer is inside
+  `ASSISTANT_TRUSTED_PROXY_CIDRS` (on EC2 `172.16.0.0/12`, Caddy's network; the app port is not
+  published). Otherwise it uses the peer address. A spoofed header from a direct client is
+  ignored (tested).
+- **Personal-data screen** (`assistant/privacy.py`): messages with an email address or a run of
+  10 or more digits (phone, Aadhaar-like or card-like numbers) are never sent to the provider.
+  The user is asked to remove it. This is a basic pattern screen: names, addresses and other
+  personal details pass, and harmless numbers can be flagged.
+- **Provider notice:** with generation on, the assistant tab shows that answers use the Gemini
+  API free tier. It says that messages and retrieved products are sent to Google, which may use
+  them to improve its products and have humans review them, and that users must not enter
+  personal, sensitive or confidential information. It also states adults only (18+), that
+  generation is not offered in the EEA, Switzerland or the UK, and the required "IP Geolocation
+  by DB-IP" attribution link.
+- **Not claimed:** IP geolocation is approximate and VPNs change the apparent country, so this
+  check lowers the risk but does not guarantee compliance. The screen does not catch all
+  personal information.
+- Existing caps (2 concurrent, 10/min, 200/day), timeouts, at most one repair, the kill switch
+  (`ASSISTANT_GENERATION_PROVIDER=none`) and the honest fallback are unchanged.

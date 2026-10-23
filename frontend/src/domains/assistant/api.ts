@@ -92,10 +92,22 @@ export function askAssistant(
 
 export interface AssistantStatus {
   generation_enabled: boolean;
+  /** Provider privacy/use notice; set only when generation is on. */
+  provider_notice?: string | null;
+  geolocation_attribution?: string | null;
+  geolocation_attribution_url?: string | null;
 }
 
+const isOptionalString = (value: unknown) => value === undefined || isNullableString(value);
+
 export function isAssistantStatus(value: unknown): value is AssistantStatus {
-  return isRecord(value) && typeof value.generation_enabled === 'boolean';
+  return (
+    isRecord(value) &&
+    typeof value.generation_enabled === 'boolean' &&
+    isOptionalString(value.provider_notice) &&
+    isOptionalString(value.geolocation_attribution) &&
+    isOptionalString(value.geolocation_attribution_url)
+  );
 }
 
 export function fetchAssistantStatus(signal?: AbortSignal): Promise<HttpResult<AssistantStatus>> {

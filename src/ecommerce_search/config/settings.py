@@ -1,6 +1,7 @@
 import re
 from decimal import Decimal
 from functools import lru_cache
+from ipaddress import IPv4Network, IPv6Network, ip_network
 from pathlib import Path
 from typing import Any, Literal, get_args
 from urllib.parse import urlsplit
@@ -226,6 +227,14 @@ class Settings(BaseSettings):
     # Retrieved records given to the generator (the first V3 results). Capped at
     # search_candidate_k when used, so it never invalidates an existing search configuration.
     assistant_evidence_k: int = Field(default=5, ge=1, le=10)
+    # Country eligibility (`assistant/eligibility.py`): the DB-IP "IP to Country Lite" CSV
+    # (gzip) and the SHA-1 of its decompressed content as published by DB-IP. Unset, missing or
+    # mismatched data = every visitor's region is unknown, so generation is skipped.
+    assistant_country_db_path: Path | None = None
+    assistant_country_db_sha1: str | None = Field(default=None, pattern=r"^[0-9a-fA-F]{40}$")
+    # Comma-separated networks of the reverse proxy whose `X-Client-IP` header is trusted (the
+    # EC2 Caddy container). Empty = never trust any forwarded header; use the TCP peer.
+    assistant_trusted_proxy_cidrs: str = ""
     # Optional owner-supplied prices for cost estimates. Unset = cost reported as unknown.
     assistant_input_usd_per_mtok: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     assistant_output_usd_per_mtok: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
@@ -434,6 +443,28 @@ class Settings(BaseSettings):
         if self.jev_retry_budget_seconds > self.jev_deadline_seconds:
             raise ValueError("jev_retry_budget_seconds must not exceed jev_deadline_seconds")
         return self
+
+    @field_validator("assistant_country_db_sha1", mode="before")
+    @classmethod
+    def _empty_sha1_is_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("assistant_trusted_proxy_cidrs")
+    @classmethod
+    def _valid_proxy_cidrs(cls, value: str) -> str:
+        for part in filter(None, (p.strip() for p in value.split(","))):
+            try:
+                ip_network(part, strict=True)
+            except ValueError:
+                raise ValueError("assistant_trusted_proxy_cidrs must be valid networks") from None
+        return value
+
+    def trusted_proxy_networks(self) -> tuple[IPv4Network | IPv6Network, ...]:
+        return tuple(
+            ip_network(part, strict=True)
+            for part in (p.strip() for p in self.assistant_trusted_proxy_cidrs.split(","))
+            if part
+        )
 
     def v4_jev_config(self) -> JevConfig | None:
         """The experimental V4 Jev configuration (retries 0, one call in flight), or None while

@@ -52,7 +52,7 @@ export interface Recommendation {
 }
 
 export interface GenerationInfo {
-  status: 'not_needed' | 'disabled' | 'used' | 'failed';
+  status: 'not_needed' | 'disabled' | 'skipped' | 'used' | 'failed';
   calls: number;
   validation: 'not_run' | 'passed' | 'repaired' | 'failed';
 }

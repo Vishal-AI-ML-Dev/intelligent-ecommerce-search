@@ -10,6 +10,7 @@ At most two generation calls per request. A provider failure is never turned int
 import time
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Literal
 
 from ecommerce_search.assistant.clarify import decide_clarification
 from ecommerce_search.assistant.explain import render_summary
@@ -37,6 +38,8 @@ from ecommerce_search.generation.provider import (
 from ecommerce_search.query_understanding.parser import parse_normalized_query
 
 MILLION = Decimal(1_000_000)
+# Reasons to skip generation before any provider request (decided by the API layer).
+GenerationBlock = Literal["region_restricted", "region_unknown", "personal_data_suspected"]
 # Quota or usage limits (provider 429 or the local guard): shown as "usage limit reached".
 USAGE_LIMIT_FAILURES = frozenset(
     {"rate_limited", "local_concurrency_limit", "local_rate_limit", "local_daily_cap"}
@@ -55,6 +58,16 @@ NOTICES = {
     "server. The products below are ordinary search results, not a recommendation.",
     "failed": "No generated answer is available: answer generation failed. The products below "
     "are ordinary search results, not a recommendation.",
+    "region_restricted": "No generated answer is available for your location: AI generation is "
+    "offered only in eligible regions. The products below are ordinary search results, not a "
+    "recommendation.",
+    "region_unknown": "No generated answer is available: your region could not be confirmed as "
+    "eligible for AI generation. The products below are ordinary search results, not a "
+    "recommendation.",
+    "personal_data_suspected": "No generated answer was requested: your message may contain "
+    "personal information (such as an email address or phone number), which is never sent to "
+    "the AI provider. Please remove it and ask again. The products below are ordinary search "
+    "results, not a recommendation.",
     "limited": "No generated answer is available right now: the generation usage limit was "
     "reached. The products below are ordinary search results, not a recommendation.",
 }
@@ -113,8 +126,12 @@ def answer(
     retriever: CatalogRetriever,
     generator: GenerationProvider | None,
     limits: AssistantLimits,
+    generation_block: GenerationBlock | None = None,
 ) -> AssistantResponse:
-    """`message` is already normalized (`normalize_query`). Raises `RetrievalUnavailable`."""
+    """`message` is already normalized (`normalize_query`). Raises `RetrievalUnavailable`.
+
+    `generation_block` (decided by the caller before any provider request: country eligibility,
+    personal-data screen) skips generation with an honest notice and plain search results."""
     started = time.perf_counter()
     understanding = parse_normalized_query(message)
     understanding_ms = _ms(started)
@@ -180,6 +197,14 @@ def answer(
         )
     if generator is None:
         return respond("generation_unavailable", "disabled", retrieval=retrieval, status="disabled")
+    if generation_block is not None:
+        return respond(
+            "generation_unavailable",
+            generation_block,
+            retrieval=retrieval,
+            status="skipped",
+            failure=generation_block,
+        )
 
     generation_started = time.perf_counter()
     repair_codes: tuple[str, ...] = ()

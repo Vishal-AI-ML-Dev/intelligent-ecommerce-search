@@ -1,5 +1,9 @@
 # Automatic HTTPS (Let's Encrypt) for the DuckDNS hostname in .env; HTTP redirects to HTTPS.
 {$SITE_HOST} {
 	encode zstd gzip
-	reverse_proxy app:8000
+	reverse_proxy app:8000 {
+		# M16: the direct TCP peer (never a client-supplied header) for the assistant's country
+		# check. Replaces any incoming X-Client-IP; the app trusts it only from this proxy.
+		header_up X-Client-IP {remote_host}
+	}
 }

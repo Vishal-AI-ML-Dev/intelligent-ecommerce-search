@@ -11,9 +11,10 @@ prompt, response text or any key.
 
 import logging
 import time
+from ipaddress import IPv4Network, IPv6Network, ip_address
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from sqlalchemy.orm import Session
 from ecommerce_search.api.dependencies import (
     get_db_session,
     get_decision_provider,
+    get_eligibility,
     get_embedder,
     get_generation_provider,
     get_reranker,
@@ -28,6 +30,7 @@ from ecommerce_search.api.dependencies import (
 )
 from ecommerce_search.api.observability import log_event
 from ecommerce_search.api.reranked import run_reranked_search
+from ecommerce_search.assistant.eligibility import ATTRIBUTION, ATTRIBUTION_URL, LazyEligibility
 from ecommerce_search.assistant.models import (
     AssistantRequest,
     AssistantResponse,
@@ -35,8 +38,9 @@ from ecommerce_search.assistant.models import (
     AssistantUnavailable,
     EvidenceProduct,
 )
+from ecommerce_search.assistant.privacy import looks_personal
 from ecommerce_search.assistant.retrieval import CatalogRetriever, Retrieval, RetrievalUnavailable
-from ecommerce_search.assistant.workflow import AssistantLimits, answer
+from ecommerce_search.assistant.workflow import AssistantLimits, GenerationBlock, answer
 from ecommerce_search.config import Settings
 from ecommerce_search.decision import DecisionProvider
 from ecommerce_search.embeddings.provider import Embedder
@@ -51,6 +55,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 UNAVAILABLE_DETAIL = "assistant unavailable"
+CLIENT_IP_HEADER = "x-client-ip"
+# Shown when generation is on; follows the Gemini API Additional Terms for unpaid services.
+PROVIDER_NOTICE = (
+    "AI answers use the Google Gemini API free tier. Your message and the retrieved catalog "
+    "products are sent to Google, which may use them to improve its products; human reviewers "
+    "may read them. Do not enter personal, sensitive or confidential information. For adults "
+    "(18+). AI generation is offered only in eligible regions, not in the EEA, Switzerland or "
+    "the UK. The AI only selects catalog products; explanations come from catalog data."
+)
 RESPONSES = {
     422: {"description": "Invalid message text (standard validation error body)."},
     503: {
@@ -171,7 +184,38 @@ def limits_from(settings: Settings) -> AssistantLimits:
 def assistant_status(
     generator: Annotated[GenerationProvider | None, Depends(get_generation_provider)],
 ) -> AssistantStatus:
-    return AssistantStatus(generation_enabled=generator is not None)
+    if generator is None:
+        return AssistantStatus(generation_enabled=False)
+    return AssistantStatus(
+        generation_enabled=True,
+        provider_notice=PROVIDER_NOTICE,
+        geolocation_attribution=ATTRIBUTION,
+        geolocation_attribution_url=ATTRIBUTION_URL,
+    )
+
+
+def client_ip(
+    request: Request, trusted_proxies: tuple[IPv4Network | IPv6Network, ...]
+) -> str | None:
+    """The visitor's IP. `X-Client-IP` is trusted only when the TCP peer is a configured proxy
+    (Caddy sets it to the direct peer, replacing any client value); otherwise the peer itself.
+    A trusted proxy without the header, or a malformed value, gives None (unknown)."""
+    peer = request.client.host if request.client else None
+    if peer is None:
+        return None
+    try:
+        peer_address = ip_address(peer)
+    except ValueError:
+        return None
+    if not any(peer_address in network for network in trusted_proxies):
+        return peer
+    forwarded = request.headers.get(CLIENT_IP_HEADER)
+    if forwarded is None or "," in forwarded:
+        return None
+    try:
+        return str(ip_address(forwarded.strip()))
+    except ValueError:
+        return None
 
 
 @router.post(
@@ -183,9 +227,11 @@ def assistant_status(
 )
 def assistant_answer(
     body: AssistantRequest,
+    request: Request,
     settings: Annotated[Settings, Depends(get_settings_dep)],
     retriever: Annotated[CatalogRetriever, Depends(get_assistant_retriever)],
     generator: Annotated[GenerationProvider | None, Depends(get_generation_provider)],
+    eligibility: Annotated[LazyEligibility | None, Depends(get_eligibility)],
 ) -> AssistantResponse:
     try:
         message = normalize_query(body.message, settings.search_max_query_length)
@@ -193,9 +239,28 @@ def assistant_answer(
         raise RequestValidationError(
             [{"type": "value_error", "loc": ("body", "message"), "msg": str(exc)}]
         ) from None
+    # Decided before any provider request; logged as a fixed code only (never the IP or country).
+    block: GenerationBlock | None = None
+    if generator is not None:
+        if looks_personal(message):
+            block = "personal_data_suspected"
+        else:
+            region = (
+                "unknown_region"
+                if eligibility is None
+                else eligibility.check(client_ip(request, settings.trusted_proxy_networks()))
+            )
+            if region == "restricted_region":
+                block = "region_restricted"
+            elif region != "eligible":
+                block = "region_unknown"
     try:
         response = answer(
-            message, retriever=retriever, generator=generator, limits=limits_from(settings)
+            message,
+            retriever=retriever,
+            generator=generator,
+            limits=limits_from(settings),
+            generation_block=block,
         )
     except RetrievalUnavailable:
         log_event(logger, "assistant_answer_unavailable", reason="search_unavailable")

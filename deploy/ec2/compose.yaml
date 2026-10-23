@@ -56,6 +56,16 @@ services:
       <<: *db-env
       POSTGRES_USER: search_app
       POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?set in .env}
+      # M16 assistant: generation stays off unless set in the root-only .env (kill switch: none).
+      ASSISTANT_GENERATION_PROVIDER: ${ASSISTANT_GENERATION_PROVIDER:-none}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Country eligibility: DB-IP Lite (CC BY 4.0) in ./geo, its published SHA-1, and Caddy's
+      # network as the only trusted source of X-Client-IP (the app port is not published).
+      ASSISTANT_COUNTRY_DB_PATH: /geo/dbip-country-lite.csv.gz
+      ASSISTANT_COUNTRY_DB_SHA1: ${ASSISTANT_COUNTRY_DB_SHA1:-}
+      ASSISTANT_TRUSTED_PROXY_CIDRS: 172.16.0.0/12
+    volumes:
+      - ./geo:/geo:ro
     depends_on:
       db:
         condition: service_healthy

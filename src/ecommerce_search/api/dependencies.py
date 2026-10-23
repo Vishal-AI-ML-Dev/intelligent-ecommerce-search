@@ -3,6 +3,7 @@ from collections.abc import Callable, Iterator
 from fastapi import Request
 from sqlalchemy.orm import Session
 
+from ecommerce_search.assistant.eligibility import LazyEligibility
 from ecommerce_search.config import Settings
 from ecommerce_search.decision import DecisionProvider
 from ecommerce_search.embeddings.provider import Embedder
@@ -44,6 +45,11 @@ def get_reranker(request: Request) -> RerankerProvider | None:
     """The application's single, lazily loaded reranker (used only by /search/reranked; None
     when no models dir is known). Not loaded until a request needs to score candidates."""
     return request.app.state.reranker
+
+
+def get_eligibility(request: Request) -> LazyEligibility | None:
+    """The country-eligibility lookup (Milestone 16); None while generation is off."""
+    return request.app.state.eligibility
 
 
 def get_generation_provider(request: Request) -> GenerationProvider | None:

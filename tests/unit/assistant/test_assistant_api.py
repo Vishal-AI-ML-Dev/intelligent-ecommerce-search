@@ -15,7 +15,7 @@ from test_assistant_workflow import EVIDENCE, INJECTION, FakeGenerator, FakeRetr
 
 from ecommerce_search.api import assistant as assistant_api
 from ecommerce_search.api.app import build_generation_provider, create_app
-from ecommerce_search.api.dependencies import get_generation_provider
+from ecommerce_search.api.dependencies import get_eligibility, get_generation_provider
 from ecommerce_search.api.schemas import RerankedSearchResult
 from ecommerce_search.assistant.retrieval import RetrievalUnavailable
 from ecommerce_search.catalog.taxonomy import StorageType
@@ -37,6 +37,10 @@ def client_for(make_settings):
         )
         if generator is not None:
             app.dependency_overrides[get_generation_provider] = lambda: generator
+            # Country eligibility is tested in test_assistant_eligibility.py; eligible here.
+            app.dependency_overrides[get_eligibility] = lambda: SimpleNamespace(
+                check=lambda ip: "eligible"
+            )
         return TestClient(app)
 
     return _client
@@ -305,10 +309,15 @@ def test_status_reports_generation_off_by_default_without_provider_details(clien
     with client_for() as client:
         response = client.get("/assistant/status")
     assert response.status_code == 200
-    assert response.json() == {"generation_enabled": False}
+    assert response.json() == {
+        "generation_enabled": False,
+        "provider_notice": None,
+        "geolocation_attribution": None,
+        "geolocation_attribution_url": None,
+    }
     assert response.headers["X-Request-ID"]
 
 
 def test_status_reports_generation_on_when_a_provider_is_configured(client_for):
     with client_for(generator=FakeGenerator()) as client:
-        assert client.get("/assistant/status").json() == {"generation_enabled": True}
+        assert client.get("/assistant/status").json()["generation_enabled"] is True

@@ -303,6 +303,41 @@ describe('generation status banner', () => {
   });
 });
 
+describe('provider notice', () => {
+  it('shows the provider privacy notice and the DB-IP attribution when generation is on', async () => {
+    const notice = 'AI answers use the Google Gemini API free tier. Do not enter personal data.';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            generation_enabled: true,
+            provider_notice: notice,
+            geolocation_attribution: 'IP Geolocation by DB-IP',
+            geolocation_attribution_url: 'https://db-ip.com',
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    render(<AssistantPage />);
+    const shown = await screen.findByTestId('provider-notice');
+    expect(shown).toHaveTextContent(notice);
+    expect(screen.getByRole('link', { name: 'IP Geolocation by DB-IP' })).toHaveAttribute(
+      'href',
+      'https://db-ip.com',
+    );
+    expect(screen.queryByTestId('generation-disabled')).toBeNull();
+  });
+
+  it('shows no provider notice while generation is off', async () => {
+    respondWith(200, assistantFixtures.generationOff);
+    render(<AssistantPage />);
+    await screen.findByTestId('generation-disabled');
+    expect(screen.queryByTestId('provider-notice')).toBeNull();
+  });
+});
+
 describe('App tabs', () => {
   it('starts on Search and switches to the assistant with the keyboard', async () => {
     render(<App />);
