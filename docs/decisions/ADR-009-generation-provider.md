@@ -77,6 +77,17 @@ Since policy asst-policy-3 (2026-10-23) the provider returns no text: only outco
 and cited field names (`response_json_schema` without `summary`). Explanations are rendered from
 catalog data. A third approved trial (2026-10-23, 3 requests) showed the live API accepts this schema; all three drafts passed validation. The model selected an injection-titled synthetic record once (rendered text stayed clean). Still Proposed.
 
+## Free-tier terms and public use (read 2026-10-23)
+
+The Gemini API Additional Terms allow only Paid Services for API clients offered to users in the
+EEA, Switzerland or the UK. They forbid submitting personal or sensitive data to unpaid services,
+which Google may use and have humans review. They require adult users. An open public demo with
+generation on therefore does not comply on the free tier. Generation stays off on any public
+deployment; see `docs/m16-progress.md`.
+
+Decision needed from the owner: accept this ADR as **technically compatible for local development
+only**, deferring quality, latency and cost selection to M17, or keep it Proposed.
+
 ## Required before any live trial (separate owner approval)
 
 1. Confirm in Google AI Studio that the project is on the free tier with no billing account

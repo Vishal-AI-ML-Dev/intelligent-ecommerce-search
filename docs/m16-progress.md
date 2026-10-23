@@ -318,3 +318,52 @@ first call (no repair, no validation codes).**
   selection quality or injection resistance (M17).
 - **Not exercised live:** the model abstained on the missing-storage case, so "not verified"
   rendering was not observed live. It remains covered only by mocked tests.
+
+## M16 criteria review (2026-10-23; acceptance not recorded)
+
+Against `docs/MASTER_PLAN.md` Milestone 16 and §17 (RAG boundaries):
+
+| Criterion | Status |
+|---|---|
+| Prerequisite M10 | Owner accepted the reduced-scope closure for M16 development only |
+| Retriever = existing V3 search | Met: `run_reranked_search`; spec facts by ID read, no second search |
+| Product discovery, grounded recommendations | Met: IDs plus cited fields; explanations rendered from catalog data; mocked tests plus 3 local smoke trials |
+| Comparisons | Met as a deterministic comparison of selected retrieved products (the plan does not require text-parsed comparison) |
+| Clarification, abstention | Met: deterministic clarification; abstain on no evidence, model abstention or failed validation |
+| Typed output citing product IDs; deterministic constraint and citation re-check | Met |
+| Prices, specifications, availability only from the catalog | Met: no model text is returned (asst-policy-3) |
+| No order, payment, discount or refund actions | Met: none exist |
+| Fixed steps, at most one repair | Met: at most 2 generation calls |
+| Provider behind a typed interface | Met |
+| Provider selected by ADR (§5: from measured quality, latency, cost) | **Gap:** ADR-009 is Proposed. Technical compatibility is shown by three local smoke trials. Measured quality, latency and cost is M17 work. Needs an owner decision (below). |
+| Degrades to search results or abstention when the provider is unavailable | Met: `generation_unavailable` with labelled search results |
+| §17 versioning and telemetry | Met: prompt, policy, evidence and retriever versions plus model; tokens, latency, validation outcome, cost status |
+| Prompt-injection, malicious-listing and false-refusal tests | M17 by plan (§17.7, M17) |
+
+## Gemini free tier and the public demo (terms read 2026-10-23)
+
+From the Gemini API Additional Terms (last updated 2026-04-28) and the available-regions page
+(last updated 2026-10-22):
+- Only Paid Services may be used when making API clients available to users in the EEA,
+  Switzerland or the UK. API clients may be offered only in available regions (India is
+  listed).
+- On unpaid services, Google uses inputs and outputs to improve its products, and human
+  reviewers may read them. Sensitive, confidential or personal information must not be
+  submitted.
+- Users must be 18 or older, and API clients must not be directed at, or likely to be
+  accessed by, people under 18.
+- Free-tier rate limits are per project.
+
+Conclusion: **generation cannot be enabled compliantly on the current open public demo.** The URL
+is reachable from the EEA, UK and Switzerland. Visitors can type personal data into a free-text
+box that is forwarded to Gemini. Minors are not excluded. There is also no app-level rate limit
+or daily cap: quota exhaustion degrades safely to `generation_unavailable`, but it would disable
+generation for every visitor. A compliant free-tier use would need at least an access-restricted
+audience (adult reviewers outside the EEA, UK and Switzerland), a no-personal-data notice and a
+request cap. Those are new owner decisions and infrastructure, not done here. Unrestricted global
+public use on the free tier is not permitted.
+
+Smallest next deployment step (not done): redeploy the existing demo with the assistant UI and
+`ASSISTANT_GENERATION_PROVIDER=none` (the default). Every assistant request then clarifies,
+abstains, or returns labelled search results with "No generated answer is available". No key is
+placed on the server, and no M16 acceptance is claimed.
