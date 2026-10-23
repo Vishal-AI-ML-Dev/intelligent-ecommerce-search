@@ -514,3 +514,20 @@ not for consumer use" clause for this demo.
   2. Recreate only the app (`sudo docker compose up -d app`).
   3. Check `/assistant/status`.
   4. Run the bounded live check: at most 5 real calls from an eligible location.
+
+## Online acceptance evidence (2026-10-23; acceptance NOT recorded)
+
+- **Generation ON** on the staging demo: the owner added the key through SSM. `/assistant/status`
+  reports `generation_enabled: true` with the provider notice. The running image is still
+  `ecommerce-search:m16-geo-e057d00` (commit `e057d00`).
+- **Telemetry** (`assistant_answer_completed`, read through SSM; fixed codes and counts only, no
+  IP, country or message): 3 online answers with `generation_status: used`,
+  `generation_calls: 1`, `validation: passed` and 3 recommendations each. Tokens in/out
+  1043/71, 860/186 and 1043/167; generation latency 1140, 1221 and 1367 ms. Also 2 abstentions
+  with no generation needed. "Used" also means the request passed the country and
+  personal-data checks. The owner observed "laptop under rs 50000" returning laptops below
+  INR 50000 with catalog explanations and evidence links.
+- **Earlier online evidence, same assistant code path** (the 2026-10-23 generation-off
+  deployment): clarification, labelled fallback, evidence anchors and the comparison table
+  passed a browser check. Mocked tests cover refused regions, personal data, usage limits,
+  provider failures and repair.
