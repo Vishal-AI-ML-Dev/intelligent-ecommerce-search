@@ -37,6 +37,10 @@ from ecommerce_search.generation.provider import (
 from ecommerce_search.query_understanding.parser import parse_normalized_query
 
 MILLION = Decimal(1_000_000)
+# Quota or usage limits (provider 429 or the local guard): shown as "usage limit reached".
+USAGE_LIMIT_FAILURES = frozenset(
+    {"rate_limited", "local_concurrency_limit", "local_rate_limit", "local_daily_cap"}
+)
 
 NOTICES = {
     "answer": "The assistant selected products from the retrieved catalog results. Every "
@@ -51,6 +55,8 @@ NOTICES = {
     "server. The products below are ordinary search results, not a recommendation.",
     "failed": "No generated answer is available: answer generation failed. The products below "
     "are ordinary search results, not a recommendation.",
+    "limited": "No generated answer is available right now: the generation usage limit was "
+    "reached. The products below are ordinary search results, not a recommendation.",
 }
 
 
@@ -191,7 +197,7 @@ def answer(
         if result.draft is None:
             return respond(
                 "generation_unavailable",
-                "failed",
+                "limited" if result.failure in USAGE_LIMIT_FAILURES else "failed",
                 retrieval=retrieval,
                 status="failed",
                 failure=result.failure,

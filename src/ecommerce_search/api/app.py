@@ -29,6 +29,7 @@ from ecommerce_search.embeddings.sentence_transformers_provider import (
     SentenceTransformerEmbedder,
 )
 from ecommerce_search.generation import GenerationProvider
+from ecommerce_search.generation.guard import GuardedGenerationProvider, GuardLimits
 from ecommerce_search.reranking.cross_encoder_provider import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
@@ -117,12 +118,21 @@ def build_generation_provider(settings: Settings) -> GenerationProvider | None:
         GeminiGenerationProvider,
     )
 
-    return GeminiGenerationProvider(
+    inner = GeminiGenerationProvider(
         GeminiConfig(
             api_key=settings.gemini_api_key,
             model=settings.assistant_generation_model,
             timeout_seconds=settings.assistant_generation_timeout_seconds,
         )
+    )
+    # Every provider request passes the usage guard (concurrency, per-minute, per-day caps).
+    return GuardedGenerationProvider(
+        inner,
+        GuardLimits(
+            max_concurrency=settings.assistant_generation_max_concurrency,
+            per_minute=settings.assistant_generation_requests_per_minute,
+            per_day=settings.assistant_generation_requests_per_day,
+        ),
     )
 
 

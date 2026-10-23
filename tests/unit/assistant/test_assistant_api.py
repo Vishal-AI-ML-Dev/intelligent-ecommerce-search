@@ -20,6 +20,7 @@ from ecommerce_search.api.schemas import RerankedSearchResult
 from ecommerce_search.assistant.retrieval import RetrievalUnavailable
 from ecommerce_search.catalog.taxonomy import StorageType
 from ecommerce_search.generation.gemini_provider import GeminiGenerationProvider
+from ecommerce_search.generation.guard import GuardedGenerationProvider, GuardLimits
 from ecommerce_search.generation.provider import GenerationResult, GroundedDraft
 from ecommerce_search.reranking.documents import RerankDocumentError
 
@@ -67,7 +68,9 @@ def test_generation_is_off_by_default(make_settings):
 def test_provider_is_built_only_when_configured_and_without_calls(make_settings):
     settings = make_settings(assistant_generation_provider="gemini", gemini_api_key=SECRET_KEY)
     provider = build_generation_provider(settings)
-    assert isinstance(provider, GeminiGenerationProvider)
+    assert isinstance(provider, GuardedGenerationProvider)
+    assert isinstance(provider.inner, GeminiGenerationProvider)
+    assert provider.limits == GuardLimits(max_concurrency=2, per_minute=10, per_day=200)
     assert provider.model == "gemini-3.5-flash-lite"
     provider.close()
 

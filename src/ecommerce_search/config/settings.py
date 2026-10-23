@@ -216,7 +216,13 @@ class Settings(BaseSettings):
     assistant_generation_deadline_seconds: float = Field(
         default=30, gt=0, le=120, allow_inf_nan=False
     )
-    assistant_generation_max_output_tokens: int = Field(default=2048, ge=256, le=4096)
+    # The draft is IDs and field names only (observed 18–120 output tokens including thinking).
+    assistant_generation_max_output_tokens: int = Field(default=1024, ge=256, le=4096)
+    # Usage guard (`generation/guard.py`): every provider request, repairs included, counts. A
+    # refused request is not sent and is not retried. Per process (one worker); 0 per day = off.
+    assistant_generation_max_concurrency: int = Field(default=2, ge=1, le=8)
+    assistant_generation_requests_per_minute: int = Field(default=10, ge=1, le=60)
+    assistant_generation_requests_per_day: int = Field(default=200, ge=0, le=1000)
     # Retrieved records given to the generator (the first V3 results). Capped at
     # search_candidate_k when used, so it never invalidates an existing search configuration.
     assistant_evidence_k: int = Field(default=5, ge=1, le=10)

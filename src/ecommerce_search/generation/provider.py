@@ -46,6 +46,10 @@ GenerationFailure = Literal[
     "refused",
     "truncated",
     "invalid_response",
+    # Refused by the local usage guard (`generation/guard.py`); nothing was sent.
+    "local_concurrency_limit",
+    "local_rate_limit",
+    "local_daily_cap",
 ]
 
 

@@ -367,3 +367,49 @@ Smallest next deployment step (not done): redeploy the existing demo with the as
 `ASSISTANT_GENERATION_PROVIDER=none` (the default). Every assistant request then clarifies,
 abstains, or returns labelled search results with "No generated answer is available". No key is
 placed on the server, and no M16 acceptance is claimed.
+
+## Slice 4 (2026-10-23): generation status, usage guard and the public-enablement blocker
+
+**Owner decisions:** ADR-009 accepted for local development only (quality and cost pending, not
+waived). Real generation is approved in principle under the zero-payment rule (existing free
+tier only; no billing, paid fallback or provider switch; key backend-only). **Public enablement
+is allowed only if the provider's audience, region, adult-use and privacy conditions are
+satisfied.** A disclaimer alone does not count.
+
+Implemented (commit after `9c95d49`; not deployed):
+- `GET /assistant/status` returns `{"generation_enabled": bool}` only, and the assistant tab
+  shows "AI generation is disabled on this public demo" when it is false.
+- **Usage guard** (`generation/guard.py`) around the provider. Every provider request, repairs
+  included, must pass all three limits: at most 2 in flight, 10 per minute and 200 per UTC day
+  (settings). A refused request is not sent, not queued and not retried. The response is
+  `generation_unavailable` with an honest "usage limit reached" notice and plain search
+  results. A provider 429 shows the same notice, and nothing is retried. The limits are per
+  process, the app runs one worker, and the counters reset on restart.
+- **Other bounds, unchanged:** input at most 200 characters (search query rules); output at most
+  1,024 tokens (lowered from 2,048, because the draft is IDs and field names only); SDK retries
+  off; 20 s per-request timeout; no repair after 30 s; at most 2 provider requests per
+  assistant request.
+- **Kill switch:** `ASSISTANT_GENERATION_PROVIDER=none` (the default) plus an app restart.
+  `ASSISTANT_GENERATION_REQUESTS_PER_DAY=0` also disables generation. On the EC2 stack, the app
+  service receives only explicitly listed variables (`deploy/ec2/compose.yaml`). No assistant
+  or Gemini variable is passed today, so generation cannot be on there.
+
+**Exact blocker for PUBLIC generation (not deployed):** the Gemini API Additional Terms
+(2026-04-28) require all of the following for unpaid use:
+1. **No users in the EEA, Switzerland or UK** ("only Paid Services when making API Clients
+   available to users" there). The open URL is reachable worldwide. The existing setup (one
+   EC2 instance, stock Caddy) has no geo-restriction. Adding one needs a GeoIP database and
+   either a custom Caddy build or app code, and IP geolocation is bypassable (VPNs). That is
+   new components and an owner decision, and not a guarantee.
+2. **Adults only:** the client must not be "likely to be accessed by individuals under 18". An
+   anonymous public page cannot ensure that without access control.
+3. **No personal or sensitive data** may be submitted. A free-text box on an open page cannot
+   ensure that.
+
+**Smallest compliant path inside the existing setup (needs owner approval, not done):** keep the
+public page generation-off. Enable generation only behind access control for invited adult
+reviewers located outside the EEA, Switzerland and UK: Caddy's built-in `basic_auth` on
+`/assistant/answer`, or a separate reviewer hostname path, credentials shared privately, plus a
+no-personal-data instruction. This needs no new AWS resource, but it is a restricted preview,
+not public generation. The owner must also accept the "for professional or business purposes,
+not for consumer use" clause for this demo.
