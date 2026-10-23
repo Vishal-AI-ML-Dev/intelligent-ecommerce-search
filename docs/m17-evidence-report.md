@@ -28,7 +28,8 @@ human-reviewed.
 | `abe-v1-live-003` | `7f87a3c` | 17-case subset (002's unrun) | **incomplete** (timeout) | 2 | `f03` timeout | 2 | 2/2 judged |
 | `abe-v1-live-004` | `ab96d81` | 15-case subset (003's unrun) | complete | 15 | 0 | 15 | 15/15 judged |
 
-Timeout origins are **unknown** (not recorded before `ab96d81`; elapsed time alone cannot
+Provider failures across all runs: **3** — **2 timeouts** (`f01` in run 002, `f03` in run 003)
+and **1 `invalid_response`** (`g02` in run 002). Timeout origins are **unknown** (not recorded before `ab96d81`; elapsed time alone cannot
 establish them). Provider call time varied widely across runs (p50 2.5 s, 13.8 s, 1.5 s
 (n=2), 1.6 s). Every one of the 40 cases has exactly one human-judged saved response, but those
 come from three different runs (002, 003, 004) with different code commits and conditions; three
@@ -93,27 +94,73 @@ thresholds in the manifest are **not evaluated**: no complete run has human revi
 | Faithfulness | **Partial** | Human "misleading" judgements cover all 40 cases but across three runs, AI-assisted/owner-endorsed, one reviewer; no complete reviewed run |
 | Answer relevance | **Partial** | Human product-fit judgements per run (002: 18 fits / 3 partly of 21; 003: 3 / 0 of 3; 004: 27 / 5 of 32; not pooled); 3 cases never answered |
 | Citation correctness | **Met** | Automated, every run: all recommended products' citations correct |
-| Unsupported-claim rate | **Partial** | Displayed text is server-rendered from catalog data (0 model/seller prose in every run); human "misleading" covers the rest; no separately defined claim-level rate |
+| Unsupported-claim rate | **Unmet (no defined measurement)** | Proxies only: displayed text is server-rendered from catalog data (0 model/seller prose in every run); human "misleading" verdicts per run |
 | Constraint satisfaction | **Met for server-checked fields; partial otherwise** | 0 failed server-checked requirements in every run; catalog-expectation fit (gender, ANC, colour, availability) via acceptable sets and human review only |
 | Clarification accuracy | **Met (with a recorded limitation)** | 4/4 in runs 001/002; `c03` unnecessary clarification reported as a diagnostic |
 | Abstention accuracy | **Met as measured; failures reported** | deterministic 4/4; model cohort 1/2 (`u01` known failure) |
 | Latency | **Partial** | Provider call time per run; workflow times pacing-contaminated; no API latency under load |
 | Token usage | **Met** | Provider-reported per call; missing counts for failed calls listed |
-| Cost | **Partial** | No prices configured; reported as unknown, nothing billed claimed |
+| Cost | **Unmet** | No prices configured; reported as unknown in every run, nothing billed claimed |
 | Prompt-injection tests | **Partial** | 6 message injections: 0/6 targets selected in runs 001 and 004; single runs, fixed evidence; run 004 same-run pair only for `m06` |
 | Malicious listing-content tests | **Partial** | 6 listing injections: 0/6 targets in runs 001 and 004; same caveats; run 004 same-run pair only for `l04` |
 | False-refusal tests | **Partial** | 0 refusals in every run, but `f01`, `f03` ended as generation failures (timeouts) in runs 002/003 |
-| Report failures honestly | **Met** | Incomplete runs, timeouts (origin unknown), known limitations and all exclusions reported |
+| Report failures honestly | **Met** | Incomplete runs, 3 provider failures (2 timeouts, origin unknown; 1 invalid_response), known limitations and all exclusions reported |
+| §5 measured provider selection (moved to M17) | **Unmet** | Quality and latency measured; cost not; no ADR records a measured selection |
+| Frozen human thresholds (manifest) | **Not evaluated** | Required population (one complete run's responses, human-reviewed) does not exist |
 
-## Remaining acceptance gaps
+## Acceptance gaps, checked against the exact rules
 
-1. No single run that is both complete over all 40 cases and human-reviewed; human evidence spans
-   three runs with different code commits and conditions.
-2. Human review is one reviewer, mostly AI-assisted/owner-endorsed (8 with provenance not
-   stated): not independent validation; no agreement measure.
-3. Provider reliability: two incomplete runs stopped on timeouts of unknown origin; three cases
-   (`g02`, `f01`, `f03`) have no judged answer.
-4. Cost unknown; latency only per provider call.
-5. Injection evidence is single-run, fixed-evidence and mostly without same-run pairs.
-6. Thresholds for human metrics were set for a complete reviewed run and are not evaluated.
-7. Acceptance criteria are an owner decision; MASTER_PLAN sets no numeric thresholds.
+Sources: `docs/MASTER_PLAN.md` (M17 section, §5 generation models, evaluation metrics, annotation
+rules, milestone table) and the frozen, owner-approved `freeze-manifest.json` evaluation rules.
+No gate is added here and no approved threshold is waived.
+
+### Mandatory gates not met
+
+1. **Human thresholds (frozen rule).** Manifest: "overall_quality_verdict: None before human review
+   is complete" and human thresholds "faithfulness_human (not misleading) at least 95% of responses
+   judged yes or no; answer_relevance_human (fits) at least 85% of judged products;
+   outcome_appropriate_human at least 85% of responses judged yes or no", set for the complete
+   40-case run. Their required population (human judgements of one complete run's responses) does
+   not exist: run 001 is complete but has no saved responses; runs 002–004 are partial or subsets.
+   **Not evaluated** (not met, not failed).
+2. **Measured provider selection (MASTER_PLAN §5).** "is selected in its milestone through an ADR
+   from measured quality, latency, and cost; … for M16 the measured quality, latency and cost
+   selection of the Gemini provider is moved to M17 … The measurement requirement itself is
+   unchanged and not yet met." Quality and latency are measured; cost is not; no ADR records a
+   measured selection. **Unmet.**
+3. **Cost (MASTER_PLAN M17 "Measure: … cost"; evaluation list "latency, tokens, and cost").**
+   Reported as unknown in every run (no operator-supplied price with a stated source). **Unmet.**
+4. **Unsupported-claim rate (MASTER_PLAN M17 "Measure: … unsupported-claim rate").** No metric with
+   that definition was predeclared or reported; only proxies exist (0 displayed model/seller prose;
+   human "misleading" verdicts). **Unmet as a defined measurement.**
+
+### Met, with evidence limitations
+
+- "Create a separate, versioned, human-reviewed answer-evaluation dataset. It is not the M9 Golden
+  Dataset." — met: `abe-v1`, 40 cases, owner-reviewed. Limitations: AI-authored cases; synthetic
+  catalog.
+- Milestone table "Real human reviewers"; annotation rules "If only one annotator exists, reports
+  say so and do not claim inter-annotator agreement. AI is never an annotator, and AI suggestions
+  become labels only after explicit human review." — met as worded: `ann-1` explicitly reviewed
+  and endorsed every judgement; one reviewer, stated; 32 of 40 judgements AI-assisted and
+  owner-endorsed, 8 provenance not stated. Not independent validation.
+- "Measure: faithfulness; answer relevance" — measured by human judgements per run (002, 003,
+  004), covering all 40 cases once but across three runs with different code commits; three cases
+  (`g02`, `f01`, `f03`) were judged only as generation failures. Not pooled.
+- "citation correctness", "constraint satisfaction" — met: hard gates met in complete run 001 and
+  in every partial run (server-checked fields only; catalog expectations via acceptable sets).
+- "clarification accuracy", "abstention accuracy" — measured: 4/4, contract 1/1, deterministic
+  cohort 4/4, model cohort 1/2 (`u01`, reported failure); `c03` diagnostic.
+- "Add prompt-injection tests, malicious listing-content tests, and false-refusal tests"; §17 item 7
+  "Prompt-injection and malicious-content tests are mandatory (M17)" — tests added and run: run 001
+  (complete) 0/12 targets, 0/12 pair changes, false refusals 0/28 (manifest quality targets met);
+  run 004 0/12 targets. Limitation: single runs on fixed evidence, not end-to-end robustness.
+- "latency", "token usage" — provider call latency and provider-reported tokens per run.
+  Limitation: workflow latency includes pacing; no latency under load.
+- "Report failures honestly" — met.
+
+### Optional improvements (not required by any rule)
+
+- An independent second reviewer and agreement measure.
+- Same-run clean/injected pairs for all 12 injection cases with human review.
+- End-to-end API latency under load; a further diagnostics-enabled run to observe timeout origin.
