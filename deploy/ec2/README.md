@@ -20,9 +20,18 @@ Shell variables used below, in Git Bash on the owner's PC:
 ```bash
 AWS="$LOCALAPPDATA/Programs/AWSCLIV2-extract/Amazon/AWSCLIV2/aws.exe"   # aws login --profile m26a first
 P="--profile m26a --region ap-southeast-2"
-SSH="ssh -i ~/.ssh/m26a-staging -o UserKnownHostsFile=~/.ssh/known_hosts_m26a ubuntu@15.134.113.75"
 ID=i-033ad34a5e29776e8
+# Admin access over SSM Session Manager (2026-10-23): no home-IP firewall edits. Needs the
+# official Session Manager plugin and the instance profile m26a-search-ssm
+# (AmazonSSMManagedInstanceCore only). In another terminal, keep a port-forward open:
+#   PATH="$PATH:/c/Program Files/Amazon/SessionManagerPlugin/bin" "$AWS" ssm start-session $P #     --target $ID --document-name AWS-StartPortForwardingSession #     --parameters '{"portNumber":["22"],"localPortNumber":["2222"]}'
+# Then SSH through it; the existing pinned host key is still verified:
+SSH="ssh -i ~/.ssh/m26a-staging -o UserKnownHostsFile=~/.ssh/known_hosts_m26a -o HostKeyAlias=15.134.113.75 -o StrictHostKeyChecking=yes -p 2222 ubuntu@127.0.0.1"
+SCP="scp -i ~/.ssh/m26a-staging -o UserKnownHostsFile=~/.ssh/known_hosts_m26a -o HostKeyAlias=15.134.113.75 -o StrictHostKeyChecking=yes -P 2222"
 ```
+
+One-off commands also work without the plugin, through SSM Run Command:
+`"$AWS" ssm send-command $P --instance-ids $ID --document-name AWS-RunShellScript --parameters 'commands=["cd /opt/m26a && docker compose ps"]'`.
 
 ## Everyday commands
 
@@ -32,13 +41,15 @@ ID=i-033ad34a5e29776e8
   about $5.60/month): `"$AWS" ec2 stop-instances $P --instance-ids $ID`
 - **Start it again:** `"$AWS" ec2 start-instances $P --instance-ids $ID`. Containers restart
   on their own. The first search after a start takes about 13 s while the models load.
-- **SSH from a new home IP:** in the console, edit security group `m26a-search-ec2`, rule
-  `owner-ssh`, and set it to your current IP with `/32`.
+- **Direct SSH (legacy):** the security-group rule `owner-ssh` (port 22 from one home IP) still
+  exists but is no longer needed; use the SSM port-forward above. Remove the rule only with the
+  owner's confirmation.
 
 ## Update the app (new image)
 
 1. On the PC: `docker save <new-tag> | gzip -1 > new.tar.gz`, then
-   `scp -i ~/.ssh/m26a-staging -o UserKnownHostsFile=~/.ssh/known_hosts_m26a new.tar.gz ubuntu@15.134.113.75:/tmp/`
+   `$SCP new.tar.gz ubuntu@127.0.0.1:/tmp/` (through the SSM port-forward; check the SHA-256 on
+   both sides)
 2. `$SSH 'cd /opt/m26a && sudo ./update.sh /tmp/new.tar.gz <new-tag>'`. It takes a backup first.
 3. Roll back by running `update.sh` again with the previous tag (and its archive), or by setting
    `APP_IMAGE` back in `.env` and running `sudo docker compose up -d app`.

@@ -9,7 +9,8 @@ See `docs/MASTER_PLAN.md` for the complete engineering plan.
 
 ## At a glance
 
-**Live staging demo (Search only):** <https://intelligent-ecommerce-search.duckdns.org/>
+**Live staging demo (Search and Shopping assistant, AI generation off):**
+<https://intelligent-ecommerce-search.duckdns.org/>
 
 This is a staging demo on a synthetic 240-product catalog. It runs on temporary cloud credits
 and is not a permanent URL. It has a single instance with no high availability and no load
@@ -18,7 +19,8 @@ testing, so it is not production-ready (`docs/m26a-progress.md`).
 | | What | Where documented |
 |---|---|---|
 | **Deployed** (staging) | Buyer Search page over V3 reranked search (`POST /search/reranked`) | `docs/m26a-progress.md` |
-| **Implemented, not deployed** | Shopping assistant first slices (M16, in progress): API, UI tab, deterministic comparison, structured RAM/storage checks, optional Gemini adapter (off by default) | `docs/m16-progress.md` |
+| **Deployed** (staging, generation OFF) | Shopping assistant tab (M16, in progress): clarification questions, labelled catalog search results, evidence references, deterministic comparison and structured RAM/storage data. The page states that AI generation is disabled. | `docs/m16-progress.md` |
+| **Implemented, local only** | Optional Gemini generation (free tier, off by default; three small local smoke trials) | `docs/m16-progress.md` |
 | **Implemented, local only** | V0–V2 search endpoints, experimental V4 (`/search/routed`), listing normalization (M13), listing decisions (M14, blocked) | sections below |
 | **Planned** | Assistant evaluation (M17), return intelligence (M18–M22), review queue (M21), production AWS stack (M26B) and the rest of `docs/MASTER_PLAN.md` | `docs/MASTER_PLAN.md` |
 
@@ -144,7 +146,8 @@ The managed-stack Terraform in `infra/staging/` is not applied.
 - M26A (Search staging demo): **accepted (2026-10-22)** with documented limitations: a
   single-EC2 demo at the URL above, not production-ready. M26B remains. See
   `docs/m26a-progress.md`.
-- M16 (grounded shopping assistant): **IN PROGRESS, not accepted, not deployed online.** See
+- M16 (grounded shopping assistant): **IN PROGRESS, not accepted.** Deployed to the staging demo
+  with AI generation off (2026-10-23). See
   "Shopping assistant (Milestone 16, in progress)" below and `docs/m16-progress.md`.
 - M15, M17–M22, M23B, M24B, M25B and M26B: not started. This includes policy-risk triage,
   assistant evaluation, return intelligence and human review (HITL).
@@ -768,7 +771,8 @@ assistant tab. Fixture and live browser results are reported separately; see
 
 ## Shopping assistant (Milestone 16, in progress)
 
-Status: **in progress; not accepted and not deployed online.** Details, limitations and the
+Status: **in progress, not accepted.** Deployed to the staging demo on 2026-10-23 (commit
+`1363994`) with **AI generation OFF**. Details, limitations and the
 remaining gaps are in `docs/m16-progress.md`, and the provider decision is in ADR-009
 (`docs/decisions/ADR-009-generation-provider.md`, **Proposed**).
 

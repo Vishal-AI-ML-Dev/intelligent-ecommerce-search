@@ -413,3 +413,45 @@ reviewers located outside the EEA, Switzerland and UK: Caddy's built-in `basic_a
 no-personal-data instruction. This needs no new AWS resource, but it is a restricted preview,
 not public generation. The owner must also accept the "for professional or business purposes,
 not for consumer use" clause for this demo.
+
+## Deployment to the staging demo (2026-10-23): generation OFF
+
+- **URL:** <https://intelligent-ecommerce-search.duckdns.org/> (same server, database volume,
+  hostname and Caddy as M26A).
+- **Commit:** `1363994dc3ca9746605b2925bd956952072c768c` (CI run 39895108069, all four jobs
+  passed). Commit hashes are not time-ordered: `a785d33` (grounding fix), `9c95d49` (status
+  banner) and every earlier M16 commit are ancestors of `1363994`.
+- **Image:** `ecommerce-search:m16-grounded-1363994`, ID
+  `sha256:b1c934f3ad256f9323527e6f464c7adf024aae7c946bae5daca3a94aa61f025d`, label
+  `org.opencontainers.image.revision=1363994d…`. Built from a clean `git archive` export of
+  `origin/main` plus the two pinned model snapshots. Checked inside the image: the draft fields are
+  `outcome` and `selected` only, the Gemini schema has no `summary`, and the versions are
+  asst-policy-3 / asst-prompt-2.
+- **Admin access:** SSM Session Manager replaced the home-IP-dependent workflow. One IAM role and
+  instance profile `m26a-search-ssm` with only the AWS managed policy
+  `AmazonSSMManagedInstanceCore` were added. There is no NAT gateway, VPC endpoint or public SSH
+  change. One instance reboot (about 1 minute) let the agent pick up the role. The image was
+  copied with `scp` through an SSM port-forward to port 22, verifying the existing pinned host key.
+  SHA-256 matched (`7c3444c3…`). The temporary archive was deleted after loading.
+- **Update:** `update.sh` took a backup first (`ecommerce_search-20261023T054521Z.dump`, 620 KB)
+  and recreated only `app`. db and Caddy were unchanged; 240 products. Rollback images
+  `ecommerce-search:m26a-8851867` and `m26a-staging-1` remain on the server.
+- **Generation: OFF.** The server's app service receives no assistant or Gemini variables, and
+  the server `.env` contains none. `/assistant/status` returns `{"generation_enabled": false}`,
+  and the UI shows "AI generation is disabled on this public demo". Server logs show every
+  assistant request with `generation_calls: 0`, and nothing mentions Gemini. No live generation
+  call was made for this deployment.
+- **Online checks (public HTTPS):** `/health` 200 with a valid certificate; `POST
+  /search/reranked` 10 results, reranker applied; `live.spec.ts` (Search) 1/1 against the
+  public URL. A temporary browser check (not committed) passed 1/1: the disabled banner, a
+  clarification for "hello there", and the labelled fallback "Search results (not a
+  recommendation)" with 5 evidence items carrying typed RAM/storage values. It also checked the
+  evidence anchor `#evidence-1`, a comparison table from two selected products, no
+  recommendations, and that every browser request stayed on the demo host.
+- **Remaining blocker for public generation:** Gemini API Additional Terms: "You may use only
+  Paid Services when making API Clients available to users in the European Economic Area,
+  Switzerland, or the United Kingdom." Smallest action, which needs owner approval: country-gate
+  only the generation call, with EEA/CH/UK visitors getting the existing fallback (best-effort
+  IP geolocation), plus a no-personal-data notice and a skip for messages containing an email
+  address or phone number. Then the owner adds `GEMINI_API_KEY` to the root-only server `.env`
+  over SSM, and the compose app service gets the two variables.
