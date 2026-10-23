@@ -493,3 +493,24 @@ not for consumer use" clause for this demo.
   personal information.
 - Existing caps (2 concurrent, 10/min, 200/day), timeouts, at most one repair, the kill switch
   (`ASSISTANT_GENERATION_PROVIDER=none`) and the honest fallback are unchanged.
+
+## Deployment update (2026-10-23): eligibility build deployed, generation still OFF
+
+- **Running:** commit `e057d00` (CI run 39909436079, all four jobs passed) as image
+  `ecommerce-search:m16-geo-e057d00` (`sha256:ecaeb633…`), built from a clean export. It was
+  copied over the SSM port-forward and the SHA-256 matched. `update.sh` took the backup
+  `ecommerce_search-20261023T065058Z.dump` first. Database: 240 products; hostname unchanged.
+- **Server config:** the reviewed `compose.yaml` and `Caddyfile` were installed, with
+  `*.bak-m26a` copies kept. Caddy was validated and reloaded, and now sets
+  `X-Client-IP {remote_host}`. The DB-IP October 2026 file was downloaded on the server into
+  `/opt/m26a/geo/` and its published SHA-1 verified. `ASSISTANT_COUNTRY_DB_SHA1` is in `.env`.
+- **Generation: OFF.** The owner chose to add the Gemini key later. `.env` has no
+  `GEMINI_API_KEY` or `ASSISTANT_GENERATION_PROVIDER`, so the default `none` applies;
+  `/assistant/status` reports `generation_enabled: false`. No live generation call was made.
+- **Rollback images on the server:** `m16-grounded-1363994`, `m26a-8851867`, `m26a-staging-1`.
+- **To resume:**
+  1. The owner adds `ASSISTANT_GENERATION_PROVIDER=gemini` and `GEMINI_API_KEY=...` with
+     `sudo nano /opt/m26a/.env` in an SSM shell, never in chat or shell history.
+  2. Recreate only the app (`sudo docker compose up -d app`).
+  3. Check `/assistant/status`.
+  4. Run the bounded live check: at most 5 real calls from an eligible location.

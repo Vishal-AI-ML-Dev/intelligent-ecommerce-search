@@ -772,7 +772,7 @@ assistant tab. Fixture and live browser results are reported separately; see
 ## Shopping assistant (Milestone 16, in progress)
 
 Status: **in progress, not accepted.** Deployed to the staging demo on 2026-10-23 (commit
-`1363994`) with **AI generation OFF**. Details, limitations and the
+`e057d00`, with the country-eligibility and personal-data checks) with **AI generation OFF**. Details, limitations and the
 remaining gaps are in `docs/m16-progress.md`, and the provider decision is in ADR-009
 (`docs/decisions/ADR-009-generation-provider.md`, **Proposed**).
 
