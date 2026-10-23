@@ -84,10 +84,52 @@ def _verdict_rate(values: list[str], good: str, definition: str) -> dict[str, An
     }
 
 
-def summarize_judgements(judgements: tuple[AnswerJudgement, ...]) -> dict[str, Any]:
+def coverage(judgements: tuple[AnswerJudgement, ...], report: dict[str, Any]) -> dict[str, Any]:
+    """How much of the recorded run was judged. Nothing missing or unsure is discarded: missing
+    responses are listed, unsure verdicts counted, and diagnostics reported separately."""
+    diagnostics = {d["case_id"] for d in report.get("diagnostics", [])}
+    recorded = {r["case_id"]: r.get("recommended", []) for r in report["results"] if not r["error"]}
+    judged = {j.case_id for j in judgements}
+
+    def responses(ids: set[str]) -> dict[str, Any]:
+        return {
+            "recorded": len(ids),
+            "judged": len(ids & judged),
+            "missing": sorted(ids - judged),
+        }
+
+    products_recorded = sum(len(recorded[i]) for i in recorded if i not in diagnostics)
+    product_verdicts = Counter(
+        p.fit for j in judgements if j.case_id not in diagnostics for p in j.products
+    )
+    return {
+        "responses_scored": responses(set(recorded) - diagnostics),
+        "responses_diagnostic": responses(set(recorded) & diagnostics),
+        "not_recorded": sorted(r["case_id"] for r in report["results"] if r["error"])
+        + list(report.get("not_run", [])),
+        "products": {
+            "recorded": products_recorded,
+            "judged": sum(product_verdicts.values()),
+            "unsure": product_verdicts["unsure"],
+            "in_missing_judgements": sum(
+                len(recorded[i]) for i in set(recorded) - judged - diagnostics
+            ),
+        },
+        "unsure": {
+            "outcome_appropriate": sum(j.outcome_appropriate == "unsure" for j in judgements),
+            "misleading": sum(j.misleading == "unsure" for j in judgements),
+            "product_fit": product_verdicts["unsure"],
+        },
+    }
+
+
+def summarize_judgements(
+    judgements: tuple[AnswerJudgement, ...], report: dict[str, Any] | None = None
+) -> dict[str, Any]:
     fits = Counter(p.fit for j in judgements for p in j.products)
     reviewers = sorted({j.reviewer_handle for j in judgements})
-    return {
+    summary: dict[str, Any] = {} if report is None else {"coverage": coverage(judgements, report)}
+    return summary | {
         "reviewers": reviewers,
         "agreement": "not claimed: one reviewer" if len(reviewers) == 1 else "not computed",
         "judgements": len(judgements),

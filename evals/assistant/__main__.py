@@ -2,7 +2,8 @@
 
 Usage:
     uv run python -m evals.assistant [mocked] [--cases PATH] [--annotations PATH] [--out DIR]
-    uv run python -m evals.assistant live --cases PATH --expected-sha256 HEX \\
+        [--run-id ID]
+    uv run python -m evals.assistant live --run-id ID --cases PATH --expected-sha256 HEX \\
         --annotations PATH --expected-annotations-sha256 HEX \\
         --max-requests N --min-interval-seconds S --out DIR [--confirm-live] \\
         [--input-usd-per-mtok X --output-usd-per-mtok Y --price-source TEXT]
@@ -16,6 +17,11 @@ approval of the case file (by SHA-256), the request cap and the interval. `--max
 `eval` cases need their `aa-1` annotations (`annotations.py`): a missing, mismatched or
 unapproved annotation refuses the run (fail closed); `live` also checks the annotation file's
 approved SHA-256.
+A run with `--out` saves every processed case at once (`responses.jsonl`, saved API responses,
+and `calls.jsonl`, per-call telemetry; `persist.py`), then `report.json`/`report.md` bound to
+their SHA-256 values and `review-sheet.md`. Runs are never merged: a non-empty `--out` is
+refused. `live` needs `--run-id` and refuses uncommitted tracked changes or untracked/ignored
+importable files under src/, evals/ or tests/; the full evaluated commit is recorded.
 `draft` builds an unsealed draft eval set: it captures V3 evidence once from the local database
 and cached models (read-only, offline, no provider), then reuses that frozen capture on every
 rebuild (`--recapture` is refused once reviews exist). It records the owner's decisions from
@@ -38,8 +44,16 @@ from ecommerce_search.generation.provider import GenerationProvider
 from evals.assistant.annotations import AnnotationError, Annotations, load_annotations
 from evals.assistant.contracts import EvalCase, file_sha256, load_cases
 from evals.assistant.judgements import load_judgements, summarize_judgements
+from evals.assistant.persist import (
+    RUN_ID,
+    RunBinding,
+    RunWriter,
+    git_provenance,
+    load_responses,
+    render_review_sheet,
+)
 from evals.assistant.report import build_report, render_markdown
-from evals.assistant.runner import run_cases, run_live
+from evals.assistant.runner import RunResult, run_cases, run_live
 
 DEFAULT_CASES = Path(__file__).parent / "fixtures" / "synthetic-v1" / "cases.jsonl"
 ProviderFactory = Callable[[Any], GenerationProvider]
@@ -72,9 +86,44 @@ def _write(out: Path | None, report: dict[str, Any]) -> str:
     markdown = render_markdown(report)
     if out is not None:
         out.mkdir(parents=True, exist_ok=True)
-        (out / "report.json").write_text(json.dumps(report, indent=2) + "\n", "utf-8")
-        (out / "report.md").write_text(markdown, "utf-8")
+        text = json.dumps(report, indent=2) + "\n"
+        (out / "report.json").write_text(text, "utf-8", newline="\n")
+        (out / "report.md").write_text(markdown, "utf-8", newline="\n")
     return markdown
+
+
+def _out_refusal(out: Path) -> str | None:
+    if out.exists() and (not out.is_dir() or any(out.iterdir())):
+        return f"output directory {out} exists and is not empty; runs are never merged"
+    return None
+
+
+def _provenance_refusal(provenance: dict[str, Any]) -> str | None:
+    if provenance["tracked_modified"] or provenance["untracked_code"]:
+        changed = provenance["tracked_modified"] + provenance["untracked_code"]
+        return f"evaluation code differs from commit {provenance['code_commit']}: {changed}"
+    return None
+
+
+def _finish(
+    out: Path | None,
+    run: RunResult,
+    cases: tuple[EvalCase, ...],
+    binding: dict[str, Any],
+    **report_args: Any,
+) -> dict[str, Any]:
+    """The report, bound to the SHA-256 of the files saved during the run, then the sheet."""
+    if out is not None:
+        for name in ("responses", "calls"):
+            path = out / f"{name}.jsonl"
+            binding[f"{name}_sha256"] = file_sha256(path) if path.exists() else None
+    report = build_report(run, binding=binding, **report_args)
+    sys.stdout.write(_write(out, report))
+    if out is not None:
+        records = load_responses(out / "responses.jsonl")
+        sheet = render_review_sheet(records, {c.case_id: c for c in cases}, report)
+        (out / "review-sheet.md").write_text(sheet + "\n", "utf-8", newline="\n")
+    return report
 
 
 def _gemini(settings: Any) -> GenerationProvider:
@@ -89,7 +138,18 @@ def _gemini(settings: Any) -> GenerationProvider:
     )
 
 
-def _live(args: argparse.Namespace, provider_factory: ProviderFactory) -> int:
+def _settings() -> Any:
+    from ecommerce_search.config import Settings
+
+    return Settings()
+
+
+def _live(
+    args: argparse.Namespace,
+    provider_factory: ProviderFactory,
+    provenance_check: Callable[[], dict[str, Any]],
+    settings_factory: Callable[[], Any] = _settings,
+) -> int:
     cases = load_cases(args.cases)
     sha256 = file_sha256(args.cases)
     refusal = live_refusal(cases, sha256, args.expected_sha256)
@@ -100,6 +160,9 @@ def _live(args: argparse.Namespace, provider_factory: ProviderFactory) -> int:
             annotations = annotations_for(cases, sha256, args.annotations)
         except AnnotationError as exc:
             refusal = str(exc)
+    provenance = provenance_check()
+    if refusal is None:
+        refusal = _out_refusal(args.out) or _provenance_refusal(provenance)
     if refusal is not None:
         print(f"refused: {refusal}; no request sent", file=sys.stderr)
         return 2
@@ -128,7 +191,20 @@ def _live(args: argparse.Namespace, provider_factory: ProviderFactory) -> int:
         "note": "harness limits, not provider quotas",
     }
     generation_cases = sum(case.generation == "on" for case in cases)
+    settings = settings_factory()
+    run_settings = {
+        "assistant_generation_model": settings.assistant_generation_model,
+        "assistant_generation_timeout_seconds": settings.assistant_generation_timeout_seconds,
+        "assistant_generation_deadline_seconds": settings.assistant_generation_deadline_seconds,
+        "assistant_generation_max_output_tokens": settings.assistant_generation_max_output_tokens,
+        "assistant_evidence_k": settings.assistant_evidence_k,
+        "gemini_api_key_configured": settings.gemini_api_key is not None,
+    }
     plan = {
+        "run_id": args.run_id,
+        "code_commit": provenance["code_commit"],
+        "out": str(args.out),
+        "run_settings": run_settings,
         "cases": len(cases),
         "cases_sha256": sha256,
         "annotations_sha256": args.expected_annotations_sha256,
@@ -140,9 +216,6 @@ def _live(args: argparse.Namespace, provider_factory: ProviderFactory) -> int:
         print(json.dumps({"dry_run": True, **plan}, indent=2))
         return 0
 
-    from ecommerce_search.config import Settings
-
-    settings = Settings()
     if settings.gemini_api_key is None:
         print("GEMINI_API_KEY is not configured; no request sent.", file=sys.stderr)
         return 2
@@ -151,22 +224,37 @@ def _live(args: argparse.Namespace, provider_factory: ProviderFactory) -> int:
         max_output_tokens=settings.assistant_generation_max_output_tokens,
         deadline_seconds=settings.assistant_generation_deadline_seconds,
     )
+    writer = RunWriter(
+        args.out,
+        RunBinding(
+            args.run_id, provenance["code_commit"], sha256, args.expected_annotations_sha256
+        ),
+    )
     run = run_live(
         cases,
         provider_factory(settings),
         max_requests=args.max_requests,
         min_interval_seconds=args.min_interval_seconds,
         limits=limits,
+        on_result=writer.write,
     )
-    report = build_report(
+    binding = {
+        "run_id": args.run_id,
+        "code_commit": provenance["code_commit"],
+        "code_provenance": provenance,
+        "run_settings": run_settings,
+    }
+    report = _finish(
+        args.out,
         run,
+        cases,
+        binding,
         cases_sha256=sha256,
         prices=prices,
         app_limits=app_limits,
         annotations=annotations,
         annotations_sha256=args.expected_annotations_sha256,
     )
-    sys.stdout.write(_write(args.out, report))
     complete = run.stopped is None and not run.not_run
     return 0 if complete and report["cases_passed"] == report["cases_scored"] else 1
 
@@ -174,7 +262,7 @@ def _live(args: argparse.Namespace, provider_factory: ProviderFactory) -> int:
 def _judgements(args: argparse.Namespace) -> int:
     report = json.loads(args.report.read_text("utf-8"))
     judgements = load_judgements(args.judgements, report, file_sha256(args.report))
-    print(json.dumps(summarize_judgements(judgements), indent=2))
+    print(json.dumps(summarize_judgements(judgements, report), indent=2))
     return 0
 
 
@@ -261,7 +349,12 @@ def _draft(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None, provider_factory: ProviderFactory = _gemini) -> int:
+def main(
+    argv: list[str] | None = None,
+    provider_factory: ProviderFactory = _gemini,
+    provenance_check: Callable[[], dict[str, Any]] = git_provenance,
+    settings_factory: Callable[[], Any] = _settings,
+) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals.assistant", description=__doc__)
     sub = parser.add_subparsers(dest="command")
     mocked = sub.add_parser("mocked")
@@ -272,6 +365,8 @@ def main(argv: list[str] | None = None, provider_factory: ProviderFactory = _gem
         p.add_argument("--cases", type=Path, default=DEFAULT_CASES)
         p.add_argument("--annotations", type=Path)
         p.add_argument("--out", type=Path)
+        p.add_argument("--run-id", default="mocked")
+    live.add_argument("--run-id", required=True)
     live.add_argument("--cases", type=Path, required=True)
     live.add_argument("--expected-sha256", required=True)
     live.add_argument("--annotations", type=Path, required=True)
@@ -289,10 +384,12 @@ def main(argv: list[str] | None = None, provider_factory: ProviderFactory = _gem
     draft.add_argument("--out", type=Path, required=True)
     draft.add_argument("--recapture", action="store_true")
     args = parser.parse_args(argv)
+    if getattr(args, "run_id", None) is not None and not RUN_ID.match(args.run_id):
+        parser.error("--run-id must match ^[a-z0-9][a-z0-9-]{2,63}$")
     if args.command == "live":
         if args.max_requests < 1 or args.min_interval_seconds < 0:
             parser.error("--max-requests must be >= 1 and --min-interval-seconds >= 0")
-        return _live(args, provider_factory)
+        return _live(args, provider_factory, provenance_check, settings_factory)
     if args.command == "judgements":
         return _judgements(args)
     if args.command == "draft":
@@ -304,13 +401,29 @@ def main(argv: list[str] | None = None, provider_factory: ProviderFactory = _gem
     except AnnotationError as exc:
         print(f"refused: {exc}", file=sys.stderr)
         return 2
-    report = build_report(
-        run_cases(cases),
+    annotations_sha256 = None if args.annotations is None else file_sha256(args.annotations)
+    writer = None
+    binding: dict[str, Any] = {"run_id": args.run_id}
+    if args.out is not None:
+        refusal = _out_refusal(args.out)
+        if refusal is not None:
+            print(f"refused: {refusal}", file=sys.stderr)
+            return 2
+        provenance = provenance_check()
+        binding.update(code_commit=provenance["code_commit"], code_provenance=provenance)
+        writer = RunWriter(
+            args.out, RunBinding(args.run_id, provenance["code_commit"], sha256, annotations_sha256)
+        )
+    run = run_cases(cases, on_result=None if writer is None else writer.write)
+    report = _finish(
+        args.out,
+        run,
+        cases,
+        binding,
         cases_sha256=sha256,
         annotations=annotations,
-        annotations_sha256=None if args.annotations is None else file_sha256(args.annotations),
+        annotations_sha256=annotations_sha256,
     )
-    sys.stdout.write(_write(args.out, report))
     return 0 if report["cases_passed"] == report["cases_scored"] else 1
 
 

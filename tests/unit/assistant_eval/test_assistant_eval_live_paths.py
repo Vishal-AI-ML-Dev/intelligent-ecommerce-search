@@ -6,6 +6,7 @@ No test sends a provider request: every "live" run here uses an in-process fake.
 
 import json
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from evals.assistant import __main__ as cli
@@ -254,6 +255,25 @@ def _refusing_factory(settings):
     raise AssertionError("no provider may be built")
 
 
+CLEAN = {"code_commit": "c" * 40, "tracked_modified": [], "untracked_code": []}
+
+
+def _clean():
+    return CLEAN
+
+
+def _settings():
+    """Stand-in for Settings in hermetic tests; the key is a placeholder, never sent."""
+    return SimpleNamespace(
+        assistant_generation_model="test-model",
+        assistant_generation_timeout_seconds=20.0,
+        assistant_generation_deadline_seconds=30.0,
+        assistant_generation_max_output_tokens=1024,
+        assistant_evidence_k=5,
+        gemini_api_key=None,
+    )
+
+
 def test_live_refuses_dev_cases_unreviewed_cases_and_unapproved_files(tmp_path):
     dev = load_cases(DEFAULT_CASES)
     assert live_refusal(dev, "x", "x") == "live runs use eval cases only"
@@ -297,6 +317,8 @@ def test_live_dry_run_and_refusals_send_nothing(tmp_path, capsys):
     annotations = write_annotations(tmp_path, path)
     base = [
         "live",
+        "--run-id",
+        "test-run-001",
         "--cases",
         str(path),
         "--annotations",
@@ -311,9 +333,20 @@ def test_live_dry_run_and_refusals_send_nothing(tmp_path, capsys):
         str(tmp_path / "out"),
     ]
     assert (
-        cli.main([*base, "--expected-sha256", "0" * 64, "--confirm-live"], _refusing_factory) == 2
+        cli.main(
+            [*base, "--expected-sha256", "0" * 64, "--confirm-live"],
+            _refusing_factory,
+            _clean,
+            _settings,
+        )
+        == 2
     )
-    assert cli.main([*base, "--expected-sha256", file_sha256(path)], _refusing_factory) == 0
+    assert (
+        cli.main(
+            [*base, "--expected-sha256", file_sha256(path)], _refusing_factory, _clean, _settings
+        )
+        == 0
+    )
     plan = json.loads(capsys.readouterr().out)
     assert plan["dry_run"] is True and plan["max_requests"] == 4
     priced = [
@@ -324,17 +357,25 @@ def test_live_dry_run_and_refusals_send_nothing(tmp_path, capsys):
         "x",
         "--confirm-live",
     ]
-    assert cli.main(priced, _refusing_factory) == 2
+    assert cli.main(priced, _refusing_factory, _clean, _settings) == 2
 
 
 def test_live_refuses_mismatched_or_unapproved_annotations(tmp_path, capsys):
     path = write(tmp_path, EVAL_RECORDS)
     approved = write_annotations(tmp_path, path)
     sha = file_sha256(approved)
-    base = ["live", "--cases", str(path), "--expected-sha256", file_sha256(path)]
+    base = [
+        "live",
+        "--run-id",
+        "test-run-001",
+        "--cases",
+        str(path),
+        "--expected-sha256",
+        file_sha256(path),
+    ]
     limits = ["--max-requests", "4", "--min-interval-seconds", "10", "--out", str(tmp_path)]
     wrong_sha = [*base, "--annotations", str(approved), "--expected-annotations-sha256", "0" * 64]
-    assert cli.main([*wrong_sha, *limits], _refusing_factory) == 2
+    assert cli.main([*wrong_sha, *limits], _refusing_factory, _clean, _settings) == 2
     unapproved = write_annotations(tmp_path, path, approved=False)
     pending = [
         *base,
@@ -343,7 +384,7 @@ def test_live_refuses_mismatched_or_unapproved_annotations(tmp_path, capsys):
         "--expected-annotations-sha256",
         file_sha256(unapproved),
     ]
-    assert cli.main([*pending, *limits], _refusing_factory) == 2
+    assert cli.main([*pending, *limits], _refusing_factory, _clean, _settings) == 2
     assert "not approved" in capsys.readouterr().err
     assert sha != file_sha256(unapproved)
 

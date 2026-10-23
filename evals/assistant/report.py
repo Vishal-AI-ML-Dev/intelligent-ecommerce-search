@@ -33,7 +33,7 @@ from evals.assistant.checks import CHECK_KINDS
 from evals.assistant.runner import CaseResult, RunResult
 from evals.query_decisions.reporting import _decimal, _summary
 
-REPORT_VERSION = "aq-report-3"
+REPORT_VERSION = "aq-report-4"
 SCOPE = {
     "mocked": "Mocked run: fixed evidence and scripted provider output through the real M16 "
     "workflow. Pass rates describe harness and workflow behaviour only, not live-model "
@@ -352,8 +352,10 @@ def measurements(run: RunResult, prices: dict[str, Any] | None) -> dict[str, Any
                 [r.response.latency_ms.generation_ms for r in ran if r.calls]
             ),
             "provider_call_ms": _ms([c.provider_ms for c in calls]),
-            "note": "workflow times use frozen evidence (no search, no HTTP); one sequential "
-            "run, not latency under load",
+            "pacing_wait_ms": _ms([c.pacing_wait_ms for c in calls]),
+            "note": "workflow times use frozen evidence (no search, no HTTP) and INCLUDE the "
+            "harness's pacing waits (pacing_wait_ms), so they are not assistant latency; "
+            "provider_call_ms excludes them. One sequential run, not latency under load",
         },
         "tokens": tokens,
         "cost": cost,
@@ -368,7 +370,10 @@ def build_report(
     app_limits: dict[str, Any] | None = None,
     annotations: Annotations | None = None,
     annotations_sha256: str | None = None,
+    binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """`binding`: run ID, evaluated code commit and its provenance check, run settings and the
+    SHA-256 of the saved responses and calls files written for this run."""
     check_totals: Counter[str] = Counter()
     check_passed: Counter[str] = Counter()
     tag_totals: Counter[str] = Counter()
@@ -403,6 +408,7 @@ def build_report(
         "mode": run.mode,
         "scope": SCOPE[run.mode],
         "cases_sha256": cases_sha256,
+        **(binding or {}),
         "split": sorted({case.split for case in cases}),
         "provider": run.provider,
         "model": run.model,
@@ -488,6 +494,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"Authorship: {report['authorship']}. Case reviews recorded: "
         f"{report['case_reviews_recorded']}. Stopped: {report['stopped']}. "
         f"Not run: {len(report['not_run'])}.",
+        "",
+        f"Run: {report.get('run_id')}; evaluated code commit {report.get('code_commit')}; "
+        f"saved responses SHA-256 {report.get('responses_sha256')}; calls SHA-256 "
+        f"{report.get('calls_sha256')}.",
         "",
         "| Check | Kind | Passed |",
         "|---|---|---|",

@@ -222,7 +222,20 @@ metric and denominator defined above. Existing requirements are not lowered.
 
 - **Step B (owner):** author or review the 40 cases and expectations; approve evidence capture
   (needs the local database and already-cached models; no downloads) and the case-file SHA-256.
-- **Step C:** live run; needs approval of the case file, request cap and interval.
+- **Step C:** run `abe-v1-live-001` done 2026-10-23 (owner-approved; evaluated code `db1c450`,
+  manifest `948aa1a`; results `evals/results/m17/abe-v1-live-001/`, see its README): complete,
+  29 calls, hard gates and quality targets met, `u01` the only failure. Valid automated evidence
+  with a human-review limitation: displayed responses were not persisted and cannot be
+  recovered. Workflow latency there includes 10 s pacing; `provider_call_ms` is the clean figure.
+  Harness since extended (`persist.py`): every processed case saved at once as a saved API
+  response (`responses.jsonl`, `ar-1`, recommendation order preserved) with per-call telemetry
+  (`calls.jsonl`, pacing wait recorded), bound to run ID, full evaluated commit and file hashes;
+  `live` refuses a non-empty output directory and uncommitted or untracked importable code;
+  `review-sheet.md` labels responses as saved API output, not verified browser output; judgement
+  summaries report response- and product-level coverage, missing and unsure. A run 002 for full
+  response review needs separate approval. `evals/results` is excluded from Ruff so preserved
+  artifacts stay byte-exact (CI run 39959816719 on `27945cc` failed `ruff format --check` on the
+  run-001 script before this exclusion).
 - **Step D (owner):** `aj-1` judgements per `docs/m17-answer-rubric.md`.
 - **Step E:** report, provider suitability note in ADR-009 (staging scope only).
 - No new dependencies were added.

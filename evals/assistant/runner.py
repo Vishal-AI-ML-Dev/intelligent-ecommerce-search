@@ -9,11 +9,16 @@ a failure that signals quota, access or transport trouble.
 
 The request cap and interval are this harness's own limits. They are not Google's account or
 model quotas, which this code does not know; a provider `rate_limited` result stops the run.
+
+Each call record keeps its UTC start and the pacing wait spent before it (the minimum-interval
+sleep runs inside the workflow's generation span, so workflow generation time includes it).
+`on_result` receives each case as soon as it finishes, so a caller can persist it at once.
 """
 
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 from ecommerce_search.assistant.models import AssistantResponse
 from ecommerce_search.assistant.retrieval import Retrieval
@@ -82,6 +87,8 @@ class CallRecord:
     input_tokens: int | None
     output_tokens: int | None
     provider_ms: float
+    started_utc: str | None = None
+    pacing_wait_ms: float = 0.0
 
 
 @dataclass
@@ -110,17 +117,26 @@ class RecordingProvider:
         if self.max_requests is not None and len(self.calls) >= self.max_requests:
             self.stopped = "request_cap_reached"
             raise RequestCapReached
+        waited = 0.0
         if self._last_sent is not None:
             wait = self.min_interval_seconds - (self.clock() - self._last_sent)
             if wait > 0:
                 self.sleep(wait)
+                waited = round(wait * 1000, 3)
         self._last_sent = self.clock()
+        started_utc = datetime.now(UTC).isoformat(timespec="milliseconds")
         started = time.perf_counter()
         result = self.inner.generate(request)
         elapsed = round((time.perf_counter() - started) * 1000, 3)
         self.calls.append(
             CallRecord(
-                self.case_id, result.failure, result.input_tokens, result.output_tokens, elapsed
+                self.case_id,
+                result.failure,
+                result.input_tokens,
+                result.output_tokens,
+                elapsed,
+                started_utc,
+                waited,
             )
         )
         if result.failure in STOP_FAILURES:
@@ -186,12 +202,18 @@ def _run_one(
     return CaseResult(case, response, checks, calls)
 
 
-def run_cases(cases: tuple[EvalCase, ...]) -> RunResult:
+OnResult = Callable[[CaseResult], None]
+
+
+def run_cases(cases: tuple[EvalCase, ...], on_result: OnResult | None = None) -> RunResult:
     """Mocked run: each case gets its own scripted provider."""
-    results = tuple(
-        _run_one(case, RecordingProvider(ScriptedProvider(case)), mocked=True) for case in cases
-    )
-    return RunResult("mocked", results, (), None, "scripted-mock", "none")
+    results = []
+    for case in cases:
+        result = _run_one(case, RecordingProvider(ScriptedProvider(case)), mocked=True)
+        if on_result is not None:
+            on_result(result)
+        results.append(result)
+    return RunResult("mocked", tuple(results), (), None, "scripted-mock", "none")
 
 
 def run_live(
@@ -202,6 +224,7 @@ def run_live(
     min_interval_seconds: float,
     limits: AssistantLimits = LIMITS,
     sleep: Callable[[float], None] = time.sleep,
+    on_result: OnResult | None = None,
 ) -> RunResult:
     """Live run with one shared provider; stops at the cap or after a stop failure. Cases not
     reached are listed, never silently dropped."""
@@ -213,7 +236,10 @@ def run_live(
         if recorder.stopped is not None:
             not_run = tuple(c.case_id for c in cases[index:])
             return RunResult("live", tuple(results), not_run, recorder.stopped, *_names(inner))
-        results.append(_run_one(case, recorder, mocked=False, limits=limits))
+        result = _run_one(case, recorder, mocked=False, limits=limits)
+        if on_result is not None:
+            on_result(result)  # persisted before the next case is sent
+        results.append(result)
     return RunResult("live", tuple(results), (), recorder.stopped, *_names(inner))
 
 

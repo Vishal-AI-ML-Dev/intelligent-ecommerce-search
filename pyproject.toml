@@ -51,6 +51,8 @@ packages = ["src/ecommerce_search"]
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+# Preserved run artifacts (e.g. the exact script of an evaluation run) stay byte-exact.
+extend-exclude = ["evals/results"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "S"]
