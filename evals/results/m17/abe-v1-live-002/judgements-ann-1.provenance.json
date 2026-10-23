@@ -1,0 +1,30 @@
+{
+  "purpose": "Provenance of ann-1's aj-1 judgements for run abe-v1-live-002 (aj-1 has no provenance field). Not a judgement file.",
+  "report_sha256": "45a3284415f7f43cec81ab48efd0e39503bb820c30ab94bcf824cbc4606581b9",
+  "judgements": {
+    "abe-g01-dell-16gb-under-60k": "not stated by the reviewer",
+    "abe-g03-samsung-phone-8gb-under-30k": "not stated by the reviewer",
+    "abe-g04-sony-anc-wireless-under-15k": "not stated by the reviewer",
+    "abe-g05-nike-running-men": "not stated by the reviewer",
+    "abe-g07-phone-12gb-256gb-under-35k": "not stated by the reviewer",
+    "abe-g08-wireless-in-ear-under-2500": "not stated by the reviewer",
+    "abe-g09-lenovo-ssd-under-45k": "not stated by the reviewer",
+    "abe-g10-women-running-under-5k": "not stated by the reviewer",
+    "abe-c01-bare-capacity": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an unaided review",
+    "abe-c02-conflicting-ram": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an unaided review",
+    "abe-c03-conflicting-budget": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an unaided review",
+    "abe-c04-price-without-bound": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an unaided review",
+    "abe-c05-price-range": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an unaided review",
+    "abe-c06-no-product-need": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-u01-smartwatch": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-u02-apple-laptop-under-40k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-u03-phone-1tb-under-50k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-u04-wired-anc-headphones": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-u05-lenovo-32gb-under-100k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-u06-dell-phone": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-f01-hinglish-laptop-8gb-under-40k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-g02-hp-16gb-512ssd-under-70k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review. An earlier partial entry is kept as history in judgements-ann-1.pending.json.",
+    "abe-g06-coding-laptop-16gb-under-60k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review. An earlier partial entry is kept as history in judgements-ann-1.pending.json."
+  },
+  "recorded_from": "Reviewer statements in the Claude Code session on 2026-10-23; transcribed by Claude Code."
+}

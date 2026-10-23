@@ -1,0 +1,42 @@
+{
+  "status": "history of reviewer entries that were partial when first given; all entries below have since been completed in judgements-ann-1.aj-1.jsonl (2026-10-23). Kept unchanged for history; not judgements themselves.",
+  "report_sha256": "45a3284415f7f43cec81ab48efd0e39503bb820c30ab94bcf824cbc4606581b9",
+  "entries": [
+    {
+      "case_id": "abe-g02-hp-16gb-512ssd-under-70k",
+      "reviewer_handle": "ann-1",
+      "judged_on": "2026-10-23",
+      "outcome_appropriate": "no",
+      "products": "not applicable (no recommendation was made)",
+      "misleading": null,
+      "notes": "Matching products available the, lekin AI recommendation deliver nahi hui. Misleading field par abhi judgement nahi diya.",
+      "recorded_from": "Owner judgement given in the Claude Code session on 2026-10-23; transcribed verbatim by Claude Code.",
+      "completed": {
+        "in": "judgements-ann-1.aj-1.jsonl",
+        "on": "2026-10-23",
+        "by": "ann-1",
+        "provenance": "AI-assisted, explicitly endorsed by ann-1"
+      }
+    },
+    {
+      "case_id": "abe-g06-coding-laptop-16gb-under-60k",
+      "reviewer_handle": "ann-1",
+      "judged_on": "2026-10-23",
+      "outcome_appropriate": null,
+      "products": {
+        "SYN-LAP-0008": null,
+        "SYN-LAP-0012": null,
+        "SYN-LAP-0052": null
+      },
+      "misleading": null,
+      "notes": "Problem — coding suitability assess nahi hui. (Reviewer instruction: do not infer individual product-fit or misleading judgements from this alone; keep those fields unjudged.)",
+      "recorded_from": "Owner review note given in the Claude Code session on 2026-10-23; transcribed verbatim by Claude Code.",
+      "completed": {
+        "in": "judgements-ann-1.aj-1.jsonl",
+        "on": "2026-10-23",
+        "by": "ann-1",
+        "provenance": "AI-assisted, explicitly endorsed by ann-1"
+      }
+    }
+  ]
+}
