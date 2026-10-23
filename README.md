@@ -1,10 +1,43 @@
 # Intelligent Ecommerce Search, Shopping & Return Intelligence Platform
 
-A production-oriented e-commerce search and bounded-decision system. The search engine is
-implemented. The buyer assistant and return intelligence are planned, not implemented.
+A production-oriented e-commerce search and bounded-decision system, built milestone by
+milestone. The search engine and its buyer Search UI are implemented and run on a staging demo.
+A grounded shopping assistant (M16) is in progress and is not deployed. Return intelligence is
+planned. The catalog is synthetic, and nothing here is production-ready.
 
-Development is organized milestone by milestone. See
-`docs/MASTER_PLAN.md` for the complete engineering plan.
+See `docs/MASTER_PLAN.md` for the complete engineering plan.
+
+## At a glance
+
+**Live staging demo (Search only):** <https://intelligent-ecommerce-search.duckdns.org/>
+
+This is a staging demo on a synthetic 240-product catalog. It runs on temporary cloud credits
+and is not a permanent URL. It has a single instance with no high availability and no load
+testing, so it is not production-ready (`docs/m26a-progress.md`).
+
+| | What | Where documented |
+|---|---|---|
+| **Deployed** (staging) | Buyer Search page over V3 reranked search (`POST /search/reranked`) | `docs/m26a-progress.md` |
+| **Implemented, not deployed** | Shopping assistant first slices (M16, in progress): API, UI tab, deterministic comparison, structured RAM/storage checks, optional Gemini adapter (off by default) | `docs/m16-progress.md` |
+| **Implemented, local only** | V0–V2 search endpoints, experimental V4 (`/search/routed`), listing normalization (M13), listing decisions (M14, blocked) | sections below |
+| **Planned** | Assistant evaluation (M17), return intelligence (M18–M22), review queue (M21), production AWS stack (M26B) and the rest of `docs/MASTER_PLAN.md` | `docs/MASTER_PLAN.md` |
+
+**Staging architecture (M26A):**
+- one EC2 instance running the application image with Docker Compose;
+- FastAPI serves the API and the built React page from one origin;
+- PostgreSQL with pgvector on a persistent encrypted disk;
+- Caddy terminates HTTPS.
+
+Deployment files live in `deploy/ec2/`.
+The managed-stack Terraform in `infra/staging/` is not applied.
+
+**Engineering basics:**
+- **CI (M23A):** one GitHub Actions workflow runs four jobs: backend lint and the hermetic unit
+  suite, frontend typecheck/unit/build, the pgvector integration suite, and fixture-backed
+  Playwright. CI never calls a live model provider.
+- **Observability (M24A):** every response carries an `X-Request-ID`, and the server writes one
+  structured completion log line per request. Logs never contain query text, request or
+  response bodies, credentials or client addresses.
 
 ## Current status
 
@@ -101,12 +134,20 @@ Development is organized milestone by milestone. See
   offline evaluator and a guarded live runner, and append-only decision storage (migration
   `0006`) with a `decide` / `show` command line. A dev-split evaluation on external source
   labels ran; the milestone's human-reviewed evaluation has not. See `docs/m14-progress.md`.
-- M25A (buyer Search UI): **accepted (2026-10-22)** for the M25A scope. Fixture-backed (6/6)
-  and live-stack (1/1) Playwright smoke tests pass locally. Two backend unit failures are
-  recorded as follow-up debt; the full suite is not green. M25B remains. See
+- M25A (buyer Search UI): **accepted (2026-10-22)** for the M25A scope. The two backend unit
+  failures recorded at acceptance were resolved in M23A. M25B remains. See
   `docs/m25a-progress.md`.
-- M15–M26 (other than M25A): not started. This includes policy-risk triage, Buyer RAG, Return
-  Intelligence, human review (HITL) and the rest of the dual frontend.
+- M23A (baseline CI): **complete (2026-10-22)**. The four required GitHub Actions jobs pass on
+  `main`. See `docs/m23a-progress.md`.
+- M24A (observability baseline): **complete (2026-10-22)**. Request IDs and privacy-safe
+  structured logs. See `docs/m24a-progress.md`.
+- M26A (Search staging demo): **accepted (2026-10-22)** with documented limitations: a
+  single-EC2 demo at the URL above, not production-ready. M26B remains. See
+  `docs/m26a-progress.md`.
+- M16 (grounded shopping assistant): **IN PROGRESS, not accepted, not deployed online.** See
+  "Shopping assistant (Milestone 16, in progress)" below and `docs/m16-progress.md`.
+- M15, M17–M22, M23B, M24B, M25B and M26B: not started. This includes policy-risk triage,
+  assistant evaluation, return intelligence and human review (HITL).
 - M27 (authorized marketplace integration): excluded from the current scope. The original
   milestone definition in `docs/MASTER_PLAN.md` is unchanged.
 
@@ -721,8 +762,45 @@ FRONTEND_DIST_DIR=frontend/dist uv run uvicorn ecommerce_search.api.app:create_a
 ```
 
 `npm run dev` serves the page with hot reload and proxies `/search` to `127.0.0.1:8000` (local
-development only). Fixture and live browser results are reported separately; see
+development only). It does not proxy `/assistant`, so use the FastAPI-served build for the
+assistant tab. Fixture and live browser results are reported separately; see
 `docs/m25a-progress.md`.
+
+## Shopping assistant (Milestone 16, in progress)
+
+Status: **in progress; not accepted and not deployed online.** Details, limitations and the
+remaining gaps are in `docs/m16-progress.md`, and the provider decision is in ADR-009
+(`docs/decisions/ADR-009-generation-provider.md`, **Proposed**).
+
+What is implemented, behind `POST /assistant/answer` and the "Shopping assistant" tab:
+- **Fixed, single-turn flow.** Deterministic clarification, retrieval through the existing V3
+  search (no second search engine), optional bounded generation (at most one repair), then an
+  answer, an abstention or plain search results.
+- **The model only selects.** It returns retrieved product IDs and the catalog field names that
+  support them. It writes no text. Explanations are server-side templates over structured
+  catalog values and requirement checks, not free-form AI advice. Prices, specifications and
+  availability come only from the catalog.
+- **Structured spec checks.** RAM and storage requirements are re-checked against the typed
+  catalog fields. A value the catalog does not give is shown as "not verified", never guessed
+  from titles.
+- **Comparison.** A side-by-side table of 2–3 selected retrieved products, built from catalog
+  values only; nothing is generated or fetched again.
+- **Generation is off by default.** With it off, or when it fails, the assistant says that no
+  generated answer is available and labels the products as ordinary search results.
+
+Local only: the optional Gemini adapter (Gemini Developer API free tier, `gemini-3.5-flash-lite`)
+was exercised in three small, owner-approved local smoke trials on synthetic data. These checked
+technical compatibility only; quality, latency and cost evaluation is M17 work.
+The free-tier terms do not allow an open public demo with generation on (for example, no users
+in the EEA, Switzerland or UK, and no personal data). So generation stays off on any public
+deployment. This controls which claims are displayed. It does not show that the model picks the
+best products or resists prompt injection.
+
+```bash
+# Generation off (default): no key needed. Optional local generation, only with owner approval:
+#   ASSISTANT_GENERATION_PROVIDER=gemini and GEMINI_API_KEY=... in your git-ignored .env
+FRONTEND_DIST_DIR=frontend/dist uv run uvicorn ecommerce_search.api.app:create_app --factory --port 8000
+```
 
 ## `GET /health`
 
