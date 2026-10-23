@@ -40,7 +40,7 @@ Provider history in this milestone, recorded for transparency:
 | SDK | `google-genai==2.32.0` (exact pin), imported only by `generation/gemini_provider.py`, which is imported only when `ASSISTANT_GENERATION_PROVIDER=gemini` |
 | Default | `ASSISTANT_GENERATION_PROVIDER=none` everywhere, including the staging demo |
 | Credentials | `GEMINI_API_KEY`, only in a developer's git-ignored `.env`; passed explicitly to the client, so `GOOGLE_API_KEY` and ambient Google credentials are not read. Never requested in chat. None exists yet. |
-| Request | `models.generate_content` with `system_instruction`, `response_mime_type="application/json"`, `response_json_schema` (a hand-written schema using basic keywords only), `max_output_tokens` (default 2048) |
+| Request | `models.generate_content` with `system_instruction`, `response_mime_type="application/json"`, `response_json_schema` (a hand-written schema using basic keywords only; outcome, product IDs and cited field names, no free text since asst-policy-3), `max_output_tokens` (default 2048) |
 | Bounds | SDK retries explicitly off (`HttpRetryOptions(attempts=1)`; with no retry options the SDK default is also a single attempt); per-request timeout of 20 s; at most two calls per request (one repair); no repair after a 30 s deadline. The per-request timeout does not bound total wall-clock time. |
 | Validation | Every output is parsed into the Pydantic `GroundedDraft` and checked deterministically (`assistant/validate.py`). Failures are repaired once, then the assistant abstains. Provider failures return `generation_unavailable`, never an answer. |
 | Cost reporting | Token counts as reported (thinking tokens counted as output); unknown counts stay null. A USD estimate is computed only from owner-supplied prices; otherwise the cost is reported as unknown. |
@@ -72,6 +72,10 @@ check; the API does not expose billing. Details: `docs/m16-progress.md`. The ADR
 A second approved trial (2026-10-23) sent 2 requests; both parsed and passed validation without
 repair (594/99 and 476/93 tokens, 1.5 s and 1.0 s). It exposed a validator gap (spelled-out
 numbers pass the summary checks). Still Proposed: two samples are not a measurement.
+
+Since policy asst-policy-3 (2026-10-23) the provider returns no text: only outcome, product IDs
+and cited field names (`response_json_schema` without `summary`). Explanations are rendered from
+catalog data. This new schema has not been sent to the live API yet.
 
 ## Required before any live trial (separate owner approval)
 

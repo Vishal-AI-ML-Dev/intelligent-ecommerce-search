@@ -75,8 +75,8 @@
     "cost_status": "not_applicable"
   },
   "versions": {
-    "prompt": "asst-prompt-1",
-    "policy": "asst-policy-2",
+    "prompt": "asst-prompt-2",
+    "policy": "asst-policy-3",
     "evidence": "asst-evidence-2",
     "retriever": "v3_reranked"
   },

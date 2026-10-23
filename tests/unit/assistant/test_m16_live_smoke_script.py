@@ -33,7 +33,6 @@ def ok(pid):
         draft=GroundedDraft(
             outcome="answer",
             selected=({"product_id": pid, "relevant_facts": ("ram_gb",)},),
-            summary="A synthetic match.",
         ),
         failure=None,
         input_tokens=10,
@@ -43,7 +42,7 @@ def ok(pid):
 
 def bad():
     return GenerationResult(
-        draft=GroundedDraft(outcome="answer", selected=(), summary=""),
+        draft=GroundedDraft(outcome="answer", selected=()),
         failure=None,
         input_tokens=10,
         output_tokens=5,
@@ -123,7 +122,7 @@ def test_every_request_is_logged_including_the_repair_codes(smoke):
     report = smoke.run_trial(smoke.BudgetedProvider(fake), LIMITS)
     first, second = report["requests"]
     assert first["structured_output_parsed"] is True and first["repair_of"] is None
-    assert first["draft"] == {"outcome": "answer", "selected": [], "summary": ""}
+    assert first["draft"] == {"outcome": "answer", "selected": []}
     assert (first["input_tokens"], first["output_tokens"]) == (10, 5)
     assert second["failure"] == "server_error"
-    assert second["repair_of"] == ["answer_without_products", "summary_empty"]
+    assert second["repair_of"] == ["answer_without_products"]

@@ -12,7 +12,6 @@ from ecommerce_search.assistant.models import EvidenceProduct
 from ecommerce_search.generation.provider import (
     MAX_FACTS_PER_PRODUCT,
     MAX_SELECTED_PRODUCTS,
-    MAX_SUMMARY_LENGTH,
 )
 
 # Description text sent to the model is cut to this many characters (bounded input size).
@@ -31,10 +30,8 @@ Return JSON that matches the schema:
 request, using their exact product_id values. For each, list 1 to {MAX_FACTS_PER_PRODUCT} \
 catalog field names that support the choice.
 - outcome "abstain": no record fits the request. Select nothing.
-- summary: at most {MAX_SUMMARY_LENGTH} characters of plain text explaining the selection. Do \
-not write any digits, prices, currencies, discounts, offers, stock, availability or delivery \
-statements; the application shows those facts from the catalog. Do not state product features \
-that are not written in the selected records. No links or markup.
+Name only catalog fields that have a value in the selected record. Return only these fields and \
+write no explanation: the application explains each selection from the catalog fields you name.
 """  # noqa: S608 - prompt text, not SQL
 
 REPAIR_NOTE = (

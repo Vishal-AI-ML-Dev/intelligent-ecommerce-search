@@ -10,8 +10,8 @@ import type {
   Recommendation,
 } from './types';
 
-// Catalog text and the generated summary are untrusted: they are rendered only as React text
-// children, never as HTML, and are never logged.
+// Catalog text is untrusted: it is rendered only as React text children, never as HTML, and is
+// never logged. The summary and explanations are server-rendered from catalog data.
 
 // Same limit as search query text on the server; longer input is rejected there with a 422.
 export const MAX_MESSAGE_LENGTH = 200;
@@ -210,6 +210,9 @@ function RecommendationItem({
           </div>
         ))}
       </dl>
+      <p className="explanation" data-testid="explanation">
+        {recommendation.explanation}
+      </p>
       <p
         className="verification"
         data-testid="verification"
@@ -258,11 +261,11 @@ function Result({ data }: { data: AssistantResponse }) {
           {data.clarification.question}
         </p>
       )}
+      {/* Server-rendered from catalog data (policy asst-policy-3); never model text. */}
       {data.summary !== null && (
-        <figure className="assistant-summary" data-testid="assistant-summary">
-          <figcaption>Generated summary (unverified)</figcaption>
-          <p>{data.summary}</p>
-        </figure>
+        <p className="assistant-summary" data-testid="assistant-summary">
+          {data.summary}
+        </p>
       )}
       {data.recommendations.length > 0 && (
         <ol className="product-list" aria-label="Suggested products">

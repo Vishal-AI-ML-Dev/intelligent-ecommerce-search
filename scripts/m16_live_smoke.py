@@ -176,8 +176,9 @@ def summarize(message: str, response: AssistantResponse) -> dict:
             {"product_id": r.product_id, "verification": r.verification}
             for r in response.recommendations
         ],
-        # Model text about synthetic records only; recorded for the compatibility check.
+        # Server-rendered from catalog values (policy asst-policy-3); no model text exists.
         "summary": response.summary,
+        "explanations": [r.explanation for r in response.recommendations],
     }
 
 

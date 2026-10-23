@@ -1,7 +1,8 @@
 """Request and response contract of `POST /assistant/answer` (Milestone 16).
 
-Every product fact in a response comes from a retrieved catalog record. The only model-written
-text is `summary`, which is unverified and is labelled as such.
+Every product fact and every explanation in a response is rendered by the server from retrieved
+catalog records. No model-written text is returned: the generator only selects product IDs and
+names supporting catalog fields.
 """
 
 from decimal import Decimal
@@ -11,8 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ecommerce_search.generation.provider import FactField
 
-PROMPT_VERSION = "asst-prompt-1"
-POLICY_VERSION = "asst-policy-2"
+PROMPT_VERSION = "asst-prompt-2"
+POLICY_VERSION = "asst-policy-3"
 EVIDENCE_VERSION = "asst-evidence-2"
 
 Outcome = Literal["answer", "clarify", "abstain", "generation_unavailable"]
@@ -85,6 +86,10 @@ class Recommendation(_Frozen):
     product_id: str
     facts: tuple[CitedFact, ...]
     constraint_checks: tuple[ConstraintCheck, ...]
+    explanation: str = Field(
+        description="Rendered deterministically from the stated requirements' check results and "
+        "the cited structured catalog values; never model text."
+    )
     verification: Literal["all_verified", "not_all_verified", "no_requirements"] = Field(
         description="`all_verified` only when every stated requirement passed on catalog "
         "fields; `not_all_verified` when any is `not_verified`."
@@ -130,8 +135,8 @@ class AssistantResponse(_Frozen):
     clarification: Clarification | None
     abstain_reason: AbstainReason | None
     summary: str | None = Field(
-        description="Model-written and unverified: it may only select and describe retrieved "
-        "products; it never carries prices, numbers or availability."
+        description="Server-rendered overview of an answer (policy asst-policy-3 and later; it "
+        "was model-written before). Never model text; null unless the outcome is `answer`."
     )
     recommendations: tuple[Recommendation, ...]
     evidence: tuple[EvidenceProduct, ...] = Field(

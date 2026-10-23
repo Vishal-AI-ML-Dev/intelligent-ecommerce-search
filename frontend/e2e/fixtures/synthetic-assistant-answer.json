@@ -1,9 +1,9 @@
 {
   "outcome": "answer",
-  "notice": "Generated selection from the retrieved catalog products. The summary is model-written and has not been verified; prices and availability are shown from the catalog.",
+  "notice": "The assistant selected products from the retrieved catalog results. Every explanation is built from catalog data; the selection itself is not verified as the best fit.",
   "clarification": null,
   "abstain_reason": null,
-  "summary": "Two Dell laptops from the results match the brand you asked for. Compare the catalog facts listed for each before choosing.",
+  "summary": "The assistant selected 2 of the 3 retrieved catalog products. Each explanation below uses catalog data only; the selection itself is not a verified best choice.",
   "recommendations": [
     {
       "product_id": "FIXTURE-LAP-101",
@@ -43,6 +43,7 @@
           "status": "passed"
         }
       ],
+      "explanation": "Matches your stated product type laptop, brand Dell, maximum price INR 50000.00, RAM 16 GB on catalog data. Cited catalog facts: brand Dell; price INR 45999.00; RAM 16 GB.",
       "verification": "all_verified"
     },
     {
@@ -51,10 +52,6 @@
         {
           "field": "brand",
           "value": "Dell"
-        },
-        {
-          "field": "ram_gb",
-          "value": null
         },
         {
           "field": "availability",
@@ -83,6 +80,7 @@
           "status": "not_verified"
         }
       ],
+      "explanation": "Matches your stated product type laptop, brand Dell, maximum price INR 50000.00 on catalog data. Not verified, not given in the catalog: RAM 16 GB. Cited catalog facts: brand Dell; out of stock.",
       "verification": "not_all_verified"
     }
   ],
@@ -156,8 +154,8 @@
     "cost_status": "unknown_pricing_not_configured"
   },
   "versions": {
-    "prompt": "asst-prompt-1",
-    "policy": "asst-policy-2",
+    "prompt": "asst-prompt-2",
+    "policy": "asst-policy-3",
     "evidence": "asst-evidence-2",
     "retriever": "v3_reranked"
   },

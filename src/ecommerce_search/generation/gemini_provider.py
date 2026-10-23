@@ -48,9 +48,8 @@ DRAFT_SCHEMA: dict[str, Any] = {
                 "required": ["product_id", "relevant_facts"],
             },
         },
-        "summary": {"type": "string"},
     },
-    "required": ["outcome", "selected", "summary"],
+    "required": ["outcome", "selected"],
 }
 
 # Finish reasons that mean the provider declined or filtered the output.

@@ -64,8 +64,13 @@ describe('AssistantPage', () => {
     render(<AssistantPage />);
     await ask('dell laptop under rs 50000');
     expect(await result()).toHaveAttribute('data-outcome', 'answer');
-    const summary = screen.getByTestId('assistant-summary');
-    expect(summary).toHaveTextContent('Generated summary (unverified)');
+    expect(screen.getByTestId('assistant-summary')).toHaveTextContent(
+      'The assistant selected 2 of the 3 retrieved catalog products.',
+    );
+    expect(document.body).not.toHaveTextContent('Generated summary');
+    expect(screen.getAllByTestId('explanation')[1]).toHaveTextContent(
+      'Not verified, not given in the catalog: RAM 16 GB.',
+    );
     const cards = screen.getAllByTestId('recommendation');
     expect(cards.map((c) => c.dataset.productId)).toEqual(['FIXTURE-LAP-101', 'FIXTURE-LAP-103']);
     const first = within(cards[0] as HTMLElement);
@@ -93,7 +98,9 @@ describe('AssistantPage', () => {
       .find((c) => c.textContent?.startsWith('RAM'));
     expect(ram).toHaveAttribute('data-status', 'not_verified');
     expect(ram).toHaveTextContent('not verified (not given in the catalog)');
-    expect(second.getByText('not given')).toBeInTheDocument();
+    // Fields the catalog does not give cannot be cited (cited_field_not_given).
+    expect(second.queryByText('not given')).toBeNull();
+    expect(second.getByTestId('explanation')).toHaveTextContent('Not verified');
   });
 
   it('compares 2 or 3 selected retrieved products from catalog values only', async () => {

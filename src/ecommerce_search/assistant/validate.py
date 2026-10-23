@@ -1,16 +1,16 @@
-"""Deterministic checks of a generated draft (Milestone 16).
+"""Deterministic checks of a generated draft (Milestone 16, policy asst-policy-3).
 
-What passing means, and what it does not: every selected ID is a retrieved record, cited fields
-exist in the catalog contract, explicit constraints hold on the catalog values (category, brand,
-price bounds, and RAM/storage where the catalog gives them; otherwise `not_verified`), and the
-summary carries no digits, price, offer, availability, link or markup wording. Passing does NOT
-show that the summary's remaining words are supported by the records; faithfulness is evaluated
-by humans in Milestone 17.
+The draft holds no free text: only an outcome, retrieved product IDs and cited catalog field
+names. Passing means every selected ID is a retrieved record, every cited field has a value in
+that record, and explicit constraints hold on the catalog values (category, brand, price
+bounds, and RAM/storage where the catalog gives them; otherwise `not_verified`). Explanations are
+then rendered from catalog values (`assistant/explain.py`). Passing does NOT show that the
+selection is the best fit; Milestone 17 evaluates selection quality.
 """
 
-import re
 from decimal import Decimal
 
+from ecommerce_search.assistant.explain import render_explanation
 from ecommerce_search.assistant.models import (
     CitedFact,
     ConstraintCheck,
@@ -19,19 +19,6 @@ from ecommerce_search.assistant.models import (
 )
 from ecommerce_search.generation.provider import GroundedDraft
 from ecommerce_search.query_understanding.models import QueryUnderstanding
-
-PRICE_OR_OFFER_TERMS = re.compile(
-    r"[₹$€£¥]|\b(?:rs|inr|usd|eur|rupees?|dollars?|price[sd]?|pricing|cost[s]?|costly|cheap"
-    r"|cheaper|cheapest|expensive|afford\w*|budget|discount\w*|offers?|deals?|sale|coupons?"
-    r"|free|emi)\b",
-    re.IGNORECASE,
-)
-AVAILABILITY_TERMS = re.compile(
-    r"\b(?:in[- ]stock|out[- ]of[- ]stock|stock|available|availability|unavailable|delivery"
-    r"|deliver\w*|ship\w*|dispatch\w*|discontinued)\b",
-    re.IGNORECASE,
-)
-LINK_OR_MARKUP = re.compile(r"[<>\[\]`]|https?:|www\.", re.IGNORECASE)
 
 
 def _fact_value(product: EvidenceProduct, field: str) -> str | None:
@@ -92,19 +79,6 @@ def _check(field: str, requested: str, ok: bool) -> ConstraintCheck:
     return ConstraintCheck(field=field, requested=requested, status="passed" if ok else "failed")
 
 
-def summary_errors(summary: str) -> list[str]:
-    errors = []
-    if any(char.isdigit() for char in summary):
-        errors.append("summary_contains_digit")
-    if PRICE_OR_OFFER_TERMS.search(summary):
-        errors.append("summary_contains_price_or_offer_term")
-    if AVAILABILITY_TERMS.search(summary):
-        errors.append("summary_contains_availability_term")
-    if LINK_OR_MARKUP.search(summary):
-        errors.append("summary_contains_link_or_markup")
-    return errors
-
-
 def validate_draft(
     draft: GroundedDraft,
     evidence: tuple[EvidenceProduct, ...],
@@ -119,15 +93,19 @@ def validate_draft(
         errors.append("answer_without_products")
     if draft.outcome == "abstain" and ids:
         errors.append("abstain_with_products")
-    if draft.outcome == "answer" and not draft.summary.strip():
-        errors.append("summary_empty")
     if len(set(ids)) != len(ids):
         errors.append("duplicate_product_id")
     if any(product_id not in by_id for product_id in ids):
         errors.append("unknown_product_id")
     if any(len(set(s.relevant_facts)) != len(s.relevant_facts) for s in draft.selected):
         errors.append("duplicate_fact")
-    errors.extend(summary_errors(draft.summary))
+    if any(
+        _fact_value(by_id[s.product_id], field) is None
+        for s in draft.selected
+        if s.product_id in by_id
+        for field in s.relevant_facts
+    ):
+        errors.append("cited_field_not_given")
     recommendations: list[Recommendation] = []
     if not errors:
         for selection in draft.selected:
@@ -144,6 +122,7 @@ def validate_draft(
                         for field in selection.relevant_facts
                     ),
                     constraint_checks=checks,
+                    explanation=render_explanation(product, selection.relevant_facts, checks),
                     verification=_verification(checks),
                 )
             )

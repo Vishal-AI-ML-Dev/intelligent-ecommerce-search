@@ -46,7 +46,6 @@ def answer_draft(pid="P1"):
         draft=GroundedDraft(
             outcome="answer",
             selected=({"product_id": pid, "relevant_facts": ("price", "brand")},),
-            summary="A Dell laptop matching the brand you asked for.",
         ),
         failure=None,
         input_tokens=900,
@@ -112,6 +111,9 @@ def test_grounded_answer_contract(client_for):
                 {"field": "brand", "requested": "Dell", "status": "passed"},
                 {"field": "max_price", "requested": "50000.00", "status": "passed"},
             ],
+            "explanation": "Matches your stated product type laptop, brand Dell, maximum "
+            "price INR 50000.00 on catalog data. Cited catalog facts: price INR 45000.00; brand "
+            "Dell.",
             "verification": "all_verified",
         }
     ]
@@ -129,8 +131,8 @@ def test_grounded_answer_contract(client_for):
         "cost_status": "unknown_pricing_not_configured",
     }
     assert body["versions"] == {
-        "prompt": "asst-prompt-1",
-        "policy": "asst-policy-2",
+        "prompt": "asst-prompt-2",
+        "policy": "asst-policy-3",
         "evidence": "asst-evidence-2",
         "retriever": "v3_reranked",
     }

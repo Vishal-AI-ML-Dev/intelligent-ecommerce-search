@@ -69,8 +69,7 @@
     "calls": 2,
     "validation": "failed",
     "validation_errors": [
-      "unknown_product_id",
-      "summary_contains_digit"
+      "unknown_product_id"
     ],
     "input_tokens": 3000,
     "output_tokens": 440,
@@ -78,8 +77,8 @@
     "cost_status": "unknown_pricing_not_configured"
   },
   "versions": {
-    "prompt": "asst-prompt-1",
-    "policy": "asst-policy-2",
+    "prompt": "asst-prompt-2",
+    "policy": "asst-policy-3",
     "evidence": "asst-evidence-2",
     "retriever": "v3_reranked"
   },

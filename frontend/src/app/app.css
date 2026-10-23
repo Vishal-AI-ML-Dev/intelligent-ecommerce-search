@@ -189,16 +189,6 @@ body {
   margin: 12px 0;
 }
 
-.assistant-summary figcaption {
-  color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.assistant-summary p {
-  margin: 4px 0 0;
-}
-
 .facts {
   display: grid;
   grid-template-columns: max-content 1fr;

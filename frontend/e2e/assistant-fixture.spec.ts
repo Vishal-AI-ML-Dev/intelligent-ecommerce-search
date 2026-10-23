@@ -61,7 +61,10 @@ test('grounded answer with evidence references and inert catalog text', async ({
   await expect(result).toHaveAttribute('data-outcome', 'answer');
   expect(captured.bodies).toEqual([{ message: MESSAGE }]);
   await expect(page.getByTestId('assistant-summary')).toContainText(
-    'Generated summary (unverified)',
+    'The assistant selected 2 of the 3 retrieved catalog products.',
+  );
+  await expect(page.getByTestId('explanation')).toHaveText(
+    assistantFixtures.answer.recommendations.map((r) => r.explanation),
   );
   await expect(page.getByTestId('recommendation')).toHaveCount(2);
   await page.getByTestId('evidence-ref').first().click();

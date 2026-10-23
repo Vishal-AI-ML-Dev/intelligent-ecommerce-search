@@ -256,3 +256,39 @@ remains M17 work.
 Trial 1's validation failure (2026-10-22) cannot be diagnosed: its draft was not captured.
 Token usage was returned by the API in both requests. No billing change, model switch or further
 request.
+
+## Slice 3 (2026-10-23): deterministic explanations (policy asst-policy-3, prompt asst-prompt-2)
+
+The second smoke trial showed a model summary carrying a numeric claim in words. Instead of
+extending word lists, the generator no longer writes text at all:
+
+- **Generator role:** `GroundedDraft` holds only `outcome` and `selected` (retrieved product IDs
+  plus cited catalog field names). The `summary` field was removed from the draft model, the
+  Gemini response schema and the prompt. Any extra field (summary, explanation, reasons) or
+  unknown field name makes the draft invalid. No raw model text is kept, returned or logged.
+- **New check:** citing a field the record does not give fails (`cited_field_not_given`).
+  The summary rules (digits, price/availability words, links) were removed, because there is
+  no model text left to check.
+- **Rendered text:** each recommendation gets an `explanation` built by fixed templates
+  (`assistant/explain.py`) from the requirement check results and the cited structured catalog
+  values only (brand, category, price, rating, reviews, availability, RAM, storage). Free-text
+  seller fields (title, subcategory, description) are never put into an explanation; the title
+  is still shown as a labelled catalog fact. Missing requirements are rendered as "Not
+  verified, not given in the catalog: ...".
+- **API:** additive `Recommendation.explanation`. The `summary` key is kept with the same type,
+  but it is now a server-rendered overview ("The assistant selected N of the M retrieved
+  catalog products...") instead of model text. This is recorded by the version bumps and the
+  OpenAPI description, not done silently. The UI dropped the "Generated summary (unverified)"
+  label and shows the explanation on each suggestion.
+- **What this does and does not do:** it controls which claims are displayed. It does not show
+  that the model selects the best products, that its field citations are the most relevant
+  ones, or that it resists prompt injection (an injected record can still be selected if it
+  passes the checks). M17 keeps systematic quality and safety evaluation. Limitations 2 and 4
+  above (unverified summary wording, conservative summary rules) no longer apply.
+- **Tests:** `tests/unit/assistant/test_assistant_grounding.py` shows that model text cannot
+  enter a draft, including digits, English and Hinglish number words, and suitability claims
+  such as "Designed for programming". It also shows that a seller title carrying such claims
+  never reaches the rendered explanation, that invalid IDs or field references fail safely,
+  that missing requirements stay not verified, and that valid suggestions still work. Local
+  results: Ruff clean; 308 focused backend tests passed; `npm run typecheck` passed; Vitest 65
+  passed; build passed; `npm run e2e:fixture` 13 passed. No live Gemini call was made.

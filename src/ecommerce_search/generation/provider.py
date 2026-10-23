@@ -5,9 +5,10 @@ retrieved catalog records as delimited data) and returns a `GenerationResult`: e
 Pydantic-validated `GroundedDraft` or a fixed failure code. Providers never raise for remote
 failures, never retry on their own and never log prompt or response text.
 
-The draft is deliberately narrow. The model may only select retrieved product IDs, name which
-catalog fields support each selection, and write a short summary. Prices, specifications and
-availability are never taken from model text: the assistant renders them from catalog records.
+The draft is deliberately narrow: the model may only choose answer or abstain, select retrieved
+product IDs and name which catalog fields support each selection. It writes no free text, so no
+model-written claim can reach a user; every displayed explanation is rendered by the assistant
+from catalog values (`assistant/explain.py`).
 """
 
 from dataclasses import dataclass
@@ -34,7 +35,6 @@ FACT_FIELDS: tuple[str, ...] = get_args(FactField)
 
 MAX_SELECTED_PRODUCTS = 3
 MAX_FACTS_PER_PRODUCT = 4
-MAX_SUMMARY_LENGTH = 400
 
 GenerationFailure = Literal[
     "timeout",
@@ -63,7 +63,6 @@ class GroundedDraft(_Frozen):
 
     outcome: Literal["answer", "abstain"]
     selected: tuple[SelectedProduct, ...] = Field(max_length=MAX_SELECTED_PRODUCTS)
-    summary: str = Field(max_length=MAX_SUMMARY_LENGTH)
 
 
 @dataclass(frozen=True)

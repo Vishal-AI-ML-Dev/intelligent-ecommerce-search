@@ -25,7 +25,6 @@ REQUEST = GenerationRequest(instructions="rules", user_content="data", max_outpu
 VALID = {
     "outcome": "answer",
     "selected": [{"product_id": "P1", "relevant_facts": ["price"]}],
-    "summary": "A good fit.",
 }
 VALID_TEXT = json.dumps(VALID)
 USAGE = {"prompt_token_count": 120, "candidates_token_count": 30, "thoughts_token_count": 10}
@@ -124,7 +123,7 @@ def test_sdk_errors_map_to_fixed_codes(error, code):
         (response(text=None), "invalid_response"),
         (response(text="not json"), "invalid_response"),
         (response(text=json.dumps(VALID | {"extra": 1})), "invalid_response"),
-        (response(text=json.dumps(VALID | {"summary": "x" * 401})), "invalid_response"),
+        (response(text=json.dumps(VALID | {"summary": "16GB RAM"})), "invalid_response"),
         (response(text=json.dumps(VALID | {"outcome": "buy"})), "invalid_response"),
     ],
 )

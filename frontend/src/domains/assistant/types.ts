@@ -46,6 +46,8 @@ export interface Recommendation {
   product_id: string;
   facts: CitedFact[];
   constraint_checks: ConstraintCheck[];
+  /** Rendered by the server from catalog data; never model text. */
+  explanation: string;
   verification: 'all_verified' | 'not_all_verified' | 'no_requirements';
 }
 
@@ -61,7 +63,7 @@ export interface AssistantResponse {
   notice: string;
   clarification: { reason: string; question: string } | null;
   abstain_reason: string | null;
-  /** Model-written and unverified. */
+  /** Server-rendered overview of an answer; never model text. */
   summary: string | null;
   recommendations: Recommendation[];
   evidence: EvidenceProduct[];

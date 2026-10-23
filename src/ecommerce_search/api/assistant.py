@@ -5,7 +5,7 @@ assistant's `CatalogRetriever` interface here, so the assistant domain has no HT
 no retrieval of its own. Generation is optional and off by default; see
 `ecommerce_search.assistant.workflow` for the bounded flow.
 
-Logs carry fixed codes, counts and timings only: never the message, catalog evidence, summary,
+Logs carry fixed codes, counts and timings only: never the message, catalog evidence, explanations,
 prompt, response text or any key.
 """
 
@@ -63,13 +63,14 @@ DESCRIPTION = (
     "Grounded shopping assistant (Milestone 16, first slice; single turn). Deterministic query "
     "understanding decides whether to ask a clarification question. Otherwise the existing V3 "
     "reranked search retrieves catalog records, and the optional generator may only select "
-    "retrieved product IDs, name the catalog fields that support them and write a short "
-    "summary. Deterministic checks reject unknown IDs, explicit-constraint violations on "
-    "catalog fields, and summaries with digits, price, offer, availability, link or markup "
-    "wording; one repair attempt is allowed, then the assistant abstains. Product facts in "
-    "`recommendations` and `evidence` come from catalog records only. The summary is "
-    "model-written and unverified. With generation off (the default) or failing, `outcome` is "
-    "`generation_unavailable` and the products are plain search results."
+    "retrieved product IDs and name the catalog fields that support them; it writes no text. "
+    "Deterministic checks reject unknown IDs, cited fields the record does not give, and "
+    "explicit-constraint violations on catalog fields; one repair attempt is allowed, then the "
+    "assistant abstains. Every explanation and the summary are rendered by the server from "
+    "catalog values (policy asst-policy-3); no model text is returned. This controls displayed "
+    "claims only: it does not show that the selection is the best fit. With generation off "
+    "(the default) or failing, `outcome` is `generation_unavailable` and the products are plain "
+    "search results."
 )
 
 

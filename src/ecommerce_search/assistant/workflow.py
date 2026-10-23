@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from ecommerce_search.assistant.clarify import decide_clarification
+from ecommerce_search.assistant.explain import render_summary
 from ecommerce_search.assistant.models import (
     AbstainReason,
     AssistantLatency,
@@ -38,9 +39,9 @@ from ecommerce_search.query_understanding.parser import parse_normalized_query
 MILLION = Decimal(1_000_000)
 
 NOTICES = {
-    "answer": "Generated selection from the retrieved catalog products. The summary is "
-    "model-written and has not been verified; prices and availability are shown from the "
-    "catalog.",
+    "answer": "The assistant selected products from the retrieved catalog results. Every "
+    "explanation is built from catalog data; the selection itself is not verified as the best "
+    "fit.",
     "clarify": "More detail is needed before searching.",
     "no_matching_products": "No catalog products matched this request, so no answer was generated.",
     "model_abstained": "The assistant found no retrieved product that fits this request.",
@@ -213,7 +214,7 @@ def answer(
                 "answer",
                 "answer",
                 retrieval=retrieval,
-                summary=result.draft.summary,
+                summary=render_summary(len(recommendations), len(retrieval.products)),
                 recommendations=recommendations,
                 status="used",
                 validation=validation,

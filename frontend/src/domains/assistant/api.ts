@@ -51,6 +51,7 @@ function isRecommendation(value: unknown): value is Recommendation {
         typeof check.requested === 'string' &&
         ['passed', 'failed', 'not_verified'].includes(check.status as string),
     ) &&
+    typeof value.explanation === 'string' &&
     ['all_verified', 'not_all_verified', 'no_requirements'].includes(value.verification as string)
   );
 }
