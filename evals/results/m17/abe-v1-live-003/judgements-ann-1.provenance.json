@@ -1,0 +1,9 @@
+{
+  "purpose": "Provenance of ann-1's aj-1 judgements for run abe-v1-live-003 (aj-1 has no provenance field). Not a judgement file.",
+  "report_sha256": "d338a5af502cc540c78351ba73154dc75086cb63151de99df5c585117bca1a8c",
+  "judgements": {
+    "abe-f02-hinglish-cheap-samsung": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review",
+    "abe-f03-killer-laptop": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-23); not an independent or unaided review"
+  },
+  "recorded_from": "Reviewer statement in the Claude Code session on 2026-10-23; transcribed by Claude Code."
+}
