@@ -65,7 +65,7 @@ separately approved run.
 | `report.md` | `c2b67592267ba03aaa1d2299bcae7a123840129ecb826ded139b58fd19db86b3` | written with CRLF as `7327d6c513b27325650cdfce8f8c9700061b6f8f8fc7d13144cc5278d853b68b` |
 | `calls.raw.jsonl` | `17cbf4f8923c5b340530ad9db2c31b368432b2cd43637d6f08149f7f58346738` | per-call metadata as written during the run |
 | `calls.jsonl` | `66190d9d9d038b7a7015859fadb51c458fb7b9f0c55cdb68fcd9711afe5d48a3` | the same records mapped to case IDs (sequential order; 29 calls, 29 cases) |
-| `precheck-and-run.log` | `e421e8f6684491bf5cbe2afaa60fb7778f816d973b3941cf4bcd4ab6cfcd5208` | pre-run hash/settings recheck and run times; CRLF original `14cbada5be47f0942a57ddf7415382a4947cef72f0646265b8b20c24bd45a682` |
+| `precheck-and-run.txt` | `e421e8f6684491bf5cbe2afaa60fb7778f816d973b3941cf4bcd4ab6cfcd5208` | pre-run hash/settings recheck and run times (saved as `.log`, renamed because the repo ignores `*.log`); CRLF original `14cbada5be47f0942a57ddf7415382a4947cef72f0646265b8b20c24bd45a682` |
 | `run_script.py` | `e728890f6dc8e9850f717126176a9248bbf849a65021cb419dac419dc611d28c` | the exact script run |
 
 A byte-identical copy of `report.md` captured from stdout was dropped. Artifacts were checked for
