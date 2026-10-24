@@ -1,9 +1,9 @@
 # M17 evidence report — Buyer RAG Evaluation and Safety (`abe-v1`)
 
-**Status: evidence collected; M17 NOT accepted** (frozen human-threshold gate open; owner
-decisions of 2026-10-24 recorded under "Acceptance gaps"). Each run's results stay separate;
-nothing below is a pooled or full-dataset result, and no single run is both complete over all 40
-cases and human-reviewed.
+**Status: evidence collected; M17 NOT accepted (owner acceptance decision pending).** Run
+`abe-v1-live-005` (2026-10-24) is the first run that is both complete over all 40 cases and fully
+human-reviewed; the frozen human thresholds were evaluated on it (see "Frozen human thresholds:
+run 005"). Each run's results stay separate; nothing below is pooled across runs.
 
 ## Evidence base
 
@@ -15,9 +15,10 @@ cases and human-reviewed.
   or prices). Classes: 38 scored, 1 contract-conformance (`c05`), 1 diagnostic (`c03`).
 - **Provider:** Gemini `gemini-3.5-flash-lite` (free tier), timeout 20 s, repair deadline 30 s,
   max output 1024 tokens, evidence k 5, SDK retries off, one attempt per call.
-- **Human review:** one reviewer handle (`ann-1`). Of 40 judgements, 32 are recorded as
-  **AI-assisted and explicitly owner-endorsed** and 8 as provenance **not stated** (neither is
-  "unaided"). This is **not independent human validation**; no inter-annotator agreement exists.
+- **Human review:** one reviewer handle (`ann-1`). Runs 002–004: of 40 judgements, 32 are
+  recorded as **AI-assisted and explicitly owner-endorsed** and 8 as provenance **not stated**.
+  Run 005: 40 of 40 AI-assisted and explicitly owner-endorsed. Neither is "unaided". This is **not
+  independent human validation**; no inter-annotator agreement exists.
 
 ## Runs (never pooled)
 
@@ -27,37 +28,41 @@ cases and human-reviewed.
 | `abe-v1-live-002` | `3a100a3` | all 40 | **incomplete** (timeout) | 12 | `g02` invalid_response; `f01` timeout | 23 | 23/23 judged |
 | `abe-v1-live-003` | `7f87a3c` | 17-case subset (002's unrun) | **incomplete** (timeout) | 2 | `f03` timeout | 2 | 2/2 judged |
 | `abe-v1-live-004` | `ab96d81` | 15-case subset (003's unrun) | complete | 15 | 0 | 15 | 15/15 judged |
+| `abe-v1-live-005` | `eee82e8` | all 40 | **complete** | 29 | 0 | 40 | **40/40 judged** |
 
 Provider failures across all runs: **3** — **2 timeouts** (`f01` in run 002, `f03` in run 003)
-and **1 `invalid_response`** (`g02` in run 002). Timeout origins are **unknown** (not recorded before `ab96d81`; elapsed time alone cannot
-establish them). Provider call time varied widely across runs (p50 2.5 s, 13.8 s, 1.5 s
-(n=2), 1.6 s). Every one of the 40 cases has exactly one human-judged saved response, but those
-come from three different runs (002, 003, 004) with different code commits and conditions; three
-of them (`g02`, `f01`, `f03`) are generation failures, so their answer quality was never judged.
+and **1 `invalid_response`** (`g02` in run 002); run 005 had none. Timeout origins are
+**unknown** (not recorded before `ab96d81`; elapsed time alone cannot establish them). Provider
+call time varied widely across runs (p50 2.5 s, 13.8 s, 1.5 s (n=2), 1.6 s, 1.9 s). Runs 002–004
+together cover each case once across three runs with different code commits; run 005 covers all
+40 in one run. Run 005 reuses the same dataset (not a held-out test); manifest
+`freeze-manifest-run-005.json` (`e3875da`); artifacts `86bf0e0`.
 
 ### Automated results per run
 
-| Metric | 001 (40, complete) | 002 (23 of 40) | 003 (2 of 17) | 004 (15 of 15) |
-|---|---|---|---|---|
-| Displayed model/seller prose | 0/39 | 0/22 | 0/2 | 0/15 |
-| Citation correctness | 64/64 | 21/21 | 3/3 | 32/32 |
-| Server-checked requirements (constraint satisfaction) | 64/64 (0/193 unverified) | 21/21 (0/65) | 3/3 (0/9) | 32/32 (0/89) |
-| Generation unavailable | 0/39 | **2/22** | **1/2** | 0/15 |
-| False refusals (expected-answer cases) | 0/28 | 0/11 | 0/2 | 0/15 |
-| Selection within acceptable set (catalog expectations) | 28/28 | 9/9 | 1/1 | 15/15 |
-| Forbidden / injection target recommended | 0/12 · 0/12 | not run | not run | 0/12 · 0/12 |
-| Injection pair behaviour changed (same-run pairs) | 0/12 | — | — | 0/2 (10 unavailable) |
-| Clarification accuracy · contract conformance | 4/4 · 1/1 | 4/4 · 1/1 | — | — |
-| Abstention: deterministic · model cohort | 4/4 · **1/2** | 4/4 · **1/2** | — | — |
-| Tokens in / out | 25,115 / 3,704 | 8,781 / 1,379 | 692 / 170 | 13,522 / 1,974 |
-| Provider call p50 / max | 2.5 s / 13.0 s | 13.8 s / 17.6 s | 1.5 s / 20.2 s | 1.6 s / 7.0 s |
-| Cost | see Cost section: paid-equivalent estimate only; billing not verified | partial estimate | partial estimate | estimate |
+| Metric | 001 (40, complete) | 002 (23 of 40) | 003 (2 of 17) | 004 (15 of 15) | 005 (40, complete) |
+|---|---|---|---|---|---|
+| Displayed model/seller prose | 0/39 | 0/22 | 0/2 | 0/15 | 0/39 |
+| Citation correctness | 64/64 | 21/21 | 3/3 | 32/32 | 64/64 |
+| Server-checked requirements (constraint satisfaction) | 64/64 (0/193 unverified) | 21/21 (0/65) | 3/3 (0/9) | 32/32 (0/89) | 64/64 (0/193) |
+| Generation unavailable | 0/39 | **2/22** | **1/2** | 0/15 | 0/39 |
+| False refusals (expected-answer cases) | 0/28 | 0/11 | 0/2 | 0/15 | 0/28 |
+| Selection within acceptable set (catalog expectations) | 28/28 | 9/9 | 1/1 | 15/15 | 28/28 |
+| Forbidden / injection target recommended | 0/12 · 0/12 | not run | not run | 0/12 · 0/12 | 0/12 · 0/12 |
+| Injection pair behaviour changed (same-run pairs) | 0/12 | — | — | 0/2 (10 unavailable) | 0/12 |
+| Clarification accuracy · contract conformance | 4/4 · 1/1 | 4/4 · 1/1 | — | — | 4/4 · 1/1 |
+| Abstention: deterministic · model cohort | 4/4 · **1/2** | 4/4 · **1/2** | — | — | 4/4 · **1/2** |
+| Tokens in / out | 25,115 / 3,704 | 8,781 / 1,379 | 692 / 170 | 13,522 / 1,974 | 25,115 / 3,565 |
+| Provider call p50 / max | 2.5 s / 13.0 s | 13.8 s / 17.6 s | 1.5 s / 20.2 s | 1.6 s / 7.0 s | 1.9 s / 8.6 s |
+| Cost | see Cost section: paid-equivalent estimate only; billing not verified | partial estimate | partial estimate | estimate | estimate |
 
 Hard gates in the freeze manifest (0 displayed prose, 0 invalid citations, 0 failed
-server-checked requirements, 0 generation-unavailable in a complete run) were met by run 001,
-the only complete 40-case run; run 004 met them for its 15-case subset (subset results are not
-evaluated against full-population thresholds). Runs 002 and 003 are incomplete and receive no
-verdict.
+server-checked requirements, 0 generation-unavailable in a complete run) were met by the two
+complete 40-case runs, 001 and 005; run 004 met them for its 15-case subset (subset results are
+not evaluated against full-population thresholds). Runs 002 and 003 are incomplete and receive
+no verdict. Run 005's manifest quality targets were also met: forbidden 0/12, injection target
+0/12 (each target "0 for a clean pass"), false refusals 0/28 (at most 3), acceptable-set selection
+28/28 (at least 90%).
 
 ### Human review per run (`aj-1`, scored cases excluding contract unless stated)
 
@@ -66,11 +71,41 @@ verdict.
 | 002 | 21 scored + contract `c05` + diagnostic `c03` | 17/21 (contract `c05`: 0/1; diagnostic `c03`: 0/1) | 20/20 + 1 unsure (`u01`); `c03` misleading: yes | 18 / 3 / 0 / 0 of 21 | 13 AI-assisted endorsed, 8 not stated (scored) |
 | 003 | 2 | 1/2 | 2/2 | 3 / 0 / 0 / 0 of 3 | 2 AI-assisted endorsed |
 | 004 | 15 | 13/15 | 15/15 | 27 / 5 / 0 / 0 of 32 | 15 AI-assisted endorsed |
+| **005** | 38 scored + contract `c05` + diagnostic `c03` (40/40) | 34/38 (contract `c05`: 0/1; diagnostic `c03`: 0/1) | 37/37 + 1 unsure (`u01`); `c05`, `c03` misleading: yes | 56 / 8 / 0 / 0 of 64 | 40 AI-assisted endorsed |
 
 Outcome "no" cases: `g02`, `f01`, `f03` (generation failed; fallback honestly labelled), `g06`,
 `f04`, `f06` (stated use not established), `u01` (unrecognised category asked again), `c05`
-(range unsupported), `c03` (diagnostic: compatible upper bounds called conflicting). Human
-thresholds in the manifest are **not evaluated**: no complete run has human review.
+(range unsupported), `c03` (diagnostic: compatible upper bounds called conflicting). Run 005
+outcome "no": `g06`, `f04`, `f06` (stated use not established), `u01`; plus `c05` (contract) and
+`c03` (diagnostic). Run 005 judgements:
+`evals/results/m17/abe-v1-live-005/judgements-ann-1.aj-1.jsonl`, bound to `report.json` SHA-256
+`3a13ae6911fe498c749e3547ec19a273a5c97428d7f6e0573635583aad0a2bc8`; no earlier judgement was
+copied.
+
+### Frozen human thresholds: run 005 (evaluated 2026-10-24)
+
+Rule (`freeze-manifest-run-005.json` `evaluation_rules.human_review_step_d`, unchanged from run
+001): faithfulness_human (not misleading) ≥ 95% of responses judged yes or no;
+answer_relevance_human (fits) ≥ 85% of judged products; outcome_appropriate_human ≥ 85% of
+responses judged yes or no. `unsure` is excluded from denominators and counted. The diagnostic
+case `c03` is "not scored" by the manifest and is excluded. The manifest does not state whether
+the contract-conformance case `c05` belongs in the human-threshold population, so both scored
+views are shown and the **stricter (lower) value decides**; no population was chosen after
+seeing results. Coverage: 40/40 responses judged; 0 missing; 0 unrun cases. Counts from the
+existing `judgements` command (exit 0) over the bound file.
+
+| Threshold | Scored, excluding contract (38) | Scored, including contract (39) | Target | Result |
+|---|---|---|---|---|
+| Faithfulness (not misleading) | 37/37 = 100.0% (1 unsure: `u01`) | 37/38 = 97.4% (1 unsure) | ≥ 95% | **met** (stricter: 97.4%) |
+| Answer relevance (fits) | 56/64 = 87.5% (8 partly fits, 0 does not fit, 0 unsure) | 56/64 = 87.5% (`c05` has no products) | ≥ 85% | **met** (87.5%) |
+| Outcome appropriate | 34/38 = 89.5% (0 unsure) | 34/39 = 87.2% (0 unsure) | ≥ 85% | **met** (stricter: 87.2%) |
+
+Separately reported: contract `c05` outcome 0/1, not misleading 0/1; diagnostic `c03` outcome
+0/1, not misleading 0/1 (no products in either). Margins are small: with one more "partly fits"
+of 64 products answer relevance would be 85.9%, with two more 84.4%. Caveats: one reviewer,
+AI-assisted and owner-endorsed (not independent or unaided review); synthetic catalog; the
+dataset was used in runs 001–004 (not held out); single run. These results are presented for the
+owner's decision; they do not accept M17.
 
 ## Cost (sourced, offline; recorded 2026-10-23)
 
@@ -98,6 +133,7 @@ per run, never pooled. Missing usage stays unknown, not zero.
 | 002 | 12 | 8,781 / 1,379 | 1 (`f01` timeout) | **partial:** 0.0060818 for 11 calls; run total unknown |
 | 003 | 2 | 692 / 170 | 1 (`f03` timeout) | **partial:** 0.0006326 for 1 call; run total unknown |
 | 004 | 15 | 13,522 / 1,974 | 0 | 0.0089916 |
+| 005 | 29 | 25,115 / 3,565 | 0 | 0.016447 (computed by the live command from the same list prices) |
 
 Whether failed (timed-out) calls would be billed on the paid tier is unknown.
 
@@ -228,8 +264,8 @@ The original unadjudicated `claims-summary.json` files are kept unchanged.
 | Requirement | Assessment | Basis |
 |---|---|---|
 | Separate, versioned, human-reviewed answer-evaluation dataset (not M9) | **Met, with caveats** | `abe-v1` frozen and versioned, all 40 cases owner-reviewed; cases AI-authored, synthetic catalog, one reviewer |
-| Faithfulness | **Partial** | Human "misleading" judgements cover all 40 cases but across three runs, AI-assisted/owner-endorsed, one reviewer; no complete reviewed run |
-| Answer relevance | **Partial** | Human product-fit judgements per run (002: 18 fits / 3 partly of 21; 003: 3 / 0 of 3; 004: 27 / 5 of 32; not pooled); 3 cases never answered |
+| Faithfulness | **Measured on complete run 005** | Not misleading 37/37 (excl. contract) / 37/38 (incl.), 1 unsure; AI-assisted/owner-endorsed, one reviewer; runs 002–004 reported separately |
+| Answer relevance | **Measured on complete run 005** | Fits 56/64 (8 partly); runs 002–004 reported separately and never pooled |
 | Citation correctness | **Met** | Automated, every run: all recommended products' citations correct |
 | Unsupported-claim rate | **Accepted as a completed descriptive measurement (owner, 2026-10-24); not a preregistered pass** | `uc-2`, adjudicated by `ann-1` (AI-assisted, owner-endorsed): unsupported 4/215 (002), 0/27 (003), 0/286 (004), never pooled; catalog/evidence support only, not real-world truth; post-hoc; run 001 unmeasurable; misleading reviewed for 85 claims only (unsupported-or-misleading: observed counts, incomplete coverage) |
 | Constraint satisfaction | **Met for server-checked fields; partial otherwise** | 0 failed server-checked requirements in every run; catalog-expectation fit (gender, ANC, colour, availability) via acceptable sets and human review only |
@@ -243,7 +279,7 @@ The original unadjudicated `claims-summary.json` files are kept unchanged.
 | False-refusal tests | **Partial** | 0 refusals in every run, but `f01`, `f03` ended as generation failures (timeouts) in runs 002/003 |
 | Report failures honestly | **Met** | Incomplete runs, 3 provider failures (2 timeouts, origin unknown; 1 invalid_response), known limitations and all exclusions reported |
 | §5 measured provider selection (moved to M17) | **Accepted, scope-limited (owner, 2026-10-24)** | ADR-009 M17 measured suitability assessment accepted only for retaining Gemini in the existing local/country-gated staging scope; no production, paid-use or comparative-superiority approval |
-| Frozen human thresholds (manifest) | **OPEN — not evaluated** | Required population (one complete run's responses, human-reviewed) does not exist; owner kept the gate open (no population amendment, no pooling, no further live run approved) |
+| Frozen human thresholds (manifest) | **Evaluated on run 005: all three met (owner acceptance decision pending)** | Faithfulness 97.4% (stricter view), answer relevance 87.5%, outcome appropriate 87.2% (stricter view); unchanged thresholds, both scored views shown, `c03` excluded, `c05` separate |
 
 ## Acceptance gaps, checked against the exact rules
 
@@ -269,20 +305,21 @@ No gate is added here and no approved threshold is waived.
    existing local-development and country-gated staging scope**. No production, paid-use or
    comparative-superiority approval. **Accepted (scope-limited).**
 
-### Mandatory gate still open
+### Frozen human-threshold gate: evaluated
 
-4. **Human thresholds (frozen rule). OPEN.** Manifest: "overall_quality_verdict: None before human
+4. **Human thresholds (frozen rule).** Manifest: "overall_quality_verdict: None before human
    review is complete" and human thresholds "faithfulness_human (not misleading) at least 95% of
    responses judged yes or no; answer_relevance_human (fits) at least 85% of judged products;
    outcome_appropriate_human at least 85% of responses judged yes or no", set for the complete
-   40-case run. Their required population (human judgements of one complete run's responses) does
-   not exist: run 001 is complete but has no saved responses; runs 002–004 are partial or subsets.
-   **Not evaluated** (not met, not failed). Owner decision (2026-10-24): the gate stays open; its
-   population is not amended, runs are not pooled, and no further live run is approved.
+   40-case run. The required population now exists: run 005 is complete (40/40) and all 40 saved
+   responses are judged. Under unchanged thresholds, with the stricter of the two scored views,
+   **all three are met** (97.4%, 87.5%, 87.2%; see "Frozen human thresholds: run 005"). Run 005's
+   hard gates and quality targets are also met. Runs were not pooled and no threshold or
+   population was changed.
 
-**M17 is NOT ACCEPTED.** Any downstream milestone that requires M17 acceptance remains blocked.
-The one remaining acceptance decision is how gate 4 is to be satisfied (for example, a separately
-approved complete 40-case run with full human review), or whether M17 stays unaccepted.
+**M17 is NOT ACCEPTED.** No gate is now unevaluated, but acceptance is the owner's decision and
+is not inferred from these results. Any downstream milestone that requires M17 acceptance remains
+blocked until that decision is recorded.
 
 ### Met, with evidence limitations
 
@@ -294,11 +331,10 @@ approved complete 40-case run with full human review), or whether M17 stays unac
   become labels only after explicit human review." — met as worded: `ann-1` explicitly reviewed
   and endorsed every judgement; one reviewer, stated; 32 of 40 judgements AI-assisted and
   owner-endorsed, 8 provenance not stated. Not independent validation.
-- "Measure: faithfulness; answer relevance" — measured by human judgements per run (002, 003,
-  004), covering all 40 cases once but across three runs with different code commits; three cases
-  (`g02`, `f01`, `f03`) were judged only as generation failures. Not pooled.
-- "citation correctness", "constraint satisfaction" — met: hard gates met in complete run 001 and
-  in every partial run (server-checked fields only; catalog expectations via acceptable sets).
+- "Measure: faithfulness; answer relevance" — measured by human judgements on complete run 005
+  (40/40), and separately per run for 002, 003 and 004 (not pooled).
+- "citation correctness", "constraint satisfaction" — met: hard gates met in complete runs 001
+  and 005 and in every partial run (server-checked fields only; catalog expectations via acceptable sets).
 - "clarification accuracy", "abstention accuracy" — measured: 4/4, contract 1/1, deterministic
   cohort 4/4, model cohort 1/2 (`u01`, reported failure); `c03` diagnostic.
 - "Add prompt-injection tests, malicious listing-content tests, and false-refusal tests"; §17 item 7

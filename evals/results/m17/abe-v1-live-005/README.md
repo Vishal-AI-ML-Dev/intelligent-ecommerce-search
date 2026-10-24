@@ -36,11 +36,22 @@ clarified instead of abstaining (recorded known limitation, as in run 001).
   `estimated_cost_usd` is null (`unknown_pricing_not_configured`) because only the report-level
   estimate was priced.
 
-Human review: in progress (`aj-1`, this run's saved responses only). Batch 1 (cases 1–5, `g01`–`g05`):
-5 judgements by `ann-1`, bound to `report.json` (`3a13ae69…`), **AI-assisted and explicitly
-owner-endorsed; not independent or unaided review**; outcome appropriate 5/5, not misleading 5/5,
-products fits 9/9. Support limited to the synthetic catalog; `g04` wireless/ANC from seller
-titles and `g05` gender/running from title/subcategory, not server checks. 35 cases unjudged.
+## Human review
+
+40/40 `aj-1` judgements by `ann-1` in `judgements-ann-1.aj-1.jsonl` (8 batches, 2026-10-24),
+bound to `report.json` (`3a13ae69…`), provenance in `judgements-ann-1.provenance.json`:
+**AI-assisted and explicitly owner-endorsed; not independent or unaided review**; one reviewer,
+no agreement claimed; no earlier judgement copied. Counted by the existing `judgements` command:
+
+- Scored excluding contract (38): outcome appropriate 34/38; not misleading 37/37 (1 unsure,
+  `u01`); products fits 56 / partly fits 8 / does not fit 0 / unsure 0 (of 64).
+- Scored including contract (39): outcome appropriate 34/39; not misleading 37/38 (1 unsure).
+- Contract `c05`: outcome 0/1, not misleading 0/1. Diagnostic `c03` (unscored): outcome 0/1,
+  not misleading 0/1.
+
+Frozen human thresholds evaluated in `docs/m17-evidence-report.md` (all three met under the
+stricter view). Support is limited to the synthetic catalog; seller-title/subcategory support is
+not server verification; no general injection-resistance claim.
 
 ## Files
 
