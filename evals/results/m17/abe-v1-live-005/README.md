@@ -36,7 +36,11 @@ clarified instead of abstaining (recorded known limitation, as in run 001).
   `estimated_cost_usd` is null (`unknown_pricing_not_configured`) because only the report-level
   estimate was priced.
 
-Human review: pending (`aj-1`, this run's saved responses only).
+Human review: in progress (`aj-1`, this run's saved responses only). Batch 1 (cases 1–5, `g01`–`g05`):
+5 judgements by `ann-1`, bound to `report.json` (`3a13ae69…`), **AI-assisted and explicitly
+owner-endorsed; not independent or unaided review**; outcome appropriate 5/5, not misleading 5/5,
+products fits 9/9. Support limited to the synthetic catalog; `g04` wireless/ANC from seller
+titles and `g05` gender/running from title/subcategory, not server checks. 35 cases unjudged.
 
 ## Files
 

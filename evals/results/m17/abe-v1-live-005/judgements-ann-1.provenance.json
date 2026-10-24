@@ -1,0 +1,13 @@
+{
+  "purpose": "Provenance of ann-1's aj-1 judgements for run abe-v1-live-005 (aj-1 has no provenance field). Not a judgement file.",
+  "report_sha256": "3a13ae6911fe498c749e3547ec19a273a5c97428d7f6e0573635583aad0a2bc8",
+  "judgements": {
+    "abe-g01-dell-16gb-under-60k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-24); not an independent or unaided review",
+    "abe-g02-hp-16gb-512ssd-under-70k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-24); not an independent or unaided review",
+    "abe-g03-samsung-phone-8gb-under-30k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-24); not an independent or unaided review",
+    "abe-g04-sony-anc-wireless-under-15k": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-24); not an independent or unaided review",
+    "abe-g05-nike-running-men": "AI-assisted, explicitly endorsed by ann-1 (reviewer statement, 2026-10-24); not an independent or unaided review"
+  },
+  "scope": "Batch 1: cases 1-5 of 40 in returned order only; no other case is judged by this approval; no prior-run judgement copied.",
+  "recorded_from": "Reviewer statement in the Claude Code session on 2026-10-24; transcribed by Claude Code."
+}
