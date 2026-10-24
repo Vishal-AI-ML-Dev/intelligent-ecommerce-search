@@ -58,7 +58,8 @@ Other documents written before this revision still use the former numbers. These
 | M23A baseline CI | Complete (2026-10-22) for the M23A scope in §28: all four required GitHub Actions jobs passed on `c9b6e6d` (run `39738936822`). M23B remains. | `.github/workflows/ci.yml`: backend Ruff + hermetic unit suite (4,853 passed), pgvector integration (762 passed, `real_model` excluded), frontend typecheck/Vitest/build, fixture Playwright 6/6. No live provider or model snapshot in CI. Metadata-test debt fixed; the recursive isolation test is skipped visibly in CI because the job is its child. Details: `docs/m23a-progress.md`. |
 | M24A observability (search path, Search page) | Complete (2026-10-22) for the M24A scope in §28: acceptance tests passed locally and in CI on `d392472` (run `39741772078`). M24B remains. | Request IDs, one completion log per request, reranked summary, query-free access logs, frontend request IDs. Details: `docs/m24a-progress.md`. |
 | M26A Search staging demo | **Accepted and complete** (owner, 2026-10-22) for the M26A scope under the scoped staging amendment, with its documented limitations: single instance, no high availability, not load-tested, not production-ready, not a permanent URL. M26B remains pending. | Scoped staging amendment (owner, 2026-10-22): for the M26A staging demo only, one Free-plan EC2 t3.small in the project Region ap-southeast-2 runs the existing image with Docker Compose, PostgreSQL/pgvector and Caddy HTTPS on a DuckDNS hostname. Hard rule: zero out-of-pocket payment, no plan upgrade. The Milestone 26 managed stack (ECR, ECS/Fargate, RDS, Terraform) is unchanged as the M26 requirement; its Terraform is prepared in `infra/staging/` and unapplied. Details: `docs/m26a-progress.md`, runbook `deploy/ec2/README.md`. |
-| M15–M26 (except M25A, M23A, M24A, M26A) | Not started | Includes M25B. |
+| M17 Buyer RAG evaluation and safety | **ACCEPTED (owner, 2026-10-24) for the documented development and country-gated staging evaluation scope**, on evidence commit `d2d1e97` and run `abe-v1-live-005` | Complete 40-case run, all 40 responses human-judged; hard gates, quality targets and the frozen human thresholds met under both contract-case population views. Limitations: synthetic catalog; dataset reused from runs 001–004 (not held out); one reviewer (`ann-1`), AI-assisted and owner-endorsed, not independent; single-run evidence; known failures (`u01`, `c03`, `c05`, use-suitability `g06`/`f04`/`f06`); no production or general injection-resistance claim. Details: `docs/m17-evidence-report.md`. |
+| M15–M26 (except M25A, M23A, M24A, M26A, M16, M17) | Not started | Includes M25B. |
 | M27 | Excluded from the current scope | The original optional milestone definition below is unchanged. |
 
 The status above was checked against git history at this revision. The M13 and M14 rows were
@@ -285,7 +286,8 @@ Generation models (M16, M19–M21) are not part of the locked stack. Each genera
   local development and the country-gated staging demo. Owner decision (2026-10-24,
   `a08fb46`): ADR-009's M17 measured suitability assessment is accepted only for retaining
   Gemini in that existing local and country-gated staging scope (no production, paid-use or
-  comparative selection). M17 itself is not accepted; its frozen human thresholds remain open;
+  comparative selection). M17 was accepted on 2026-10-24 for the same scope (see the
+  milestone table);
 - sits behind a typed, provider-isolated interface;
 - has its output validated through Pydantic.
 
@@ -1094,7 +1096,7 @@ M14 -> M15 -> M21 -> M22 -> M25B -> M23B -> M24B -> M26B
 | M24A | Existing search path; M25A for UI-to-API request correlation | Logs never contain unredacted PII |
 | M26A | M23A and M24A; local stability (Milestone 26) | Owner approval before any chargeable action; cloud account and billing are owner decisions. Blocks only M26B. |
 | M16 | M10 prerequisite (the development-scoped M10 closure does not by itself satisfy it; the owner decides); generation-provider ADR | **ACCEPTED (owner, 2026-10-23) for the implemented development and country-gated staging scope.** M10's reduced-scope closure accepted for M16 only (no gate waived). ADR-009 accepts the Gemini free tier for local development and the country-gated staging demo. The §5 measured provider selection is moved to M17 (§5 sequencing amendment), not met. Evidence: `docs/m16-progress.md` |
-| M17 | M16; a separate human-reviewed answer set | Real human reviewers |
+| M17 | M16; a separate human-reviewed answer set | Real human reviewers. **ACCEPTED (owner, 2026-10-24) for the documented development and country-gated staging evaluation scope** (evidence `d2d1e97`, run `abe-v1-live-005`; one AI-assisted owner-endorsed reviewer, not independent). Evidence: `docs/m17-evidence-report.md` |
 | M18 | Return data source with recorded provenance and rights; PII redaction | Data source not chosen |
 | M19 | M18; a separate human-reviewed return-reason set; generation-provider ADR | Real human reviewers |
 | M20 | M18, M19; M13 listing versions (exist) | Separate human-reviewed root-cause set |
@@ -1657,8 +1659,9 @@ this revision", and M14 is BLOCKED. M25A, the first item of §28, "Execution ord
 accepted on 2026-10-22, and M23A was completed on 2026-10-22 (`docs/m23a-progress.md`). M24A was
 completed on 2026-10-22 (`docs/m24a-progress.md`). M26A was accepted on 2026-10-22 (single-EC2
 staging demo; `docs/m26a-progress.md`). M16 was accepted on 2026-10-23 for the
-implemented development and country-gated staging scope (`docs/m16-progress.md`). M17 and the
-production work remain pending.
+implemented development and country-gated staging scope (`docs/m16-progress.md`). M17 was
+accepted on 2026-10-24 for the documented development and country-gated staging evaluation scope
+(`docs/m17-evidence-report.md`). The production work remains pending.
 
 Historical text:
 

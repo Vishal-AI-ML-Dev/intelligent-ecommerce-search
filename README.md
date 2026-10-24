@@ -21,7 +21,7 @@ testing, so it is not production-ready (`docs/m26a-progress.md`).
 | **Deployed** (staging) | Buyer Search page over V3 reranked search (`POST /search/reranked`) | `docs/m26a-progress.md` |
 | **Deployed** (staging) | Shopping assistant tab (M16, accepted for this scope). It shows clarification questions, evidence references, deterministic comparison and structured RAM/storage checks. Gemini free-tier generation is limited to eligible countries: the model only selects products, explanations are server templates over catalog data, and other visitors get labelled catalog search results. | `docs/m16-progress.md`, ADR-009 |
 | **Implemented, local only** | V0–V2 search endpoints, experimental V4 (`/search/routed`), listing normalization (M13), listing decisions (M14, blocked) | sections below |
-| **Planned** | Assistant evaluation (M17), return intelligence (M18–M22), review queue (M21), production AWS stack (M26B) and the rest of `docs/MASTER_PLAN.md` | `docs/MASTER_PLAN.md` |
+| **Planned** | Return intelligence (M18–M22), review queue (M21), production AWS stack (M26B) and the rest of `docs/MASTER_PLAN.md` | `docs/MASTER_PLAN.md` |
 
 **Staging architecture (M26A):**
 - one EC2 instance running the application image with Docker Compose;
@@ -146,10 +146,11 @@ The managed-stack Terraform in `infra/staging/` is not applied.
   single-EC2 demo at the URL above, not production-ready. M26B remains. See
   `docs/m26a-progress.md`.
 - M16 (grounded shopping assistant): **accepted (2026-10-23)** for the implemented development
-  and country-gated staging scope. M17 evaluation and production hardening remain. See
+  and country-gated staging scope; M17 evaluation is accepted; production hardening remains. See
   "Shopping assistant (Milestone 16)" below and `docs/m16-progress.md`.
-- M17 (assistant evaluation): in progress; mocked harness groundwork only. Systematic quality,
-  safety and provider quality, latency and cost evaluation are pending.
+- M17 (assistant evaluation and safety): **accepted (owner, 2026-10-24)** for the documented
+  development and country-gated staging evaluation scope, on one complete 40-case run with all
+  responses human-judged. Limitations: synthetic catalog; dataset reused from runs 001–004 (not held out); one reviewer (`ann-1`), AI-assisted and owner-endorsed, not independent; single-run evidence; known failures (`u01`, `c03`, `c05`, use-suitability `g06`/`f04`/`f06`); no production or general injection-resistance claim. See `docs/m17-evidence-report.md`.
 - M15, M18–M22, M23B, M24B, M25B and M26B: not started. This includes policy-risk triage,
   return intelligence and human review (HITL).
 - M27 (authorized marketplace integration): excluded from the current scope. The original
@@ -775,9 +776,10 @@ assistant tab. Fixture and live browser results are reported separately; see
 Status: **accepted (owner, 2026-10-23) for the implemented development and country-gated staging
 scope.** Deployed to the staging demo on 2026-10-23 (commit `e057d00`). Gemini free-tier
 generation is on for eligible countries only, with the personal-data screen and usage limits.
-Not a production or quality claim: systematic evaluation is M17. Details, limitations and the
+Not a production claim. M17 evaluated it on a synthetic catalog (accepted 2026-10-24 for the
+development and country-gated staging scope; `docs/m17-evidence-report.md`). Details, limitations and the
 remaining gaps are in `docs/m16-progress.md`, and the provider decision is in ADR-009
-(`docs/decisions/ADR-009-generation-provider.md`, **Proposed**).
+(`docs/decisions/ADR-009-generation-provider.md`).
 
 What is implemented, behind `POST /assistant/answer` and the "Shopping assistant" tab:
 - **Fixed, single-turn flow.** Deterministic clarification, retrieval through the existing V3
@@ -797,8 +799,9 @@ What is implemented, behind `POST /assistant/answer` and the "Shopping assistant
 
 Provider: Gemini Developer API free tier (`gemini-3.5-flash-lite`), ADR-009, accepted for local
 development and the country-gated staging demo. Evidence so far is limited smoke evidence: three
-local trials on synthetic data and three online answers. Quality, latency and cost evaluation is
-M17 work.
+local trials on synthetic data and three online answers; M17 then measured quality, latency and
+cost on the synthetic `abe-v1` set, and ADR-009's measured suitability assessment is accepted for
+this scope only.
 - **Region gate:** the free-tier terms allow no free-tier use for users in the EEA, Switzerland
   or the UK. On the demo, generation runs only for eligible countries (DB-IP offline data,
   best-effort), and other visitors get labelled catalog search results.

@@ -1,12 +1,12 @@
 # Milestone 17 — Buyer RAG Evaluation and Safety: progress
 
-**Status: IN PROGRESS. Not accepted.** M16's prerequisite is met (M16 accepted for development and
-the country-gated staging scope, 2026-10-23, `941f9e0`). The §5 measured provider selection
-moved to M17 by sequencing amendment; ADR-009's M17 measured suitability assessment is accepted
-only for the existing local and country-gated staging scope (owner, 2026-10-24, `a08fb46`). M17
-is **not accepted**; the frozen human thresholds remain **open**. Evaluation data, four live runs
-(`abe-v1-live-001`–`004`, none both complete and human-reviewed) and `ann-1` human judgements
-exist; see `docs/m17-evidence-report.md`. This page is the step-by-step build record.
+**Status: ACCEPTED (owner, 2026-10-24) for the documented development and country-gated staging
+evaluation scope**, based on evidence commit `d2d1e97` and run `abe-v1-live-005` (complete 40/40,
+all 40 responses judged; hard gates, quality targets and the frozen human thresholds met under
+both contract-case population views). ADR-009's M17 measured suitability assessment is accepted
+only for the existing local and country-gated staging scope (`a08fb46`). Limitations kept:
+synthetic catalog; dataset reused from runs 001–004 (not held out); one reviewer (`ann-1`), AI-assisted and owner-endorsed, not independent; single-run evidence; known failures (`u01`, `c03`, `c05`, use-suitability `g06`/`f04`/`f06`); no production or general injection-resistance claim. Full evidence: `docs/m17-evidence-report.md`. This page is the step-by-step
+build record; its later sections are historical and unchanged.
 
 ## Step A (offline harness, mocked tests only) — 2026-10-23
 

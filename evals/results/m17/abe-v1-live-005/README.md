@@ -3,7 +3,9 @@
 **Status: complete (40/40 processed, not stopped).** One owner-approved run of the unchanged,
 frozen `abe-v1` dataset with full response saving. Not a held-out test (the dataset was used in
 runs 001–004) and not an independent confirmation. Never pooled with runs 001–004; no earlier
-judgement is reused. Not M17 acceptance.
+judgement is reused. M17 was accepted by the owner on 2026-10-24 for the documented development
+and country-gated staging evaluation scope, based on this run and evidence commit `d2d1e97`
+(`docs/m17-evidence-report.md`); this run's results themselves are unchanged.
 
 ## Provenance
 

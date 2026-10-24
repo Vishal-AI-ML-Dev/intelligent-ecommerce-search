@@ -1,9 +1,11 @@
 # M17 evidence report — Buyer RAG Evaluation and Safety (`abe-v1`)
 
-**Status: evidence collected; M17 NOT accepted (owner acceptance decision pending).** Run
-`abe-v1-live-005` (2026-10-24) is the first run that is both complete over all 40 cases and fully
-human-reviewed; the frozen human thresholds were evaluated on it (see "Frozen human thresholds:
-run 005"). Each run's results stay separate; nothing below is pooled across runs.
+**Status: M17 ACCEPTED (owner, 2026-10-24) for the documented development and country-gated
+staging evaluation scope**, based on evidence commit `d2d1e97` and run `abe-v1-live-005`, the
+first run that is both complete over all 40 cases and fully human-reviewed (see "Frozen human
+thresholds: run 005"). Both contract-case population views (excluding and including `c05`) met
+every human threshold. Limitations kept: synthetic catalog; dataset reused from runs 001–004 (not held out); one reviewer (`ann-1`), AI-assisted and owner-endorsed, not independent; single-run evidence; known failures (`u01`, `c03`, `c05`, use-suitability `g06`/`f04`/`f06`); no production or general injection-resistance claim. Each run's results stay separate;
+nothing below is pooled across runs, and historical results are unchanged.
 
 ## Evidence base
 
@@ -317,9 +319,11 @@ No gate is added here and no approved threshold is waived.
    hard gates and quality targets are also met. Runs were not pooled and no threshold or
    population was changed.
 
-**M17 is NOT ACCEPTED.** No gate is now unevaluated, but acceptance is the owner's decision and
-is not inferred from these results. Any downstream milestone that requires M17 acceptance remains
-blocked until that decision is recorded.
+**Owner decision (2026-10-24): M17 ACCEPTED for the documented development and country-gated
+staging evaluation scope**, based on evidence commit `d2d1e97` and run 005. Both contract-case
+population views met the thresholds (excluding `c05`: 100.0%, 87.5%, 89.5%; including `c05`:
+97.4%, 87.5%, 87.2%). Limitations kept: synthetic catalog; dataset reused from runs 001–004 (not held out); one reviewer (`ann-1`), AI-assisted and owner-endorsed, not independent; single-run evidence; known failures (`u01`, `c03`, `c05`, use-suitability `g06`/`f04`/`f06`); no production or general injection-resistance claim. Not a production-quality or
+real-world claim. M18 is not started until separately instructed.
 
 ### Met, with evidence limitations
 
