@@ -101,6 +101,38 @@ per run, never pooled. Missing usage stays unknown, not zero.
 
 Whether failed (timed-out) calls would be billed on the paid tier is unknown.
 
+## Unsupported claims (post-hoc, provisional, not adjudicated; recorded 2026-10-24)
+
+Tool: `evals/assistant/claims.py` (`python -m evals.assistant claims`). **Post-hoc:** defined after
+runs 002–004 existed; descriptive only, no threshold, not a preregistered pass criterion. Runs are
+never pooled; run 001 has no saved responses and no measurement. **No human adjudication exists;
+no rate is reported.** Mechanical verdicts check only displayed values against the frozen
+synthetic catalog (catalog consistency), never real-world truth; catalog-consistent seller text
+is left for human review, never marked unsupported because no external check exists.
+
+**Boundary amendment `uc-1` → `uc-2` (also post-hoc, not blind).** The `uc-1` boundaries were
+fixed before extraction, but its output (kept unchanged and uncommitted in
+`evals/results/m17/unsupported-claims/`) showed three defects; `uc-2` was defined after seeing
+it: D1 "?" is now a boundary; D2 a clause that is only a question, or exactly one of the six
+known instruction sentences of the server templates, is a recorded non-claim (a clause mixing an
+instruction with an assertion stays a claim); D3 the known ", so" status notices are two claims.
+D4: message phrases that no stated requirement, `not_assessed` note or filler word accounts for
+are listed as **unadjudicated omission candidates** (`omission-candidates.jsonl`, exact text,
+span and exclusion reasons), never as omission findings or requirements. Outputs:
+`evals/results/m17/unsupported-claims-uc-2/abe-v1-live-00{2,3,4}/`.
+
+| Run | Claims uc-1 → uc-2 | Mechanical supported | Contradicted | Unresolved (needs human) | Non-claims | Omission findings | Candidates (unadjudicated) |
+|---|---|---|---|---|---|---|---|
+| 002 | 214 → 215 | 169 → 173 | 0 → 0 | 45 → 42 | 9 (6 questions, 3 instructions) | 9 → 9 | 0 (7 cases excluded: no recommendation) |
+| 003 | 27 → 27 | 24 → 24 | 0 → 0 | 3 → 3 | 0 | 0 → 0 | 1 (`f02` "sasta") |
+| 004 | 286 → 286 | 246 → 246 | 0 → 0 | 40 → 40 | 0 | 19 → 19 | 6 (`f04`, `f05`, `f06` ×2, `m06`, `l04`) |
+
+Run 002 changes: four `u02`/`u03`/`u05`/`u06` notices split into "No catalog products matched
+this request" (needs human: catalog-wide claim) and "so no answer was generated." (mechanically
+supported); the merged `c06`/`u01` question+instruction claims and the `c05` "Please give…"
+instruction left the claim set. Mechanical "supported" means consistent with the frozen synthetic
+catalog or the response itself, not true in the real world.
+
 ## Known limitations
 
 - `u01`: category-recognition limitation (clarifies "smartwatch" instead of abstaining).
@@ -123,7 +155,7 @@ Whether failed (timed-out) calls would be billed on the paid tier is unknown.
 | Faithfulness | **Partial** | Human "misleading" judgements cover all 40 cases but across three runs, AI-assisted/owner-endorsed, one reviewer; no complete reviewed run |
 | Answer relevance | **Partial** | Human product-fit judgements per run (002: 18 fits / 3 partly of 21; 003: 3 / 0 of 3; 004: 27 / 5 of 32; not pooled); 3 cases never answered |
 | Citation correctness | **Met** | Automated, every run: all recommended products' citations correct |
-| Unsupported-claim rate | **Unmet (no defined measurement)** | Proxies only: displayed text is server-rendered from catalog data (0 model/seller prose in every run); human "misleading" verdicts per run |
+| Unsupported-claim rate | **Unmet (post-hoc measurement not adjudicated)** | Post-hoc `uc-2` claim extraction for runs 002–004 (see Unsupported claims): 0 mechanically contradicted, 42/3/40 unresolved, no human adjudication, no rate; proxies: 0 model/seller prose; human "misleading" verdicts per run |
 | Constraint satisfaction | **Met for server-checked fields; partial otherwise** | 0 failed server-checked requirements in every run; catalog-expectation fit (gender, ANC, colour, availability) via acceptable sets and human review only |
 | Clarification accuracy | **Met (with a recorded limitation)** | 4/4 in runs 001/002; `c03` unnecessary clarification reported as a diagnostic |
 | Abstention accuracy | **Met as measured; failures reported** | deterministic 4/4; model cohort 1/2 (`u01` known failure) |
@@ -163,8 +195,9 @@ No gate is added here and no approved threshold is waived.
    (missing usage); actual billing not verified. **Partially met**; whether an estimate satisfies
    "measure cost" is an owner decision.
 4. **Unsupported-claim rate (MASTER_PLAN M17 "Measure: … unsupported-claim rate").** No metric with
-   that definition was predeclared or reported; only proxies exist (0 displayed model/seller prose;
-   human "misleading" verdicts). **Unmet as a defined measurement.**
+   that definition was predeclared; a post-hoc extraction (`uc-2`, after a post-hoc boundary
+   amendment) exists for runs 002–004 but no claim has been human-adjudicated, so no rate is
+   reported. **Unmet** until adjudication; the measurement stays post-hoc and descriptive.
 
 ### Met, with evidence limitations
 

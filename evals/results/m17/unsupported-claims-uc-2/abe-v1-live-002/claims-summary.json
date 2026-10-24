@@ -1,0 +1,67 @@
+{
+  "run_id": "abe-v1-live-002",
+  "responses_sha256": "ae0c382833595ee7c1e7eca08c728fda64ee7358c0d1d4117b0af9c77f810caf",
+  "responses": 23,
+  "case_selection": null,
+  "post_hoc": "defined after the runs; descriptive only; not a preregistered pass criterion",
+  "boundaries": "uc-2-claims: post-hoc amendment of uc-1, defined after its output",
+  "provisional": true,
+  "claims": 215,
+  "by_type": {
+    "C1_fact": 44,
+    "C2_requirement": 65,
+    "C3_scope": 9,
+    "C4_outcome": 31,
+    "C5_interpretation": 5,
+    "C6_disclaimer": 36,
+    "C7_seller_text": 25
+  },
+  "primary_verdicts": {
+    "supported": 173,
+    "unresolved": 42
+  },
+  "verdict_sources": {
+    "mechanical": 173,
+    "needs_human": 42
+  },
+  "unsupported_rate": {
+    "numerator": 0,
+    "denominator": 173,
+    "definition": "contradicted + unverifiable-asserted / claims with a decided primary verdict (unsure and unresolved excluded, counted)"
+  },
+  "misleading_flags": {
+    "not judged": 215
+  },
+  "unsupported_or_misleading_union": {
+    "numerator": 0,
+    "denominator": 215,
+    "definition": "claims unsupported or flagged misleading, counted once / all claims; unresolved and unjudged claims are not counted as either"
+  },
+  "catalog_consistency": {
+    "consistent": 69,
+    "n/a": 146
+  },
+  "untrusted_seller_instructions_displayed": 0,
+  "real_world_truth": {
+    "n/a": 146,
+    "not assessed: seller statement": 25,
+    "not assessed: synthetic catalog": 44
+  },
+  "omission_findings": {
+    "not assessed (owner-reviewed spec)": 1,
+    "stated requirement not server-checked": 8
+  },
+  "non_claims": {
+    "instruction": 3,
+    "question": 6
+  },
+  "omission_candidates": {
+    "unadjudicated": 0,
+    "excluded": {
+      "not_assessed note": 1,
+      "response made no recommendation": 7,
+      "stated requirement": 66
+    }
+  },
+  "claims_sha256": "9316b2fc869fbb1a92b3e49e8f30675a7fbf39ea633c92ef9f4a3ec0d1505d4b"
+}

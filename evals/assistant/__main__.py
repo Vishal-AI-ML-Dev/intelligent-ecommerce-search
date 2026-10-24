@@ -367,7 +367,7 @@ def _judgements(args: argparse.Namespace) -> int:
 
 def _claims(args: argparse.Namespace) -> int:
     """Post-hoc unsupported-claims extraction for one run (`claims.py`); never pools runs."""
-    from evals.assistant.claims import extract, load_adjudications, summarize
+    from evals.assistant.claims import CLAIMS_VERSION, extract, load_adjudications, summarize
 
     refusal = _out_refusal(args.out)
     if refusal is not None:
@@ -378,16 +378,21 @@ def _claims(args: argparse.Namespace) -> int:
         return 2
     cases = {case.case_id: case for case in load_cases(args.cases)}
     spec = json.loads(args.spec.read_text("utf-8"))
-    claims, omissions, binding = extract(args.run_dir, cases, spec)
+    extraction = extract(args.run_dir, cases, spec)
     args.out.mkdir(parents=True, exist_ok=True)
-    claims_path = args.out / "claims.uc-1.jsonl"
-    lines = "".join(json.dumps(c, ensure_ascii=False) + "\n" for c in claims)
-    claims_path.write_text(lines, "utf-8", newline="\n")
-    lines = "".join(json.dumps(o, ensure_ascii=False) + "\n" for o in omissions)
-    (args.out / "omissions.jsonl").write_text(lines, "utf-8", newline="\n")
-    claims_sha256 = file_sha256(claims_path)
+    version = CLAIMS_VERSION.removesuffix("-claims")
+    outputs = {
+        f"claims.{version}.jsonl": extraction.claims,
+        "non-claims.jsonl": extraction.non_claims,
+        "omissions.jsonl": extraction.omissions,
+        "omission-candidates.jsonl": extraction.candidates,
+    }
+    for name, rows in outputs.items():
+        lines = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+        (args.out / name).write_text(lines, "utf-8", newline="\n")
+    claims_sha256 = file_sha256(args.out / f"claims.{version}.jsonl")
     adjudications = load_adjudications(args.adjudications, claims_sha256)
-    summary = summarize(claims, omissions, adjudications, binding)
+    summary = summarize(extraction, adjudications)
     summary["claims_sha256"] = claims_sha256
     text = json.dumps(summary, indent=2) + "\n"
     (args.out / "claims-summary.json").write_text(text, "utf-8", newline="\n")

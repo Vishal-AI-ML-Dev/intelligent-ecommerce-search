@@ -8,13 +8,23 @@ Scope: server-written displayed text and displayed cited values of each saved re
 notice, the summary, the clarification question, each recommendation's explanation and its
 cited facts. The evidence list (seller-written search results) is not assistant text.
 
-Atomic boundaries (fixed before extraction):
-* Notice and summary: one claim per clause, split at ". ", "; " and ": ".
-* Clarification question: one claim per declarative sentence; questions ("…?") are not claims.
+Atomic boundaries (`uc-2`, a post-hoc amendment of `uc-1`; see below):
+* Notice, summary and clarification question: one claim per clause, split at ". ", "; ", ": "
+  and "? "; the known ", so" status templates (`SO_SPLIT`) are two clauses. A clause that is
+  only a question ("…?") or exactly one of the known instruction sentences of the server
+  templates (`INSTRUCTIONS`) is recorded as a non-claim with its reason; every other clause,
+  including one that mixes an instruction with an assertion, stays a claim.
 * Explanation: one claim per requirement listed in "Matches your stated …" and in "Not verified,
   not given in the catalog: …"; "You stated no requirement that the catalog can check." is one
   claim; each fact in "Cited catalog facts: …" is the same claim as its `facts[]` entry.
 * Cited facts: one claim per `facts[]` entry (field, value) of a recommended product.
+
+Post-hoc amendment (`uc-2`, 2026-10-24): `uc-1` boundaries were fixed before extraction, but
+reading the `uc-1` output of runs 002–004 showed three defects: "?" was not a boundary (a
+question and an instruction were merged into one claim), template instructions ("Please give…")
+were counted as claims, and ", so" merged two assertions of one status notice. `uc-2` was
+defined after seeing that output, so it is not blind; `uc-1` outputs are kept unchanged for
+comparison.
 
 Duplicate rule: within one response a fact rendered in the explanation and listed in `facts[]`
 is one claim with both locations; repeated template clauses in different responses are separate
@@ -30,12 +40,19 @@ synthetic, and a seller title matching its source shows faithful copying, not th
 statement is true. Seller text containing injected instructions is flagged as untrusted
 instructions, not as a claim the assistant endorses. Requested attributes the response does not
 check are coverage/omission findings, never automatically false claims.
+
+Candidate omissions (`uc-2`): words of the (clean) case message that no stated requirement,
+`not_assessed` note or filler word accounts for are listed per phrase as unadjudicated
+candidates, with the words that were accounted for and why. A candidate is a prompt for human
+review, never an omission finding or a requirement by itself: lexical matching cannot tell a
+need from context, and wording that differs from a structured field still yields a candidate.
 """
 
 import hashlib
 import json
 import re
 from collections import Counter
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -44,8 +61,8 @@ from ecommerce_search.assistant.explain import FACT_TEXT, REQUIREMENT_TEXT
 from ecommerce_search.assistant.models import EvidenceProduct
 from evals.assistant.contracts import EvalCase, file_sha256
 
-CLAIMS_VERSION = "uc-1-claims"
-ADJUDICATION_VERSION = "uc-1-adjudication"
+CLAIMS_VERSION = "uc-2-claims"
+ADJUDICATION_VERSION = "uc-2-adjudication"
 PRIMARY = ("supported", "contradicted", "unverifiable-asserted", "unsure")
 SERVER_CHECKED = {
     "category",
@@ -58,11 +75,110 @@ SERVER_CHECKED = {
     "storage_interface",
 }
 SELLER_TEXT_FIELDS = {"title", "subcategory"}
-CLAUSE = re.compile(r"(?<=[.;:])\s+")
+CLAUSE = re.compile(r"(?<=[.;:?])\s+")
+# Server template sentences that only instruct (clarify.py, workflow.py NOTICES).
+INSTRUCTIONS = frozenset(
+    {
+        "Please write it without separators, for example rs 50000.",
+        "Please give a single maximum or minimum, for example under rs 50000.",
+        "Please give each requirement separately, for example 16gb ram.",
+        "Please check it.",
+        "Name a product type, brand or requirement, for example a laptop for coding under "
+        "rs 60000.",
+        "Please remove it and ask again.",
+    }
+)
+# The workflow.py NOTICES sentences joined by ", so": each is two assertions.
+SO_SPLIT = re.compile(
+    r"^(No catalog products matched this request"
+    r"|A generated answer was produced but failed the grounding checks), (so .+)$"
+)
+# Candidate omissions: message words never treated as a need on their own.
+FILLER = frozenset({
+    "a", "an", "the", "and", "or", "of", "to", "for", "with", "in", "on", "at", "from", "by",
+    "my", "me", "i", "you", "your", "it", "is", "am", "be", "will", "can", "that", "this",
+    "some", "something", "please", "need", "want", "looking", "show", "suggest", "give", "find",
+    "get", "while", "mujhe", "ke", "wala", "chahiye", "bhai", "dikhao",
+})  # fmt: skip
+# Message words that state a requirement field (beyond its value).
+FIELD_WORDS = {
+    "category": {"laptops", "phones", "smartphone", "headphone", "earphones", "shoe"},
+    "min_price": {"rs", "over", "above", "min"},
+    "max_price": {"rs", "under", "below", "max"},
+    "ram_gb": {"ram", "memory"},
+    "storage_gb": {"storage", "rom"},
+    "wireless": {"wireless", "wired", "bluetooth"},
+    "anc": {"anc", "noise", "cancelling", "canceling", "cancellation", "active"},
+    "gender": {"men", "women", "man", "woman", "mens", "womens"},
+}
+WORD = re.compile(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")
 
 
 def _clauses(text: str) -> list[str]:
     return [c.strip() for c in CLAUSE.split(text or "") if c.strip()]
+
+
+def _pieces(text: str) -> list[tuple[str, str | None]]:
+    """Atomic pieces of a server-written text, each with its non-claim reason (None: a claim)."""
+    out: list[tuple[str, str | None]] = []
+    for clause in _clauses(text):
+        match = SO_SPLIT.match(clause)
+        for piece in match.groups() if match else (clause,):
+            if piece.endswith("?"):
+                out.append((piece, "question"))
+            else:
+                out.append((piece, "instruction" if piece in INSTRUCTIONS else None))
+    return out
+
+
+def _requirement_words(field: str, value: Any) -> set[str]:
+    words = set(FIELD_WORDS.get(field, set()))
+    for v in value if isinstance(value, list) else [value]:
+        text = str(v).casefold()
+        words |= {text, *WORD.findall(text)}
+        if field in ("ram_gb", "storage_gb"):
+            words |= {f"{text}gb"} | ({"1tb"} if text == "1024" else set())
+        if field in ("min_price", "max_price"):
+            words.add(str(int(Decimal(text))))
+    return words
+
+
+def _candidates(message: str, stated: dict[str, Any], notes: list[str]) -> list[dict[str, Any]]:
+    """Message phrases (exact text and span), each a `candidate` or excluded with its reason."""
+    labelled = []
+    for m in WORD.finditer(message):
+        word = m.group().casefold()
+        field = next((f for f, v in stated.items() if word in _requirement_words(f, v)), None)
+        note = next((n for n in notes if word in WORD.findall(n.split(":")[0].casefold())), None)
+        if field is not None:
+            label = f"stated requirement: {field}"
+        elif note is not None:
+            label = f"not_assessed note: {note.split(':')[0]}"
+        else:
+            label = "filler" if word in FILLER else "candidate"
+        labelled.append([m.start(), m.end(), label])
+    # Filler between two candidate words belongs to the candidate phrase.
+    content = [i for i, item in enumerate(labelled) if item[2] != "filler"]
+    for a, b in zip(content, content[1:], strict=False):
+        if labelled[a][2] == labelled[b][2] == "candidate":
+            for item in labelled[a + 1 : b]:
+                item[2] = "candidate"
+    phrases: list[dict[str, Any]] = []
+    for start, end, label in labelled:
+        if phrases and phrases[-1]["label"] == label:
+            phrases[-1]["span"][1] = end
+        else:
+            phrases.append({"label": label, "span": [start, end]})
+    return [
+        {
+            "status": "candidate" if p["label"] == "candidate" else "excluded",
+            "reason": None if p["label"] == "candidate" else p["label"],
+            "text": message[p["span"][0] : p["span"][1]],
+            "span": p["span"],
+        }
+        for p in phrases
+        if p["label"] != "filler"
+    ]
 
 
 def _mechanical(verdict: str | None, basis: str) -> dict[str, Any]:
@@ -160,10 +276,19 @@ def _satisfies(field: str, requested: str, product: EvidenceProduct) -> bool | N
     return str(value).casefold() == requested.casefold()
 
 
+@dataclass(frozen=True)
+class Extraction:
+    claims: list[dict[str, Any]]
+    omissions: list[dict[str, Any]]
+    non_claims: list[dict[str, Any]]
+    candidates: list[dict[str, Any]]
+    binding: dict[str, Any]
+
+
 def extract(
     run_dir: Path, cases: dict[str, EvalCase], spec: dict[str, Any] | None = None
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    """Claims and omission findings for one run's saved responses, bound to its files."""
+) -> Extraction:
+    """Claims, non-claims, omission findings and candidates for one run, bound to its files."""
     report = json.loads((run_dir / "report.json").read_text("utf-8"))
     responses_path = run_dir / "responses.jsonl"
     responses_sha256 = file_sha256(responses_path)
@@ -172,6 +297,8 @@ def extract(
     items = {c["case_id"]: c for c in (spec or {}).get("cases", [])}
     claims: list[dict[str, Any]] = []
     omissions: list[dict[str, Any]] = []
+    non_claims: list[dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     lines = [line for line in responses_path.read_text("utf-8").splitlines() if line.strip()]
     for line in lines:
         record = json.loads(line)
@@ -203,20 +330,22 @@ def extract(
                 }
             )
 
-        for field in ("notice", "summary"):
-            for n, clause in enumerate(_clauses(response[field] or "")):
-                kind, verdict = _clause_check(clause, response)
-                add(None, f"$.response.{field}#clause{n}", clause, kind, verdict)
+        texts = [(f, f"$.response.{f}#clause", response[f]) for f in ("notice", "summary")]
         if response["clarification"]:
-            for n, sentence in enumerate(_clauses(response["clarification"]["question"])):
-                if not sentence.endswith("?"):
-                    add(
-                        None,
-                        f"$.response.clarification.question#sentence{n}",
-                        sentence,
-                        "C5_interpretation",
-                        _mechanical(None, "request-interpretation premise: human review"),
+            question = response["clarification"]["question"]
+            texts.append(("clarification", "$.response.clarification.question#sentence", question))
+        for field, prefix, text in texts:
+            for n, (piece, reason) in enumerate(_pieces(text or "")):
+                if reason is not None:
+                    non_claims.append(
+                        {**base, "json_path": f"{prefix}{n}", "text": piece, "reason": reason}
                     )
+                elif field == "clarification":
+                    verdict = _mechanical(None, "request-interpretation premise: human review")
+                    add(None, f"{prefix}{n}", piece, "C5_interpretation", verdict)
+                else:
+                    kind, verdict = _clause_check(piece, response)
+                    add(None, f"{prefix}{n}", piece, kind, verdict)
         evidence = {
             p["product_id"]: EvidenceProduct.model_validate(p) for p in response["evidence"]
         }
@@ -267,6 +396,8 @@ def extract(
                         "untrusted_instruction": not clean,
                         "real_world_truth": "not assessed: seller statement",
                     }
+                    # Catalog consistency is recorded above; the missing real-world check alone
+                    # never makes it unsupported: only a human verdict can.
                     verdict = _mechanical(None, "seller free text: faithful copy is not truth")
                     add(
                         rec["product_id"],
@@ -313,13 +444,26 @@ def extract(
                 omissions.append(
                     {**base, "kind": "not assessed (owner-reviewed spec)", "requirement": note}
                 )
+        message = cases[source].message if source in cases else case.message
+        for phrase in _candidates(message, stated, item.get("not_assessed", [])):
+            if phrase["status"] == "candidate" and not response["recommendations"]:
+                phrase |= {"status": "excluded", "reason": "response made no recommendation"}
+            candidates.append(
+                {
+                    **base,
+                    "source_case_id": source,
+                    "source_message": message,
+                    **phrase,
+                    "adjudication": None,
+                }
+            )
     binding = {
         "run_id": report["run_id"],
         "responses_sha256": responses_sha256,
         "responses": len(lines),
         "case_selection": report.get("case_selection"),
     }
-    return claims, omissions, binding
+    return Extraction(claims, omissions, non_claims, candidates, binding)
 
 
 def load_adjudications(path: Path | None, claims_sha256: str) -> dict[str, dict[str, Any]]:
@@ -344,12 +488,8 @@ def load_adjudications(path: Path | None, claims_sha256: str) -> dict[str, dict[
     return out
 
 
-def summarize(
-    claims: list[dict[str, Any]],
-    omissions: list[dict[str, Any]],
-    adjudications: dict[str, dict[str, Any]],
-    binding: dict[str, Any],
-) -> dict[str, Any]:
+def summarize(extraction: Extraction, adjudications: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    claims, omissions, binding = extraction.claims, extraction.omissions, extraction.binding
     unknown = set(adjudications) - {c["claim_id"] for c in claims}
     if unknown:
         raise ValueError(f"adjudications of unknown claims: {sorted(unknown)[:3]}")
@@ -370,6 +510,8 @@ def summarize(
     return {
         **binding,
         "post_hoc": "defined after the runs; descriptive only; not a preregistered pass criterion",
+        "boundaries": f"{CLAIMS_VERSION}: post-hoc amendment of uc-1, defined after its output",
+        "provisional": not adjudications,
         "claims": len(claims),
         "by_type": dict(sorted(Counter(c["claim_type"] for c in claims).items())),
         "primary_verdicts": dict(sorted(primary_counts.items())),
@@ -400,5 +542,21 @@ def summarize(
         "untrusted_seller_instructions_displayed": sum(
             bool(c.get("untrusted_instruction")) for c in claims
         ),
+        "real_world_truth": dict(
+            sorted(Counter(c.get("real_world_truth", "n/a") for c in claims).items())
+        ),
         "omission_findings": dict(sorted(Counter(o["kind"] for o in omissions).items())),
+        "non_claims": dict(sorted(Counter(n["reason"] for n in extraction.non_claims).items())),
+        "omission_candidates": {
+            "unadjudicated": sum(c["status"] == "candidate" for c in extraction.candidates),
+            "excluded": dict(
+                sorted(
+                    Counter(
+                        c["reason"].split(":")[0]
+                        for c in extraction.candidates
+                        if c["status"] == "excluded"
+                    ).items()
+                )
+            ),
+        },
     }
