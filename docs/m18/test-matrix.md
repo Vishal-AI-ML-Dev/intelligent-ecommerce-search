@@ -15,6 +15,7 @@ section.
 | **Fresh full hermetic unit suite** | hermetic unit | **FAILED: 1 failed, 5391 passed, 4 skipped.** `test_unit_isolation.py::test_whole_unit_suite_passes_without_a_database_password` hit `subprocess.TimeoutExpired` on its fixed 1,200 s nested run. Not passed; see `handoff.md`. |
 | `ruff check .` / `ruff format --check .` | lint | exit 0 / exit 0 |
 | AC-14: protected-path diff; M17 SHA-256 listing | recorded command | exit 0 / exit 0 |
+| CI run 40103962367 on `797bc75` (backend, integration, frontend, e2e-fixture) | CI | all success. Hermetic child: 5392 passed, 4 skipped, 957 deselected. Integration: 939 passed, 18 deselected. The Windows outer isolation wrapper is not covered by CI. |
 
 M18-02 coverage by AC:
 - **AC-01:** database side covered.

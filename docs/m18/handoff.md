@@ -2,10 +2,11 @@
 
 ## Current state (2026-10-24, end of M18-02 session)
 
-- **Commits:** M18-02 is committed as `feat(m18): add return data storage and contracts` on
+- **Commits:** M18-02 is `797bc75` (`feat(m18): add return data storage and contracts`), on
   top of `0d9465a` (`docs(m18): freeze return data foundation design`, parent `bf67d11`). Both
-  are pushed to `origin/main` for normal CI only. CI results are recorded in the follow-up
-  docs commit.
+  were pushed to `origin/main` (fast-forward `bf67d11..797bc75`) for normal CI only. This
+  handoff update is a docs-only follow-up commit.
+- **CI on `797bc75`: run 40103962367, all 4 jobs succeeded** (details below).
 - **M18-01 design:** FROZEN (owner approval 2026-10-24, Q1–Q5, `plan.md` §8). M18-02 did not
   change any frozen document other than this handoff and the test-matrix status.
 - **Staging:** untouched. Deployment, staging migrations, grants, imports and credential
@@ -155,14 +156,30 @@ the open full-unit gate.
 - **Preserved untouched:** `docs/m12-diagnostic-tooling.md`, `.claude/`, `docs/m17-handoff.md`,
   `evals/results/m17/unsupported-claims/`, `.env`, and historical artifacts.
 
+## CI results for `797bc75` (run 40103962367, push event, conclusion success)
+
+| Job | Result |
+|---|---|
+| backend lint + hermetic unit suite | success. `ruff check .`: all checks passed; `ruff format --check .`: 485 files already formatted. The hermetic step clears the `POSTGRES_*`, `DB_*`, `APP_ENV*`, `LOG_LEVEL*`, `EMBEDDING_*`, `SEARCH_*` and `RERANKER_*` variables, sets `ECOMMERCE_SEARCH_HERMETIC_CHILD=1` and `POSTGRES_PASSWORD=""`, and runs `uv run --frozen python -m pytest -m "not integration and not real_model" -q -p no:cacheprovider -ra`: **5392 passed, 4 skipped, 957 deselected** (10 min 49 s). Skips: 3 in `test_model_fetch_profiles.py` (no `_winapi` on Linux) and 1 in `test_unit_isolation.py` ("already inside the hermetic child"). |
+| database integration suite (pgvector) | success: `pytest tests/integration -m "integration and not real_model"`, **939 passed, 18 deselected** (4 min 40 s) |
+| frontend typecheck, unit tests, build | success |
+| fixture Playwright against the FastAPI-served build | success |
+
+**Limits of this evidence:**
+- CI runs the isolation test's child directly; the recursive wrapper test skips there by design.
+- A green CI run does **not** mean the Windows outer isolation wrapper passed, and does not
+  fix its 1,200-second timeout. The local outer result stays **FAILED** (5391 passed, 4
+  skipped, 1 isolation subprocess timeout).
+- CI shows that the same hermetic tests pass on Linux.
+
 ## Next task
 
-1. **Owner decision on the isolation-test timeout gate.** It is a pre-existing 1,200-second
+1. **Owner decision on the local isolation-test timeout.** It is a pre-existing 1,200-second
    budget, exceeded on this machine. Options:
    - rerun the full unit suite on an awake, idle machine, or in CI (the CI backend job is the
      isolation child itself);
    - approve a separate change to the budget.
 
    No change was made.
-2. Owner review of the interpretations above, then review `git diff` and commit M18-02.
-3. Only after that, and with approval: **M18-03 Ingestion, Privacy & Fixtures**.
+2. With owner approval: **M18-03 Ingestion, Privacy & Fixtures**. The mandatory importer
+   checks and the error-code mapping are in `contracts.md` §10.
