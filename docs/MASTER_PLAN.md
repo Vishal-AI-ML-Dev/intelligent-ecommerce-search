@@ -282,8 +282,10 @@ Generation models (M16, M19–M21) are not part of the locked stack. Each genera
 - is selected in its milestone through an ADR from measured quality, latency, and cost;
   sequencing amendment (owner, 2026-10-23): for M16 the measured quality, latency and cost
   selection of the Gemini provider is moved to M17. ADR-009 accepts the provider only for
-  local development and the country-gated staging demo on limited smoke evidence. The
-  measurement requirement itself is unchanged and not yet met;
+  local development and the country-gated staging demo. Owner decision (2026-10-24,
+  `a08fb46`): ADR-009's M17 measured suitability assessment is accepted only for retaining
+  Gemini in that existing local and country-gated staging scope (no production, paid-use or
+  comparative selection). M17 itself is not accepted; its frozen human thresholds remain open;
 - sits behind a typed, provider-isolated interface;
 - has its output validated through Pydantic.
 

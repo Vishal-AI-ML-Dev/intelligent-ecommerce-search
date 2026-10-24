@@ -2,8 +2,10 @@
 
 **Status: IN PROGRESS. Not accepted.** M16's prerequisite is met (M16 accepted for development and
 the country-gated staging scope, 2026-10-23, `941f9e0`). The §5 measured provider selection
-moved to M17 by sequencing amendment and is **not met**. No M17 evaluation data, live run or
-human judgement exists yet.
+moved to M17 by sequencing amendment; ADR-009's M17 measured suitability assessment is accepted
+only for the existing local and country-gated staging scope (owner, 2026-10-24, `a08fb46`). M17
+is **not accepted**; the frozen human thresholds remain **open**. No M17 evaluation data, live
+run or human judgement exists yet.
 
 ## Step A (offline harness, mocked tests only) — 2026-10-23
 
