@@ -1,7 +1,30 @@
 # M18 — Acceptance and test matrix
 
-Status: **FROZEN — approved by the owner on 2026-10-24 with the M18-01 design.** No test
-exists yet.
+Status: **FROZEN — approved by the owner on 2026-10-24 with the M18-01 design.** The planned
+tests below are unchanged. M18-02 results (2026-10-24) are recorded in the next
+section.
+
+## M18-02 results (actual, 2026-10-24)
+
+| Run | Kind | Result |
+|---|---|---|
+| `tests/unit/returns/` (canonical forms, contracts, ORM allowlists and enum CHECKs) | hermetic unit | 212 passed |
+| `tests/unit/catalog/test_catalog_models_metadata.py` + `tests/unit/returns/` | hermetic unit | 232 passed |
+| `tests/integration/test_returns_schema.py` + `test_returns_grants.py` | database integration (scratch DBs, real per-test LOGIN roles) | 175 passed |
+| Full integration, `not real_model` (run before the metadata-test edit and the format-only change) | database integration | 939 passed, 18 deselected |
+| **Fresh full hermetic unit suite** | hermetic unit | **FAILED: 1 failed, 5391 passed, 4 skipped.** `test_unit_isolation.py::test_whole_unit_suite_passes_without_a_database_password` hit `subprocess.TimeoutExpired` on its fixed 1,200 s nested run. Not passed; see `handoff.md`. |
+| `ruff check .` / `ruff format --check .` | lint | exit 0 / exit 0 |
+| AC-14: protected-path diff; M17 SHA-256 listing | recorded command | exit 0 / exit 0 |
+
+M18-02 coverage by AC:
+- **AC-01:** database side covered.
+- **AC-02:** FK/UNIQUE/CHECK direct-SQL backstops, migration round trip, and T2/T4/T6/T8
+  database backstops covered. Snapshot-hash equality and T1/T3/T5/T7 are M18-03.
+- **AC-03:** covered.
+- **AC-04:** storage and join covered. `dataset_mismatch` is M18-03; API provenance is M18-04.
+- **AC-05:** storage and Pydantic covered. Response schemas are M18-04.
+- **AC-13 (3)/(4):** covered.
+
 "Kind" uses the reporting labels required by MASTER_PLAN §28:
 - hermetic unit;
 - database integration (scratch pgvector database, real per-test roles where stated);

@@ -88,7 +88,8 @@ def test_constraint_and_index_names_match_models_and_limits(migrated_engine):
                 text(
                     "SELECT c.conname FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid "
                     "JOIN pg_namespace n ON n.oid=t.relnamespace "
-                    "WHERE n.nspname='public' AND t.relname <> 'alembic_version'"
+                    "WHERE n.nspname='public' AND t.relname <> 'alembic_version' "
+                    "AND c.contype <> 't'"  # M18: constraint triggers are migration-only
                 )
             ).scalars()
         )
@@ -407,7 +408,7 @@ def test_dataset_version_must_be_a_canonical_positive_integer(migrated_engine, v
 def _constraint_definitions(text_blob):
     """name -> normalized definition, using balanced parentheses after each CONSTRAINT."""
     found = {}
-    for m in re.finditer(r"CONSTRAINT (\w+) ", text_blob):
+    for m in re.finditer(r"CONSTRAINT (?!TRIGGER )(\w+) ", text_blob):
         i, depth, seen = m.end(), 0, False
         j = i
         while j < len(text_blob):
@@ -437,7 +438,7 @@ def test_model_and_migration_constraint_definitions_are_identical(settings):
     config = Config("alembic.ini")
     config.attributes["database"] = "offline_sql_only"  # offline mode never connects
     config.output_buffer = io.StringIO()
-    command.upgrade(config, "0001:0006", sql=True)  # M14: the model now includes 0006
+    command.upgrade(config, "0001:0007", sql=True)  # M18: the model now includes 0007
     migration = _constraint_definitions(config.output_buffer.getvalue())
 
     model = {}

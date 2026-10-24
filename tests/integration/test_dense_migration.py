@@ -82,11 +82,11 @@ def test_round_trip_0003_0004_0003_head_and_head_is_a_no_op(settings, scratch_da
                 ).scalar_one()
                 == 1
             )
-        migrator.upgrade(scratch_database)  # M14: head is now 0006 (listing decision history)
-        assert TABLE in tables(engine) and revision(engine) == "0006"
+        migrator.upgrade(scratch_database)  # M18: head is now 0007 (return data foundation)
+        assert TABLE in tables(engine) and revision(engine) == "0007"
         before = tables(engine)
         migrator.upgrade(scratch_database)  # head again: no-op
-        assert tables(engine) == before and revision(engine) == "0006"
+        assert tables(engine) == before and revision(engine) == "0007"
     finally:
         engine.dispose()
 

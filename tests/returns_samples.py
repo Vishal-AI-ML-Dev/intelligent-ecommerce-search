@@ -1,0 +1,125 @@
+"""Valid SYNTHETIC `return-data-v1` records in JSON input form (one per entity, all linked).
+
+Test fixtures only: no names, addresses or personal data. `CATALOG_SHA` stands in for the
+catalog raw-line hash; database tests replace it with the stored value.
+"""
+
+CATALOG_SHA = "c" * 64
+
+DATASET = {
+    "dataset_id": "synthetic-returns-test",
+    "dataset_version": 1,
+    "source_type": "synthetic",
+    "source_name": "M18 test fixture",
+    "source_description": "Synthetic records written for the M18 storage tests.",
+    "rights_note": "Authored by this project for testing.",
+    "license_identifier": None,
+    "authored_on": "2026-10-24",
+    "generator": "tests/returns_samples.py",
+    "is_synthetic": True,
+    "notes": None,
+}
+
+RECORDS: dict[str, dict] = {
+    "orders": {
+        "order_id": "SYN-ORD-00001",
+        "customer_ref": "SYN-CUST-00001",
+        "ordered_at": "2026-01-05T10:00:00+05:30",
+        "currency": "INR",
+        "is_synthetic": True,
+    },
+    "order_items": {
+        "order_item_id": "SYN-OI-00001",
+        "order_id": "SYN-ORD-00001",
+        "product_id": "SYN-SHO-0001",
+        "quantity": 1,
+        "unit_price": "2499.00",
+        "catalog_dataset_id": "synthetic-seed",
+        "catalog_dataset_version": "1",
+        "catalog_raw_sha256": CATALOG_SHA,
+        "is_synthetic": True,
+    },
+    "shipments": {
+        "shipment_id": "SYN-SHP-00001",
+        "order_id": "SYN-ORD-00001",
+        "carrier_ref": "synthetic-carrier-a",
+        "status": "delivered",
+        "shipped_at": "2026-01-06T09:00:00+05:30",
+        "promised_delivery_by": "2026-01-09T21:00:00+05:30",
+        "delivered_at": "2026-01-08T14:30:00+05:30",
+        "is_synthetic": True,
+    },
+    "delivery_events": {
+        "event_id": "SYN-DEV-00001",
+        "shipment_id": "SYN-SHP-00001",
+        "occurred_at": "2026-01-08T14:30:00+05:30",
+        "event_type": "delivered",
+        "source": "carrier",
+        "is_synthetic": True,
+    },
+    "returns": {
+        "return_id": "SYN-RET-00001",
+        "order_item_id": "SYN-OI-00001",
+        "requested_at": "2026-01-10T11:00:00+05:30",
+        "quantity": 1,
+        "customer_reason_code": "SIZE_TOO_SMALL",
+        "status": "received",
+        "received_at": "2026-01-14T16:00:00+05:30",
+        "is_synthetic": True,
+    },
+    "return_comments": {
+        "comment_id": "SYN-RCM-00001",
+        "return_id": "SYN-RET-00001",
+        "submitted_at": "2026-01-10T11:05:00+05:30",
+        "text": "The shoe runs one size small. जूता छोटा है।",
+        "is_synthetic": True,
+    },
+    "inspection_observations": {
+        "observation_id": "SYN-INS-00001",
+        "return_id": "SYN-RET-00001",
+        "observed_at": "2026-01-15T10:00:00+05:30",
+        "inspector_ref": "SYN-INSP-00001",
+        "condition": "as_new",
+        "note": None,
+        "is_synthetic": True,
+    },
+    "customer_reviews": {
+        "review_id": "SYN-REV-00001",
+        "product_id": "SYN-SHO-0001",
+        "order_item_id": "SYN-OI-00001",
+        "rating": 4,
+        "submitted_at": "2026-01-20T12:00:00+05:30",
+        "text": None,
+        "is_synthetic": True,
+    },
+    "support_complaints": {
+        "complaint_id": "SYN-CMP-00001",
+        "order_id": "SYN-ORD-00001",
+        "order_item_id": "SYN-OI-00001",
+        "product_id": "SYN-SHO-0001",
+        "opened_at": "2026-01-11T09:00:00+05:30",
+        "channel": "chat",
+        "customer_topic": "return_process",
+        "text": "Asked how to send the item back.",
+        "is_synthetic": True,
+    },
+    "correction_cases": {
+        "case_id": "SYN-CASE-00001",
+        "product_id": "SYN-SHO-0001",
+        "catalog_dataset_id": "synthetic-seed",
+        "catalog_dataset_version": "1",
+        "catalog_raw_sha256": CATALOG_SHA,
+        "opened_at": "2026-02-01T10:00:00+05:30",
+        "opened_by_ref": "SYN-STAFF-00001",
+        "focus_area": "size_information",
+        "status": "opened",
+        "note": None,
+        "is_synthetic": True,
+    },
+    "correction_case_evidence": {
+        "case_id": "SYN-CASE-00001",
+        "evidence_type": "return",
+        "evidence_id": "SYN-RET-00001",
+        "is_synthetic": True,
+    },
+}

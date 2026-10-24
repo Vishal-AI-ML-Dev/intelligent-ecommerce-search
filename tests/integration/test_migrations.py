@@ -84,10 +84,11 @@ def test_revision_0002_creates_the_m2_catalog_tables_and_no_search_table(
     assert _public_tables(settings, scratch_database) == sorted(M2_TABLES)
 
 
-def test_head_adds_only_the_derived_and_listing_tables(settings, scratch_database, migrator):
+def test_head_adds_only_the_derived_listing_and_return_tables(settings, scratch_database, migrator):
     # M3 intentionally superseded the M2 expectation that head has no search table; M4 likewise
     # adds exactly one derived table, the dense embedding index. M13 (0005) adds the seller
-    # listing history and M14 (0006) the inferred listing decision history.
+    # listing history, M14 (0006) the inferred listing decision history and M18 (0007) the
+    # return data foundation.
     migrator.upgrade(scratch_database)
     assert _public_tables(settings, scratch_database) == sorted(
         [
@@ -102,5 +103,20 @@ def test_head_adds_only_the_derived_and_listing_tables(settings, scratch_databas
             "listing_decision_proposals",
             "listing_decision_probabilities",
             "listing_decision_reasons",
+            "return_datasets",
+            "return_import_batches",
+            "return_import_files",
+            "return_import_file_contents",
+            "orders",
+            "order_items",
+            "shipments",
+            "delivery_events",
+            "returns",
+            "return_comments",
+            "inspection_observations",
+            "customer_reviews",
+            "support_complaints",
+            "correction_cases",
+            "correction_case_evidence",
         ]
     )

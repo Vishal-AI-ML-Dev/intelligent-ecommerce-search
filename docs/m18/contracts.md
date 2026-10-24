@@ -2,7 +2,8 @@
 
 Status: **FROZEN — M18-01 design approved by the owner on 2026-10-24** (revision 2, with the
 owner qualifications recorded in `plan.md` §8). Decision IDs refer to `plan.md` §8. Changes
-after the freeze need owner approval. Nothing is implemented.
+after the freeze need owner approval. M18-02 (storage, contracts, grants) is implemented;
+its implementation boundaries are recorded in §10.
 
 ## 1. Versions and conventions
 
@@ -611,3 +612,53 @@ The third tab, "Retailer returns", lives in `frontend/src/domains/returns/`.
 Text is rendered only as React text. No AI, classification, dashboard, root-cause or approval
 controls. The HTTP client gains GET, an `Authorization` header and multipart support; its
 logging rule is unchanged.
+
+## 10. M18-02 implementation boundaries (owner-directed record, 2026-10-24)
+
+These notes clarify how M18-02 implements §1–4. They change no rule above and waive no check.
+
+- **Catalog snapshot version:** `catalog_dataset_version` uses the catalog's existing text
+  representation (`catalog_datasets.dataset_version`, `^[1-9][0-9]{0,8}$`). It is not
+  converted to an integer, which lets (`catalog_dataset_id`, `catalog_dataset_version`)
+  reference `catalog_datasets` by foreign key.
+- **Redacted storage bound:** stored `text` and `note` allow twice the §4.4 limits (4,000 /
+  2,000 code points), because `redaction-1` tokens can be longer than the text they replace.
+  The raw input limits (2,000 / 1,000) are unchanged and are enforced on raw input before
+  redaction.
+- **Not database-enforced; mandatory importer checks (M18-03):** the database checks
+  existence and dataset-version scoping, but not these rules:
+  - equality of the snapshot triple with the stored `raw_catalog_records` row
+    (`source_key = product_id`, `raw_sha256`);
+  - the evidence-to-product relation and that the evidence target exists for its
+    `evidence_type`;
+  - the cross-table time rules (§3.1), and nothing later than the import time;
+  - an inspection only on a `received` or `closed` return;
+  - consistency of a complaint's `order_id` and `product_id` given without `order_item_id`.
+
+  M18-03 must check all of them in Phase A and recheck them under the advisory lock in
+  Phase B (§4.3).
+- **Database backstops that are enforced:**
+  - composite foreign keys per dataset version;
+  - an item's product agrees with a review or complaint that names that item;
+  - one shipment per order;
+  - natural keys and the 152-character evidence key;
+  - CHECKs;
+  - append-only triggers;
+  - the deferred quantity trigger. It serializes writers per order item and refuses
+    REPEATABLE READ, so commits must use READ COMMITTED (§4.3).
+- **Privileges** (`returns-grants-1`, §2.1):
+  - The API role's pre-M18 privileges are preserved through an explicit table list; nothing
+    pre-M18 is revoked.
+  - The API role has no privilege on `return_import_file_contents`.
+  - The importer has SELECT + INSERT on M18 tables, INSERT only on raw contents, and
+    column-level catalog SELECT only.
+  - The script additionally refuses superuser roles, members of the table owner, table
+    owners, and holders of default privileges.
+- **Status-dependent field errors** (mapping for the M18-03 `RowError`):
+
+  | Case | Code |
+  |---|---|
+  | A status-required field is missing (`delivered_at` when `delivered`; `received_at` when `received`) | `required` |
+  | The status forbids a field that is present (`delivered_at` when not `delivered`; `received_at` on `cancelled`) | `format` |
+  | Row-local time order (`shipped_at > delivered_at`, `requested_at > received_at`) | `temporal_order` |
+  | A complaint without `order_id`, `order_item_id` or `product_id` | `required` |

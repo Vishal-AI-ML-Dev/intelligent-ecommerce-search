@@ -1,0 +1,273 @@
+"""The M18 field, column and enum sets, transcribed from the frozen `docs/m18/contracts.md`.
+
+Kept literal (never derived from the code under test) so a column or field added to the code
+without a contract change fails the AC-01 / AC-05 tests.
+"""
+
+# contracts §3: each entity's input fields (all of them hashed by `record_sha256`).
+CONTRACT_FIELDS: dict[str, set[str]] = {
+    "orders": {"order_id", "customer_ref", "ordered_at", "currency", "is_synthetic"},
+    "order_items": {
+        "order_item_id",
+        "order_id",
+        "product_id",
+        "quantity",
+        "unit_price",
+        "catalog_dataset_id",
+        "catalog_dataset_version",
+        "catalog_raw_sha256",
+        "is_synthetic",
+    },
+    "shipments": {
+        "shipment_id",
+        "order_id",
+        "carrier_ref",
+        "status",
+        "shipped_at",
+        "promised_delivery_by",
+        "delivered_at",
+        "is_synthetic",
+    },
+    "delivery_events": {
+        "event_id",
+        "shipment_id",
+        "occurred_at",
+        "event_type",
+        "source",
+        "is_synthetic",
+    },
+    "returns": {
+        "return_id",
+        "order_item_id",
+        "requested_at",
+        "quantity",
+        "customer_reason_code",
+        "status",
+        "received_at",
+        "is_synthetic",
+    },
+    "return_comments": {"comment_id", "return_id", "submitted_at", "text", "is_synthetic"},
+    "inspection_observations": {
+        "observation_id",
+        "return_id",
+        "observed_at",
+        "inspector_ref",
+        "condition",
+        "note",
+        "is_synthetic",
+    },
+    "customer_reviews": {
+        "review_id",
+        "product_id",
+        "order_item_id",
+        "rating",
+        "submitted_at",
+        "text",
+        "is_synthetic",
+    },
+    "support_complaints": {
+        "complaint_id",
+        "order_id",
+        "order_item_id",
+        "product_id",
+        "opened_at",
+        "channel",
+        "customer_topic",
+        "text",
+        "is_synthetic",
+    },
+    "correction_cases": {
+        "case_id",
+        "product_id",
+        "catalog_dataset_id",
+        "catalog_dataset_version",
+        "catalog_raw_sha256",
+        "opened_at",
+        "opened_by_ref",
+        "focus_area",
+        "status",
+        "note",
+        "is_synthetic",
+    },
+    "correction_case_evidence": {"case_id", "evidence_type", "evidence_id", "is_synthetic"},
+}
+DATASET_FIELDS = {
+    "dataset_id",
+    "dataset_version",
+    "source_type",
+    "source_name",
+    "source_description",
+    "rights_note",
+    "license_identifier",
+    "authored_on",
+    "generator",
+    "is_synthetic",
+    "notes",
+}
+
+# contracts §2: per-row provenance; §5.1: per-kind redaction counts where free text is stored.
+ROW_PROVENANCE = {
+    "id",
+    "dataset_pk",
+    "batch_pk",
+    "source_file_pk",
+    "source_row",
+    "source_record_id",
+    "record_sha256",
+    "is_synthetic",
+}
+REDACTION_COUNTS = {
+    "redacted_email_count",
+    "redacted_upi_count",
+    "redacted_number_count",
+    "redacted_pin_count",
+}
+FREE_TEXT_TABLES = {
+    "return_comments",
+    "inspection_observations",
+    "customer_reviews",
+    "support_complaints",
+    "correction_cases",
+}
+COUNTED_ENTITIES = tuple(CONTRACT_FIELDS)
+STORAGE_COLUMNS: dict[str, set[str]] = {
+    "return_datasets": {"id", *DATASET_FIELDS, "descriptor_sha256"},
+    "return_import_batches": {
+        "id",
+        "batch_id",
+        "dataset_pk",
+        "contract_version",
+        "transformation_version",
+        "redaction_version",
+        "bundle_sha256",
+        "format",
+        "file_count",
+        "total_bytes",
+        *(f"{e}_{k}" for e in COUNTED_ENTITIES for k in ("received", "new", "unchanged")),
+        "imported_by_label",
+        "imported_at",
+    },
+    "return_import_files": {
+        "id",
+        "batch_pk",
+        "name",
+        "entity",
+        "media_type",
+        "size_bytes",
+        "raw_sha256",
+        "row_count",
+    },
+    "return_import_file_contents": {"file_pk", "raw_bytes", "raw_sha256"},
+    **{
+        table: ROW_PROVENANCE | fields | (REDACTION_COUNTS if table in FREE_TEXT_TABLES else set())
+        for table, fields in CONTRACT_FIELDS.items()
+    },
+}
+M18_TABLES = set(STORAGE_COLUMNS)
+
+# Words that would mean a hypothesis, decision, outcome or sanction field (AC-05, AC-13 (4)).
+FORBIDDEN_FIELD_WORDS = {
+    "refund",
+    "resolution",
+    "resolved",
+    "fault",
+    "responsible",
+    "responsibility",
+    "fraud",
+    "abuse",
+    "ban",
+    "sanction",
+    "decision",
+    "decided",
+    "approved",
+    "outcome",
+    "hypothesis",
+    "verdict",
+    "score",
+    "risk",
+    "label",
+    "classification",
+    "category",
+}
+# `imported_by_label` is the batch's non-secret token label (contracts §6), not a data label.
+FORBIDDEN_WORD_EXCEPTIONS = {"imported_by_label"}
+
+# contracts §3 enumerations.
+ENUM_VALUES: dict[str, set[str]] = {
+    "shipment_status": {
+        "pending",
+        "in_transit",
+        "delivered",
+        "delivery_failed",
+        "returned_to_origin",
+        "unknown",
+    },
+    "delivery_event_type": {
+        "dispatched",
+        "in_transit",
+        "out_for_delivery",
+        "delivered",
+        "delivery_attempt_failed",
+        "delay_notified",
+        "damage_reported_by_carrier",
+        "returned_to_origin",
+    },
+    "delivery_event_source": {"carrier", "warehouse"},
+    "return_status": {"requested", "in_transit_to_warehouse", "received", "closed", "cancelled"},
+    "reason_code": {
+        "SIZE_TOO_SMALL",
+        "SIZE_TOO_LARGE",
+        "NOT_AS_DESCRIBED",
+        "LOOKS_DIFFERENT_FROM_IMAGE",
+        "SPECIFICATION_DIFFERENT",
+        "DEFECTIVE_OR_NOT_WORKING",
+        "ARRIVED_DAMAGED",
+        "WRONG_ITEM_RECEIVED",
+        "ARRIVED_LATE",
+        "NO_LONGER_NEEDED",
+        "OTHER",
+        "NOT_PROVIDED",
+    },
+    "inspection_condition": {
+        "as_new",
+        "used_good",
+        "damaged",
+        "functional_fault_confirmed",
+        "no_fault_found",
+        "item_differs_from_order",
+        "parts_missing",
+        "not_assessable",
+    },
+    "complaint_channel": {"email", "chat", "phone", "other"},
+    "complaint_topic": {
+        "delivery",
+        "damaged",
+        "wrong_item",
+        "product_issue",
+        "return_process",
+        "other",
+    },
+    "focus_area": {
+        "listing_text",
+        "size_information",
+        "specification",
+        "imagery",
+        "packaging",
+        "product_quality",
+        "fulfilment",
+        "logistics",
+        "other",
+    },
+    "correction_case_status": {"opened"},
+    "evidence_type": {
+        "return",
+        "return_comment",
+        "inspection_observation",
+        "customer_review",
+        "support_complaint",
+        "shipment",
+        "delivery_event",
+    },
+    "currency": {"INR"},
+    "source_type": {"synthetic"},
+}

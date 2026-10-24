@@ -36,6 +36,23 @@ EXPECTED_TABLES = {
     "listing_decision_proposals",
     "listing_decision_probabilities",
     "listing_decision_reasons",
+    # Milestone 18 adds exactly fifteen append-only return-data tables (migration 0007,
+    # docs/m18/contracts.md §2–3; no JSON, no vector or search column, no non-constraint index).
+    "return_datasets",
+    "return_import_batches",
+    "return_import_files",
+    "return_import_file_contents",
+    "orders",
+    "order_items",
+    "shipments",
+    "delivery_events",
+    "returns",
+    "return_comments",
+    "inspection_observations",
+    "customer_reviews",
+    "support_complaints",
+    "correction_cases",
+    "correction_case_evidence",
 }
 SEARCH_TABLE = "product_search_documents"
 EMBEDDING_TABLE = "product_embeddings"
