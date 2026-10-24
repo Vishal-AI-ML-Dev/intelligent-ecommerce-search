@@ -25,13 +25,15 @@ Default off everywhere unless explicitly enabled.
     input and 71–186 output tokens, 1.14–1.37 s generation latency;
   - the asst-policy-3 structured-output schema is accepted by the live API.
 - **Sequencing amendment, not a waiver:** the master plan (§5) requires the provider to be
-  selected from measured quality, latency and cost. That measurement has **not** been done. The
-  owner moved it to M17, where comprehensive provider quality, latency and cost evaluation
-  remains pending. No measured provider selection is claimed.
+  selected from measured quality, latency and cost. The owner moved that measurement to M17.
+  **M17 measured suitability (owner, 2026-10-24):** the assessment below ("M17 measured
+  suitability assessment") is accepted **only for retaining Gemini in this existing scope**. It
+  is not a production, paid-use or comparative selection, and it does not accept M17.
 - **Not approved:** paid billing, paid fallback, other providers or production use.
 
 History: Proposed 2026-10-22 (mocked tests only); accepted for local development only on
-2026-10-23; amended the same day to add the country-gated staging demo.
+2026-10-23; amended the same day to add the country-gated staging demo; M17 measured
+suitability assessment accepted for retaining this scope on 2026-10-24.
 
 ## Date
 
@@ -137,3 +139,53 @@ Owner decisions (2026-10-23):
   `docs/m16-progress.md` for the limitations and M17 for evaluation.
 - Changing the provider later requires only a new adapter behind `GenerationProvider` and a new
   ADR; the workflow, API and UI do not change.
+
+## M17 measured suitability assessment (2026-10-24) — accepted, scope-limited
+
+**Owner decision (2026-10-24): accepted only for retaining Gemini `gemini-3.5-flash-lite` (free
+tier) in the existing local-development and country-gated staging scope.** No production,
+paid-use or comparative-superiority approval; M17 itself is not accepted (its frozen
+human-threshold gate is open). Source of every figure: `docs/m17-evidence-report.md` (frozen `abe-v1`,
+synthetic catalog, `gemini-3.5-flash-lite` free tier, one attempt per call, 20 s timeout). Runs
+are reported separately, never pooled. Only one provider was measured, so this is a
+single-candidate suitability assessment, not a comparison between providers.
+
+### Recorded evidence
+
+| | Run 001 (40, complete) | Run 002 (23/40, stopped) | Run 003 (2/17, stopped) | Run 004 (15/15, complete) |
+|---|---|---|---|---|
+| Calls / provider failures | 29 / 0 | 12 / 2 (`f01` timeout, `g02` invalid_response) | 2 / 1 (`f03` timeout) | 15 / 0 |
+| Provider call p50 / max | 2.5 s / 13.0 s | 13.8 s / 17.6 s | 1.5 s / 20.2 s (n=2) | 1.6 s / 7.0 s |
+| Hard gates (prose, citations, server-checked requirements) | met | no verdict (incomplete); 0 prose, 0 bad citations, 0 failed checks | no verdict (incomplete); same | met (subset) |
+| Human: outcome appropriate (scored) | not reviewable | 17/21 | 1/2 | 13/15 |
+| Unsupported claims (post-hoc `uc-2`, catalog support) | not measurable | 4/215 | 0/27 | 0/286 |
+| Injection targets selected | 0/12 | not run | not run | 0/12 |
+| Paid-equivalent estimate (USD; billing not verified) | 0.0167945 | partial 0.0060818 | partial 0.0006326 | 0.0089916 |
+
+Caveats: one reviewer (`ann-1`), AI-assisted and owner-endorsed judgements; no complete run is
+human-reviewed, so the frozen human thresholds are not evaluated; timeout origins are unknown;
+the free tier is published as free of charge and actual billing was not checked; free-tier
+content may be used by Google, so only synthetic data may be sent.
+
+### Assessment
+
+- **Quality:** on the synthetic catalog the bounded design (IDs and cited fields only; text
+  rendered from the catalog) kept 0 displayed prose, 0 invalid citations and 0 failed
+  server-checked requirements in every run, and the post-hoc unsupported claims found are
+  server-template notices in diagnostic/contract cases (`c03`, `c05`) and `u01`, not model prose. Use-suitability needs (`f04`, `f06`) were not addressed. This supports the
+  current limited scope; it is not production-quality evidence.
+- **Latency:** usually 1.5–2.5 s p50, but one run had a 13.8 s p50 and two calls reached the
+  20 s timeout. Latency is not stable enough to promise a response time.
+- **Cost:** zero on the free tier as published; paid-equivalent estimates are about USD 0.0006
+  per successful call. Paid use is not approved.
+- **Reliability (main weakness):** 3 failures in 58 calls across four runs (2 timeouts, 1 invalid
+  response); two of four runs stopped early under the stop-on-timeout rule. The fallback
+  (`generation_unavailable`) worked in every failure; nothing failed open.
+
+**Conclusion (accepted as worded, 2026-10-24):** the measured evidence is
+consistent with keeping Gemini `gemini-3.5-flash-lite` (free tier) as the optional generation
+provider for the **existing scope only** (local development and the country-gated staging demo,
+generation optional, deterministic fallback), with reliability recorded as a known limitation.
+It does not support production use, paid use, or a claim that this provider is better than any
+alternative. Any wider scope (production, paid tier, another provider) needs new measurement
+and a new owner decision.
