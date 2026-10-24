@@ -4,8 +4,9 @@
 the country-gated staging scope, 2026-10-23, `941f9e0`). The §5 measured provider selection
 moved to M17 by sequencing amendment; ADR-009's M17 measured suitability assessment is accepted
 only for the existing local and country-gated staging scope (owner, 2026-10-24, `a08fb46`). M17
-is **not accepted**; the frozen human thresholds remain **open**. No M17 evaluation data, live
-run or human judgement exists yet.
+is **not accepted**; the frozen human thresholds remain **open**. Evaluation data, four live runs
+(`abe-v1-live-001`–`004`, none both complete and human-reviewed) and `ann-1` human judgements
+exist; see `docs/m17-evidence-report.md`. This page is the step-by-step build record.
 
 ## Step A (offline harness, mocked tests only) — 2026-10-23
 
