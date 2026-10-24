@@ -473,6 +473,8 @@ Return-intelligence entities (M18) are typed, versioned contracts:
 - human decisions;
 - outcomes.
 
+M18 implements products/SKU linkage through correction cases. Proposed corrections and human decisions are introduced with their own versioned contracts in M21, outcomes in M22.
+
 Every record carries these provenance fields:
 
 ```text
@@ -532,6 +534,8 @@ Prepare at least 30 representative products for real human review. Do not mark t
    - feedback;
    - proposed corrections and human decisions;
    - measured or simulated outcomes, each marked as such.
+
+   Proposed corrections and human decisions are added by M21, outcomes by M22.
 8. **Public reviews.** Legally permitted public review or complaint data is used only as review evidence. A review is never treated as a confirmed return event.
 9. **Return-reason and root-cause evaluation.** Build a separate human-reviewed evaluation set. Generated labels are never authoritative ground truth.
 10. **Separate versioning.** Search, buyer-RAG, listing, policy-risk, return-reason, root-cause, and HITL/outcome evaluation datasets are versioned separately.
@@ -1097,7 +1101,7 @@ M14 -> M15 -> M21 -> M22 -> M25B -> M23B -> M24B -> M26B
 | M26A | M23A and M24A; local stability (Milestone 26) | Owner approval before any chargeable action; cloud account and billing are owner decisions. Blocks only M26B. |
 | M16 | M10 prerequisite (the development-scoped M10 closure does not by itself satisfy it; the owner decides); generation-provider ADR | **ACCEPTED (owner, 2026-10-23) for the implemented development and country-gated staging scope.** M10's reduced-scope closure accepted for M16 only (no gate waived). ADR-009 accepts the Gemini free tier for local development and the country-gated staging demo. The §5 measured provider selection is moved to M17 (§5 sequencing amendment), not met. Evidence: `docs/m16-progress.md` |
 | M17 | M16; a separate human-reviewed answer set | Real human reviewers. **ACCEPTED (owner, 2026-10-24) for the documented development and country-gated staging evaluation scope** (evidence `d2d1e97`, run `abe-v1-live-005`; one AI-assisted owner-endorsed reviewer, not independent). Evidence: `docs/m17-evidence-report.md` |
-| M18 | Return data source with recorded provenance and rights; PII redaction | Data source not chosen |
+| M18 | Return data source with recorded provenance and rights; PII redaction | Data source chosen (owner, 2026-10-24): project-authored synthetic linked dataset over catalog v1, every record `is_synthetic`; real retailer data not authorized (§10 item 14 unchanged). Details: `docs/m18/plan.md`. |
 | M19 | M18; a separate human-reviewed return-reason set; generation-provider ADR | Real human reviewers |
 | M20 | M18, M19; M13 listing versions (exist) | Separate human-reviewed root-cause set |
 | M14 (resume) | Recorded M14 blockers resolved by the owner | Human reviews (0 recorded), calibration, gated comparison arm, run-quality failure, 5 unsent dev listings, test split, upstream rights |
