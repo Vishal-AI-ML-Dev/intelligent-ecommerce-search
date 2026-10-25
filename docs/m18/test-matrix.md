@@ -26,6 +26,57 @@ M18-02 coverage by AC:
 - **AC-05:** storage and Pydantic covered. Response schemas are M18-04.
 - **AC-13 (3)/(4):** covered.
 
+## M18-03A results (actual, 2026-10-25; uncommitted)
+
+M18-03A covers validation and privacy only (Phase A steps 1–4, in memory). Its tests are
+hermetic unit tests in `tests/unit/returns/`.
+
+| Run | Kind | Result |
+|---|---|---|
+| `uv run pytest tests/unit/returns -q` (M18-02's 212 + 178 new; after the commit-checkpoint review fixes) | hermetic unit | **390 passed** |
+| `uv run ruff check .` / `uv run ruff format --check .` | lint | all checks passed / 495 files formatted |
+| AC-14 protected-path diff against `bf67d11` | recorded command | exit 0 |
+| AC-14 M17 SHA-256 listing | recorded command | exit 0 at the M18-03A commit checkpoint: the original M18-02 listing was recovered from the M18-02 session scratchpad (`ac14-m17-untracked.sha256`); its own SHA-256 equals the recorded `cf74568d…41adf7`; `sha256sum -c` reported all 10 files OK; and the directory holds no extra files |
+| Full unit suite, nested isolation test, integration suite | — | **not run** (not authorized in this package). The M18-02 local isolation timeout stays FAILED. |
+
+New tests:
+- `test_returns_redaction.py` (18): each `redaction-1` kind and token, order and counts, text
+  outside the patterns left unchanged, G1–G3 on 3,000 seeded random strings, the 2× storage
+  bound, and preview truncation with re-redaction.
+- `test_returns_bundle_parsing.py` (55):
+  - envelope: unexpected, repeated and hostile part names; `scenarios.json` refused; missing
+    anchor;
+  - §4.4 limits at the limit and limit + 1: files, file / manifest / bundle bytes, entity and
+    bundle rows, CSV columns, CSV field bytes;
+  - JSON failures: duplicate keys, BOM, invalid UTF-8, NaN, depth 4/5, U+0000 and lone
+    surrogates;
+  - CSV: BOM, LF/CRLF equivalence, quoting, syntax errors with line, ragged rows, headers;
+  - manifest entries and set consistency; `bundle_sha256`.
+- `test_returns_validation.py` (70):
+  - JSON/CSV equivalence of records, `record_sha256` and `records_sha256`;
+  - field rules, with each code; the status-field mapping;
+  - `looks_personal` on IDs, `carrier_ref` and dataset text;
+  - every in-bundle §3.1 structural rule;
+  - deferred references not reported;
+  - all seven §3.1 conflict examples accepted with zero errors;
+  - 199/200/201/1,000/1,001-error counts, lower bound and truncation;
+  - deterministic ordering.
+- `test_returns_error_privacy.py` (35): hostile values on 23 surfaces (file names, keys,
+  headers, manifest, IDs, enums, timestamps, money, integers, actor refs, free text, dataset
+  text, version, syntax errors). None appear in the report or in captured logs; validation
+  emits no log records. Also covers the preview rules, the code-template set, and safe
+  key/pointer echo, and pins `KNOWN_KEYS` to the literal contract name sets.
+
+**AC status after M18-03A.** Partial only; no AC is closed by M18-03A alone.
+- **AC-06:** the unit side is covered for Phase A steps 1–4. The phase-5/Phase B codes are
+  M18-03B.
+- **AC-09:** the domain limits are covered. API 413/429 and the temp-file check are M18-04.
+- **AC-10:** domain redaction and error privacy are covered. The fixture scan (§5.3) needs the
+  M18-03C dataset; API surfaces are M18-04.
+- **Not started:** AC-07 and AC-08 (except format equivalence of records), which are M18-03B.
+- **Concurrency T1–T8:** the M18-03B service-level tests are pending. The M18-02 database
+  backstop evidence for T2/T4/T6/T8 stays as recorded above.
+
 "Kind" uses the reporting labels required by MASTER_PLAN §28:
 - hermetic unit;
 - database integration (scratch pgvector database, real per-test roles where stated);
@@ -78,6 +129,11 @@ Compared with `git diff --exit-code bf67d11 -- …` at the end of each package:
   SHA-256 listing described in AC-14.
 
 ## Concurrency tests (R2; part of AC-02/AC-07/AC-08)
+
+**Status (2026-10-25):**
+- The M18-03B service-level T1–T8 tests are pending.
+- The M18-02 database backstop evidence for T2/T4/T6/T8 stays as recorded in the M18-02
+  results.
 
 Two real sessions per test. A test hook pauses a commit after it takes the lock.
 
