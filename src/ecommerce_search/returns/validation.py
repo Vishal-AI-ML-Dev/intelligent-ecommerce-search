@@ -13,14 +13,19 @@
 
 Step 4 rejects only what the bundle alone proves impossible. A reference to a record that is
 not in the bundle may point to a stored record, so it is never an error here: references,
-catalog rows (step 5) and every stored-data rule are left to `DEFERRED_CHECKS`, which this
-module does not run. Conflicting evidence (§3.1, e.g. a "damaged" comment and an `as_new`
-inspection) is valid and is never flagged. A report without errors therefore does **not** mean
-the upload is valid or that a later commit will succeed.
+catalog rows (step 5) and every stored-data rule are left to `DEFERRED_CHECKS`, which
+`validate_upload` does not run. Conflicting evidence (§3.1, e.g. a "damaged" comment and an
+`as_new` inspection) is valid and is never flagged. A report without errors therefore does
+**not** mean the upload is valid or that a later commit will succeed.
+
+`check_stored` (M18-03B, Phase B) runs the same §3.1 rules again over the bundle's records
+together with the records already stored in the dataset version. With every record visible it
+also rejects unknown references and decides the rules Phase A deferred: stored shipments and
+quantities, and every evidence-to-product relation.
 """
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Annotated, Any, get_args
@@ -55,6 +60,20 @@ DEFERRED_CHECKS = (
     # `shipment` and `delivery_event` link: an order's stored items may contain the product.
     "stored_evidence_relations",
 )
+
+# Reference fields resolved inside the dataset version (contracts §3); evidence targets are
+# resolved through `EVIDENCE_ENTITIES`, catalog products by the import service.
+REFERENCES: dict[E, tuple[tuple[str, E], ...]] = {
+    E.ORDER_ITEMS: (("order_id", E.ORDERS),),
+    E.SHIPMENTS: (("order_id", E.ORDERS),),
+    E.DELIVERY_EVENTS: (("shipment_id", E.SHIPMENTS),),
+    E.RETURNS: (("order_item_id", E.ORDER_ITEMS),),
+    E.RETURN_COMMENTS: (("return_id", E.RETURNS),),
+    E.INSPECTION_OBSERVATIONS: (("return_id", E.RETURNS),),
+    E.CUSTOMER_REVIEWS: (("order_item_id", E.ORDER_ITEMS),),
+    E.SUPPORT_COMPLAINTS: (("order_id", E.ORDERS), ("order_item_id", E.ORDER_ITEMS)),
+    E.CORRECTION_CASE_EVIDENCE: (("case_id", E.CORRECTION_CASES),),
+}
 
 # Values never previewed: free text, actor references (dataset text is never previewed).
 _NO_PREVIEW = frozenset({"text", "note", "customer_ref", "inspector_ref", "opened_by_ref"})
@@ -260,17 +279,46 @@ def _check_rows(
 # ---- step 4: structure inside the bundle ---------------------------------------------------
 
 
+def record_error(v: ValidatedRecord, code: str, field: str | None) -> er.RowError:
+    """A `RowError` on one validated record (a JSON pointer only for `bundle.json`)."""
+    entity = v.record.ENTITY.value
+    return er.row_error(
+        code,
+        v.file,
+        entity=entity,
+        row=v.row,
+        pointer=er.pointer(entity, v.row - 1, *([field] if field else []))
+        if v.file.endswith(".json")
+        else None,
+        field=field,
+    )
+
+
 class _Structure:
-    def __init__(self, valid: dict[E, list[ValidatedRecord]], checked_at: datetime) -> None:
+    """The §3.1 structural rules over the bundle's records (Phase A step 4), or, with `stored`,
+    over the bundle together with every stored record of the dataset version (Phase B).
+
+    `stored` maps each entity to its stored records by ID; a stored record only needs the
+    attributes the rules read. A bundle record replaces a stored record with the same ID (an
+    unchanged record, or a `conflict_existing` that the import service reports)."""
+
+    def __init__(
+        self,
+        valid: Mapping[E, Sequence[ValidatedRecord]],
+        checked_at: datetime,
+        stored: Mapping[E, Mapping[str, Any]] | None = None,
+    ) -> None:
         self.errs: list[er.RowError] = []
         self.checked_at = checked_at
+        self.complete = stored is not None  # every record of the dataset version is visible
+        self.stored: Mapping[E, Mapping[str, Any]] = stored or {}
         self.by_id: dict[E, dict[str, Any]] = {}
         self.items_by_order: dict[str, list[Any]] = defaultdict(list)
         self.rows: dict[E, list[ValidatedRecord]] = {}
-        for entity, records in valid.items():
+        for entity in E:
             seen: dict[str, Any] = {}
             kept = []
-            for v in records:
+            for v in valid.get(entity, ()):
                 key = v.record.source_record_id()
                 if key in seen:
                     field = v.record.ID_FIELDS[0] if len(v.record.ID_FIELDS) == 1 else None
@@ -278,25 +326,18 @@ class _Structure:
                     continue
                 seen[key] = v.record
                 kept.append(v)
-            self.by_id[entity] = seen
+            self.by_id[entity] = {**self.stored.get(entity, {}), **seen}
             self.rows[entity] = kept
         for item in self.by_id[E.ORDER_ITEMS].values():
             self.items_by_order[item.order_id].append(item)
 
     def error(self, v: ValidatedRecord, code: str, field: str | None) -> None:
-        entity = v.record.ENTITY.value
-        self.errs.append(
-            er.row_error(
-                code,
-                v.file,
-                entity=entity,
-                row=v.row,
-                pointer=er.pointer(entity, v.row - 1, *([field] if field else []))
-                if v.file.endswith(".json")
-                else None,
-                field=field,
-            )
-        )
+        self.errs.append(record_error(v, code, field))
+
+    def stored_only(self, entity: E) -> list[Any]:
+        """Stored records of `entity` that the bundle does not repeat."""
+        in_bundle = {v.record.source_record_id() for v in self.rows[entity]}
+        return [r for key, r in self.stored.get(entity, {}).items() if key not in in_bundle]
 
     def get(self, entity: E, record_id: str | None) -> Any:
         return None if record_id is None else self.by_id[entity].get(record_id)
@@ -319,6 +360,8 @@ class _Structure:
         return None if ret is None else self.product_of_item(ret.order_item_id)
 
     def run(self) -> list[er.RowError]:
+        if self.complete:
+            self._references()
         for records in self.rows.values():
             for v in records:
                 for name, value in v.record:
@@ -334,8 +377,21 @@ class _Structure:
         self._evidence()
         return self.errs
 
+    def _references(self) -> None:
+        for entity, fields in REFERENCES.items():
+            for v in self.rows[entity]:
+                for name, target in fields:
+                    value = getattr(v.record, name)
+                    if value is not None and self.get(target, value) is None:
+                        self.error(v, "unknown_reference", name)
+        for v in self.rows[E.CORRECTION_CASE_EVIDENCE]:
+            ev = v.record
+            if self.get(rc.EVIDENCE_ENTITIES[ev.evidence_type], ev.evidence_id) is None:
+                self.error(v, "unknown_reference", "evidence_id")
+
     def _shipments(self) -> None:
-        orders_seen: set[str] = set()
+        # Orders that already have a stored shipment which the bundle does not repeat.
+        orders_seen: set[str] = {s.order_id for s in self.stored_only(E.SHIPMENTS)}
         for v in self.rows[E.SHIPMENTS]:
             s = v.record
             if s.order_id in orders_seen:
@@ -353,6 +409,9 @@ class _Structure:
 
     def _returns(self) -> None:
         returned: dict[str, int] = defaultdict(int)
+        for stored in self.stored_only(E.RETURNS):
+            if stored.status != rc.ReturnStatus.CANCELLED:
+                returned[stored.order_item_id] += stored.quantity
         for v in self.rows[E.RETURNS]:
             r = v.record
             order = self.order_of_item(r.order_item_id)
@@ -361,6 +420,8 @@ class _Structure:
             if r.status is rc.ReturnStatus.CANCELLED:
                 continue
             item = self.get(E.ORDER_ITEMS, r.order_item_id)
+            if item is None and self.complete:
+                continue  # reported as `unknown_reference`
             # A stored item holds at most ORDER_ITEM_QUANTITY_MAX, so exceeding it is definite.
             limit = rc.ORDER_ITEM_QUANTITY_MAX if item is None else item.quantity
             returned[r.order_item_id] += r.quantity
@@ -400,29 +461,56 @@ class _Structure:
             order = self.get(E.ORDERS, order_id)
             if order is not None:
                 self.not_before(v, order.ordered_at, "opened_at")
+            # An order and a product given without an item: the order must contain the product.
+            # Decided only when every item of the order is visible (contracts §10).
+            if (
+                self.complete
+                and c.order_item_id is None
+                and order is not None
+                and c.product_id is not None
+                and c.product_id not in self.order_products(c.order_id)
+            ):
+                self.error(v, "inconsistent_reference", "product_id")
 
-    def _evidence_product(self, kind: rc.EvidenceType, target: str) -> str | None:
-        """The evidence's product when the bundle alone determines it; else None."""
+    def order_products(self, order_id: str | None) -> set[str]:
+        return {item.product_id for item in self.items_by_order.get(order_id or "", ())}
+
+    def _evidence_products(self, kind: rc.EvidenceType, target: str) -> set[str] | None:
+        """The products the evidence relates to, or None when that is not decided here."""
         T = rc.EvidenceType
+
+        def one(product: str | None) -> set[str] | None:
+            return None if product is None else {product}
+
         if kind is T.RETURN:
-            return self.product_of_return(target)
+            return one(self.product_of_return(target))
         if kind is T.RETURN_COMMENT:
             comment = self.get(E.RETURN_COMMENTS, target)
-            return None if comment is None else self.product_of_return(comment.return_id)
+            return None if comment is None else one(self.product_of_return(comment.return_id))
         if kind is T.INSPECTION_OBSERVATION:
             obs = self.get(E.INSPECTION_OBSERVATIONS, target)
-            return None if obs is None else self.product_of_return(obs.return_id)
+            return None if obs is None else one(self.product_of_return(obs.return_id))
         if kind is T.CUSTOMER_REVIEW:
             review = self.get(E.CUSTOMER_REVIEWS, target)
-            return None if review is None else review.product_id
+            return None if review is None else one(review.product_id)
         if kind is T.SUPPORT_COMPLAINT:
             complaint = self.get(E.SUPPORT_COMPLAINTS, target)
             if complaint is None:
                 return None
-            return complaint.product_id or self.product_of_item(complaint.order_item_id)
-        # Shipments and delivery events relate through an order that contains the product;
-        # stored items of that order may contain it, so a missing match is never definite.
-        return None
+            product = complaint.product_id or self.product_of_item(complaint.order_item_id)
+            if product is not None or not self.complete or complaint.order_id is None:
+                return one(product)
+            # Order only: related only when the product is actually among that order's items.
+            return self.order_products(complaint.order_id)
+        # Shipments and delivery events relate through an order that contains the product.
+        # Before Phase B, stored items of that order may contain it, so nothing is decided.
+        if not self.complete:
+            return None
+        shipment = self.get(E.SHIPMENTS, target)
+        if kind is T.DELIVERY_EVENT:
+            event = self.get(E.DELIVERY_EVENTS, target)
+            shipment = None if event is None else self.get(E.SHIPMENTS, event.shipment_id)
+        return None if shipment is None else self.order_products(shipment.order_id)
 
     def _evidence(self) -> None:
         for v in self.rows[E.CORRECTION_CASE_EVIDENCE]:
@@ -430,12 +518,24 @@ class _Structure:
             case = self.get(E.CORRECTION_CASES, ev.case_id)
             if case is None:
                 continue
-            product = self._evidence_product(ev.evidence_type, ev.evidence_id)
-            if product is not None and product != case.product_id:
+            products = self._evidence_products(ev.evidence_type, ev.evidence_id)
+            if products is not None and case.product_id not in products:
                 self.error(v, "inconsistent_reference", "evidence_id")
 
 
-# ---- entry point ---------------------------------------------------------------------------
+# ---- entry points --------------------------------------------------------------------------
+
+
+def check_stored(
+    records: Mapping[E, Sequence[ValidatedRecord]],
+    stored: Mapping[E, Mapping[str, Any]],
+    *,
+    checked_at: datetime,
+) -> list[er.RowError]:
+    """Phase B structural checks: the §3.1 rules over the bundle's validated records together
+    with the dataset version's stored records. Natural-key comparison, catalog rows and the
+    dataset descriptor are checked by the import service."""
+    return _Structure(records, checked_at, stored).run()
 
 
 def validate_upload(parts: Sequence[Part], *, checked_at: datetime) -> UploadValidation:

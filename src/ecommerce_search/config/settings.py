@@ -24,6 +24,7 @@ from ecommerce_search.reranking.spec import (
     RerankerModelSpec,
     registered_reranker,
 )
+from ecommerce_search.returns.labels import is_valid_importer_label
 
 # A versioned Jev model id; the moving aliases (`jev-latest`, `jev-preview`, `jev`) are rejected.
 _JEV_PINNED_MODEL = re.compile(r"jev-\d+\.\d+\.\d+")
@@ -238,6 +239,22 @@ class Settings(BaseSettings):
     # Optional owner-supplied prices for cost estimates. Unset = cost reported as unknown.
     assistant_input_usd_per_mtok: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     assistant_output_usd_per_mtok: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
+
+    # Milestone 18: the label recorded on return import batches committed by the CLI (contracts
+    # §6). Supplied provenance, not an authenticated identity. Unset = CLI imports are refused.
+    returns_importer_label: str | None = None
+
+    @field_validator("returns_importer_label", mode="before")
+    @classmethod
+    def _importer_label(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        if not is_valid_importer_label(value):
+            raise ValueError(
+                "returns_importer_label must be 1-64 letters, digits, '.', '_', ':' or '-' and "
+                "must not look like personal data"
+            )
+        return value
 
     @field_validator("frontend_dist_dir")
     @classmethod

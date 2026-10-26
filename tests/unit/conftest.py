@@ -18,6 +18,7 @@ _ISOLATED_PREFIXES = (
     "ASSISTANT_",
     "GEMINI_",
     "GOOGLE_",
+    "RETURNS_",
 )
 
 

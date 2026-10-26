@@ -1,10 +1,279 @@
 # M18 — Handoff
 
-## Current state (2026-10-25, end of the M18-03A session)
+## Current state (2026-10-26, end of the M18-03B session)
+
+- **HEAD at start:** `797c6e40461ea35af242c2e4dc3fd65cf3186e81` (M18-03A), as expected.
+  M18-03A is pushed, and CI run 40215398031 succeeded on that SHA. The 2026-10-25 section
+  below said "not pushed"; that statement was stale and is corrected there.
+- **M18-03B (Atomic Import & CLI): implemented and focused-verified.** After the review
+  checkpoint, the owner authorized one scoped commit and a normal push for CI. The SHA and
+  the CI result are reported in the session summary, not in this file. M18-03C has not
+  started. M18-03 as a whole is not
+  complete, and M18 is not accepted.
+- Unrelated working-tree items are unchanged: `docs/m12-diagnostic-tooling.md` (modified),
+  untracked `.claude/`, `docs/m17-handoff.md` and `evals/results/m17/unsupported-claims/`.
+- **Not done in this session:**
+  - no dev or staging migrations, writes or grant changes; the development database was read
+    only and is still at `0004`;
+  - no deployment, provider calls, AWS actions, installs, commits or pushes;
+  - Docker Desktop (already installed, user-local) and `docker compose up -d db` were started
+    for the scratch-database tests.
+- The local full-unit-suite isolation timeout from M18-02 is still **FAILED**. It was not
+  rerun, and its timeout and skips were not changed. This is separate from the successful CI
+  evidence (runs 40103962367 and 40215398031), which does not cover the Windows outer wrapper.
+
+### What M18-03B implements
+
+**`returns/service.py`** — the domain import service. Public: `validate_import`,
+`commit_import`, `ImportReport`, `ImportRoleError`, `ImportStorageError`.
+
+- **Phase A, steps 1–4:** the existing `validate_upload`, unchanged. A run with errors stops
+  there, with no database access.
+- **Phase A, step 5:** catalog references, in a short read-only transaction.
+  - `unknown_product`: a `product_id` of an order item, case, review or complaint is not in
+    `products`.
+  - `snapshot_mismatch`: no `raw_catalog_records` row of that product, in that catalog
+    dataset version, has that `raw_sha256`.
+  - It reads only the importer's column-level catalog grants.
+- **Phase B, in order:**
+  1. Dataset descriptor: `dataset_mismatch`, one error per differing field, no values.
+  2. Stored natural keys: `unchanged` versus `conflict_existing`.
+  3. `bundle_sha256` already stored: `already_imported`, with the existing `batch_id`.
+  4. Catalog references again.
+  5. `check_stored`: the §3.1 rules over the bundle together with every stored record of the
+     dataset version.
+- **Validate mode:** Phase B in a `READ ONLY`, `REPEATABLE READ` transaction, without the
+  lock. It never writes.
+- **Commit mode:** one `READ COMMITTED` transaction.
+  1. `require_importer_role` runs first.
+  2. Then `pg_advisory_xact_lock` with a SHA-256-derived key of
+     `returns-import:<dataset_id>:<dataset_version>`, the existing lock-key pattern.
+  3. Every Phase B check re-runs under the lock.
+  4. Only for `imported` does it write: the dataset row (first import only), the batch, the
+     metadata and contents of every file of the request, and **new rows only**. Contents are
+     inserted without RETURNING.
+- **Failure handling:** a database refusal raises `ImportStorageError` with a fixed message,
+  no cause chain and no library text. The transaction rolls back.
+- **Test hook:** `checkpoint(name, conn)`, used for fault injection and to pause a commit
+  under the lock.
+- **Role check** (`require_importer_role`) refuses:
+  - a superuser or a role with `BYPASSRLS`;
+  - an owner or a member of an M18 table owner;
+  - any column-level SELECT on raw contents;
+  - a role missing INSERT on any M18 table, or SELECT on any M18 table except raw contents;
+  - UPDATE, DELETE or TRUNCATE on any M18 or catalog table;
+  - INSERT on a catalog table.
+
+**`returns/validation.py`** (refactor; Phase A behaviour unchanged, 390 M18-03A tests pass)
+- `_Structure` takes an optional stored-record view (`check_stored`).
+- With every record visible, it adds:
+  - `unknown_reference` for every reference field and evidence target;
+  - stored shipments (`duplicate_shipment`);
+  - the stored non-cancelled quantity (cancelled returns excluded, repeated returns not
+    counted twice);
+  - inspections on stored returns that were not received;
+  - time order against stored parents;
+  - the order + product complaint rule (§10);
+  - every evidence-to-product relation, including through shipments and delivery events.
+- `record_error` and `REFERENCES` are factored out.
+
+**CLI** (`returns/cli.py`, `returns/__main__.py`):
+- `python -m ecommerce_search.returns validate|import <bundle.json | csv-dir>`, with no other
+  flags, per §4.1.
+- **Input:**
+  - A file argument becomes part `bundle.json`; its local name is not used.
+  - A directory gives one part per regular file, by file name. Subdirectories are refused.
+  - Each file is read with a cap of 5 MiB + 1 byte.
+- **Output:** the `ImportReport` as JSON on stdout.
+  - Exit 0: `valid`, `imported`, `already_imported` or `no_new_records`.
+  - Exit 1: `invalid`.
+  - Exit 2: a usage, input, settings, role or database error, with a fixed message.
+- Messages never contain paths, values, credentials or connection strings.
+- `verify` (§4.1/§4.7) is **not** implemented; see the gaps below.
+
+**Settings** (owner-approved narrow change, 2026-10-26): `RETURNS_IMPORTER_LABEL`
+(`returns_importer_label`).
+- It is optional. An empty value means unset.
+- A set value must be 1–64 characters of `[A-Za-z0-9._:-]`, starting with a letter or digit.
+- It is refused if any `redaction-1` pattern matches (`returns/labels.py`). The error names the
+  field only.
+- `.env.example` documents it, and the unit-test isolation prefix list gains `RETURNS_`.
+- No other `RETURNS_*` setting was added (M18-04).
+
+### Configuration decision (owner choice, 2026-10-26)
+
+- The CLI connects with the **standard POSTGRES_* settings**. A CLI import must run with the
+  scoped `returns_importer` credentials in its environment, as the deploy one-off container
+  does (plan D12).
+- `import` requires `RETURNS_IMPORTER_LABEL`.
+  - A missing or invalid label fails before input is read or a connection is made.
+  - There is no silent default.
+  - The label is supplied provenance, not an authenticated personal identity.
+- **There is no fallback to other credentials.** With admin credentials (superuser) or the API
+  role, `import` stops before any write with `ImportRoleError` (`superuser` /
+  `missing_privilege`). This is tested through the CLI.
+- `validate` uses the same POSTGRES_* connection in a read-only transaction.
+- `RETURNS_IMPORT_COMMIT_ENABLED` and the `RETURNS_IMPORTER_DB_*` engine remain API settings
+  for M18-04 and were not added. The main app's credentials and grants are unchanged.
+
+### Interpretations made in M18-03B (frozen text unchanged; owner accepted these where compatible)
+
+1. **Phase names:**
+   - step 5 is `catalog_references`, and Phase B is `stored_data`;
+   - a phase is listed when all of its checks ran, even if it found errors (the same rule as
+     M18-03A);
+   - Phase B is not listed after `dataset_mismatch` or `already_imported`.
+2. **Stopping:** every phase that reports errors stops the run.
+   - A Phase A error means no database access, and a step-5 error means Phase B is skipped.
+   - `error_count_is_lower_bound` is then true.
+   - Errors from a completed Phase B give a lower bound of false.
+3. **Report values:**
+   - `mode` is `validate` or `commit`.
+   - `counts[entity].new` and `.unchanged` are null until the natural-key comparison has run.
+   - On an `invalid` Phase B, conflicting records count as neither.
+4. **Error fields:**
+   - `snapshot_mismatch` is reported on field `catalog_raw_sha256`. A wrong catalog dataset ID
+     or version also gives `snapshot_mismatch`.
+   - `dataset_mismatch` is a dataset-level error (`entity` null) on `bundle.json` or
+     `manifest.json`, with pointer `/dataset/<field>`.
+5. **Evidence via a complaint with only `order_id`** (owner condition): it relates to the case
+   only when the case's product is actually among the referenced order's items, stored or in
+   the bundle. Merely having an `order_id` is not enough.
+6. **`already_imported`:** it is decided after the descriptor check. Its counts are the
+   natural-key comparison (all `unchanged` for the same bytes).
+
+### Commands run and actual results (2026-10-26)
+
+| Command | Result |
+|---|---|
+| `git rev-parse HEAD`; `git status --short` | `797c6e40461e…`; only the four unrelated items |
+| `uv run pytest tests/unit/returns -q` (after the refactor, before the new tests) | **390 passed** |
+| `uv run pytest tests/unit/returns -q -p no:cacheprovider` (final) | **455 passed** (390 + 48 service + 17 CLI) |
+| `uv run pytest tests/unit/test_settings.py tests/unit/test_compose_config.py tests/unit/test_engine.py tests/unit/catalog/test_catalog_models_metadata.py -q` | **223 passed** |
+| `uv run pytest tests/integration/test_returns_import.py -q` (first run, `-x`) | 1 failed, 7 passed: a test bug (a comment bundle without its parents). The failure output also printed the per-module test roles' generated passwords through the fixture's dataclass repr. Those were throwaway `m18t_*` roles, dropped at teardown, on a local scratch server. **Fix:** the field is now `repr=False`. |
+| `uv run pytest tests/integration/test_returns_import.py -q` (final) | **78 passed** (36.9 s) |
+| `uv run pytest tests/integration/test_returns_schema.py tests/integration/test_returns_grants.py -q` | **175 passed** |
+| `uv run python -m ecommerce_search.returns --help` | exit 0; commands `validate`, `import` only |
+| `uv run ruff check .` / `uv run ruff format --check .` | all checks passed / 502 files already formatted |
+| `git diff --exit-code bf67d11 -- <AC-14 protected paths>` | exit 0 |
+| AC-14 M17 listing: `sha256sum -c` of the M18-02 `ac14-m17-untracked.sha256` | listing SHA-256 starts with `cf74568d`; 10 OK, exit 0; 9 files under `unsupported-claims/` |
+| Development database (read only) / leftovers | `alembic_version` `0004` at start and end; 0 scratch databases and 0 `m18t_*` roles left |
+
+**Not run:**
+- the full unit suite and the recursive isolation wrapper (the M18-02 local timeout stays
+  **FAILED**);
+- the full integration suite;
+- CI on these changes (not yet pushed when this table was recorded).
+
+### Files changed by M18-03B (in the scoped M18-03B commit)
+
+- **New:**
+  - `src/ecommerce_search/returns/service.py`, `cli.py`, `__main__.py`, `labels.py`
+  - `tests/unit/returns/test_returns_import_service.py`, `tests/unit/returns/test_returns_cli.py`
+  - `tests/integration/test_returns_import.py`
+- **Modified:**
+  - `src/ecommerce_search/returns/validation.py`
+  - `src/ecommerce_search/config/settings.py` (`returns_importer_label`)
+  - `tests/unit/conftest.py` (isolates `RETURNS_*`)
+  - `.env.example`
+  - `docs/m18/handoff.md`, `docs/m18/test-matrix.md`
+
+### Review checkpoint (2026-10-26, one bounded pass before the M18-03B commit)
+
+**1. AC-13 (5) service surface.**
+- `service.__all__` now declares the whole public surface: `validate_import`, `commit_import`
+  (the only writer), `ImportReport`, `EntityCounts`, `ImportRoleError`, `ImportStorageError`,
+  `import_lock_key` and `require_importer_role`.
+- New unit tests pin it exactly:
+  - `__all__`, and the public callables defined in the module, both equal the literal set;
+  - the CLI reaches the domain only through `validate_import` / `commit_import`, the report
+    and the two errors;
+  - no public callable in any `returns` module has a refund, ban, sanction, approval,
+    rejection, fraud, penalty, suspension or responsibility name.
+
+**2. Test-credential disclosure (incident record; no secret values reproduced here).**
+- **What happened:** during the first M18-03B integration run, a failing assertion made
+  pytest print the module fixture's dataclass repr. The repr included the generated
+  passwords of the two per-module test LOGIN roles.
+- **Scope:**
+  - The output went only to this local session's terminal. Nothing was committed, logged to
+    a file or sent to CI.
+  - The admin engine URL in the same repr was masked by SQLAlchemy (`***`).
+  - Only the two temporary roles' passwords were exposed. They were generated with
+    `secrets.token_urlsafe(24)` per module run, on the local Docker server.
+- **Verification (2026-10-26):** by name, both exposed roles are absent from `pg_roles` (0
+  rows), and their scratch database is absent (0 rows). No `m18t_*` role remains.
+- **Remediation:**
+  - The password field is now `field(repr=False)`.
+  - New regression tests check that:
+    - the fixture's repr/str and every engine repr show neither role passwords nor the
+      admin password, and that SQLAlchemy masks URLs;
+    - a failed connection gives an `ImportStorageError` whose formatted traceback, repr and
+      str carry no password, connection string or role name, with no cause and the context
+      suppressed;
+    - the CLI's stdout and stderr for the same failure carry none of these either.
+
+**3. Role checks, rollback, and lock/recheck.** No contradiction with contracts §2, §4.3 or
+§10 was found.
+- `require_importer_role` runs inside the commit transaction before the lock, and is stricter
+  than the §2 list but grants nothing new. Its refusal is raised unwrapped, and the
+  transaction rolls back.
+- `pg_advisory_xact_lock` is taken before any Phase B read. Every recheck runs after it, in
+  the same READ COMMITTED transaction, as does the dataset-row creation. These are the
+  descriptor, bundle, natural keys, catalog, references, time order, shipments, quantity and
+  evidence checks.
+- A non-`valid` outcome rolls back explicitly, and any exception rolls back through the
+  context manager. Both are covered by the checkpoint fault-injection, T1–T8 and role tests.
+- Contract §4.3 calls step 5 "no transaction": the step-5 catalog read runs in its own short
+  read-only transaction, which is never the Phase B transaction and never holds the lock. This
+  is read as consistent with the contract.
+
+**4. Scope records.**
+- `returns verify` is **assigned to M18-03C** (owner direction, 2026-10-26). AC-08 stays
+  **partial** until then.
+- The Phase B memory limit stays open (below).
+
+**Checkpoint commands and actual results:**
+
+| Command | Result |
+|---|---|
+| Read-only check of `pg_roles` for the two exposed role names, any `m18t_*` role, and the scratch database | 0 / 0 / 0 |
+| `uv run pytest tests/unit/returns -q -p no:cacheprovider` | **458 passed** (adds 3 surface tests) |
+| `uv run pytest tests/integration/test_returns_import.py -q -p no:cacheprovider` | **80 passed** (adds 2 diagnostics tests), 40.9 s |
+| `uv run ruff check .` / `uv run ruff format --check .` | all checks passed / 502 files already formatted |
+
+The full unit suite, the isolation wrapper and the full integration suite were not run. The
+local Windows isolation timeout stays **FAILED**.
+
+### Remaining gaps
+
+- **`returns verify`** (stored `records_sha256`, missing and extra counts) is **assigned to
+  M18-03C**. AC-08 is **partial** until then. The `records_sha256` equality itself is tested
+  directly against stored rows.
+- **Phase B memory (unmeasured):** Phase B loads every stored record of the dataset version
+  (key columns only) into memory. This is expected to be fine at demo scale (about 5,300
+  rows), but memory and time were **not measured**, at that scale or for larger dataset
+  versions.
+- **Not covered here:**
+  - API single-flight (429), 413 and the temp-file check (M18-04);
+  - the §5.3 fixture scan (M18-03C);
+  - the generator and dataset (M18-03C).
+- **CLI choices** that the contract does not fix: the exit codes, and JSON on stdout.
+
+### Next task
+
+1. The scoped M18-03B commit and push (owner-authorized at the review checkpoint), then CI on
+   the pushed SHA.
+2. With separate approval: **M18-03C**, the generator, the committed dataset, the §5.3 fixture
+   scan, and `returns verify` (assigned there).
+3. The local isolation-test timeout decision is still open.
+
+## State at the end of the M18-03A session (2026-10-25)
 
 - **HEAD at start:** `5a04ece` (M18-02 implementation `797bc75`), as expected.
-- **Commit:** M18-03A is committed locally on `main` as one commit on top of `5a04ece` (the
-  SHA is reported in the session summary). It has **not** been pushed.
+- **Commit:** M18-03A is commit `797c6e4` on `main`, on top of `5a04ece`. *Correction
+  (2026-10-26): it was pushed, and CI run 40215398031 succeeded on that SHA. The earlier
+  "not pushed" text was stale.*
 - **M18-03A (Validation & Privacy): implemented, focused tests pass.** M18-03B and M18-03C
   have not started. M18-03 as a whole is **not** complete, and M18 is not accepted.
 - Unrelated working-tree items are unchanged: `docs/m12-diagnostic-tooling.md` (modified),
@@ -176,7 +445,7 @@ Not run:
   - `evals/results/m17/unsupported-claims/` holds exactly the 9 listed files.
   - No new baseline was created.
 
-### Files changed by M18-03A (all uncommitted)
+### Files changed by M18-03A (committed as `797c6e4`)
 
 - New source: `src/ecommerce_search/returns/redaction.py`, `errors.py`, `bundle.py`,
   `validation.py`
@@ -186,9 +455,9 @@ Not run:
     `test_returns_validation.py`, `test_returns_error_privacy.py`.
 - Docs: `docs/m18/handoff.md`, `docs/m18/test-matrix.md`
 
-### Next task
+### Next task (as recorded at the end of M18-03A; superseded by the M18-03B section above)
 
-1. Owner decision on pushing the local M18-03A commit (not pushed).
+1. Owner decision on pushing the local M18-03A commit (since pushed; CI 40215398031 green).
 2. With separate approval: **M18-03B**, the domain import service.
    - Phase A step 5 (catalog references), then Phase B: validate as READ ONLY / REPEATABLE
      READ; commit as READ COMMITTED under the advisory lock, re-running every check in

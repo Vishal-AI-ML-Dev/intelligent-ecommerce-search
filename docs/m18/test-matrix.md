@@ -26,7 +26,7 @@ M18-02 coverage by AC:
 - **AC-05:** storage and Pydantic covered. Response schemas are M18-04.
 - **AC-13 (3)/(4):** covered.
 
-## M18-03A results (actual, 2026-10-25; uncommitted)
+## M18-03A results (actual, 2026-10-25; committed `797c6e4`, pushed, CI run 40215398031 success)
 
 M18-03A covers validation and privacy only (Phase A steps 1–4, in memory). Its tests are
 hermetic unit tests in `tests/unit/returns/`.
@@ -76,6 +76,88 @@ New tests:
 - **Not started:** AC-07 and AC-08 (except format equivalence of records), which are M18-03B.
 - **Concurrency T1–T8:** the M18-03B service-level tests are pending. The M18-02 database
   backstop evidence for T2/T4/T6/T8 stays as recorded above.
+
+## M18-03B results (actual, 2026-10-26; in the scoped M18-03B commit)
+
+M18-03B adds the import service (Phase A step 5, Phase B, commit), the `ImportReport` and the
+`validate`/`import` CLI.
+
+| Run | Kind | Result |
+|---|---|---|
+| `uv run pytest tests/unit/returns -q` (390 M18-02/03A + 48 service + 17 CLI) | hermetic unit | **455 passed** |
+| `tests/unit/test_settings.py`, `test_compose_config.py`, `test_engine.py`, `catalog/test_catalog_models_metadata.py` | hermetic unit | **223 passed** |
+| `tests/integration/test_returns_import.py` (one scratch database per module; real per-module `m18t_*` LOGIN roles with `returns-grants-1`; every import runs as the importer role) | database integration | **78 passed** (the first run had 1 test bug, fixed; see `handoff.md`) |
+| `tests/integration/test_returns_schema.py` + `test_returns_grants.py` | database integration | **175 passed** |
+| `ruff check .` / `ruff format --check .` | lint | all checks passed / 502 files formatted |
+| AC-14 protected-path diff; M17 SHA-256 listing | recorded command | exit 0 / exit 0 (10 OK) |
+| Review checkpoint: `tests/unit/returns` (adds 3 AC-13 (5) surface tests) | hermetic unit | **458 passed** |
+| Review checkpoint: `tests/integration/test_returns_import.py` (adds 2 credential-diagnostics regression tests) | database integration | **80 passed** |
+| Review checkpoint: `ruff check .` / `ruff format --check .` | lint | all checks passed / 502 files formatted |
+| Full unit suite, nested isolation test, full integration suite, CI | — | **not run**. The M18-02 local isolation timeout stays **FAILED**; CI success on `797bc75`/`797c6e4` does not cover the Windows outer wrapper. |
+
+**What the new tests cover:**
+
+- **AC-07 (atomicity):**
+  - Fault injection at every commit checkpoint (`phase_a`, `catalog`, `locked`, `checked`,
+    `dataset`, `batch`, `files`, each `rows:<entity>`, `before_commit`), for JSON and CSV.
+    All 15 M18 table counts are unchanged afterwards, and the same upload then imports.
+  - Missing, unexpected, checksum and row-count CSV set errors write nothing.
+  - A check missed by the service (patched out) is stopped by the deferred quantity trigger,
+    as a sanitized `ImportStorageError`, and nothing is written.
+- **AC-08 (idempotency and formats):**
+  - `imported`, then the same bytes give `already_imported` with the same `batch_id`, in both
+    modes.
+  - The other format gives `no_new_records`, with no batch and no files.
+  - JSON and CSV give identical stored rows and an identical `records_sha256`, equal to the
+    release-side computation.
+  - A partial import then the rest reaches the full `records_sha256`.
+  - Incremental references to stored records work.
+  - `conflict_existing` and `dataset_mismatch` write nothing, in both modes.
+  - Stored text is redacted with counts, and raw bytes are kept only in contents.
+  - **Not covered:** `returns verify` (assigned to M18-03C), so its missing and extra counts are
+    still open.
+- **AC-06 (phase 5 and Phase B codes):**
+  - `unknown_product` and `snapshot_mismatch` (hash and catalog version), `unknown_reference`
+    (every reference field and evidence target), and `conflict_existing`.
+  - `dataset_mismatch`, stored `duplicate_shipment`, stored `quantity_exceeded`, an inspection
+    on a stored return that was not received, and time order against stored parents.
+  - The order + product complaint rule, and evidence relations through shipments, delivery
+    events and order-only complaints.
+  - Conflicting evidence against stored records is accepted.
+  - `phases_completed` and lower-bound semantics.
+- **Permissions and transaction modes:**
+  - Commit as the owner (superuser) or the API role raises `ImportRoleError` and writes
+    nothing.
+  - Validate works as the API role and as the importer.
+  - Validate is `REPEATABLE READ`, read-only, with no advisory lock.
+  - Commit is `READ COMMITTED`, under the dataset-version lock, as the importer role.
+- **CLI:**
+  - Unit tests: input mapping, the read cap, exit codes, the required label, and messages
+    without paths, values or credentials.
+  - Integration: `validate`/`import` as the importer (`imported`, `already_imported`,
+    `no_new_records`, with the label stored).
+  - No fallback: admin and API-role credentials are refused before any write, and a missing
+    label is refused before connecting.
+
+**Concurrency T1–T8 (service level, two real sessions):** all pass. The test hook pauses the
+first commit under the lock, and the test confirms the second session waits on the advisory
+lock before releasing it.
+- T1: `imported` + `already_imported`, with one batch.
+- T2: `quantity_exceeded`.
+- T3: `conflict_existing`.
+- T4: `duplicate_shipment`.
+- T5: commit gives `imported`; rollback gives `unknown_reference`.
+- T6: one dataset row; a different descriptor gives `dataset_mismatch`.
+- T7: validate during a paused commit (rows inserted, not committed) sees nothing and returns
+  promptly.
+- T8: a cancelled return plus a new one are both imported.
+
+**AC status after M18-03B.** Partial; no AC is closed.
+- AC-06: the domain side is covered.
+- AC-07: covered at the service level.
+- AC-08: partial; `verify` is assigned to M18-03C.
+- AC-13 (5): the service surface is pinned (unit). AC-13 as a whole still needs M18-04.
+- AC-09/10/11/12: API parts are M18-04.
 
 "Kind" uses the reporting labels required by MASTER_PLAN §28:
 - hermetic unit;
@@ -130,8 +212,9 @@ Compared with `git diff --exit-code bf67d11 -- …` at the end of each package:
 
 ## Concurrency tests (R2; part of AC-02/AC-07/AC-08)
 
-**Status (2026-10-25):**
-- The M18-03B service-level T1–T8 tests are pending.
+**Status (2026-10-26):**
+- The M18-03B service-level T1–T8 tests pass (`tests/integration/test_returns_import.py`;
+  see the M18-03B results above).
 - The M18-02 database backstop evidence for T2/T4/T6/T8 stays as recorded in the M18-02
   results.
 
