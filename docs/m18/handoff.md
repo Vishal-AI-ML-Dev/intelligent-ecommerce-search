@@ -6,8 +6,11 @@
   - **CI on `4d495c8`:** green **as confirmed by the owner**. This session could not open the
     private run, so this is owner-confirmed, not independently verified.
 - **M18-03C (Synthetic Dataset & Verification): implemented and focused-verified.** After the
-  review checkpoint below, the owner authorized one scoped commit and a normal push for CI. The
-  SHA and the CI result are reported in the session summary, not in this file.
+  review checkpoint below, the owner authorized one scoped commit and a normal push for CI.
+  - That commit, `4821bbd`, **failed CI during test collection**, as reported by the owner.
+  - The cause was a duplicate test-module basename. A corrective commit renames one file; see
+    "CI failure on `4821bbd` and corrective fix" below.
+  - The corrective SHA and its CI result are reported in the session summary, not in this file.
   - The full unit suite, the isolation wrapper and the full integration suite were not run.
   - M18 is not accepted, and M18-04 has not started.
 - Unrelated working-tree items are unchanged: `docs/m12-diagnostic-tooling.md` (modified),
@@ -182,7 +185,9 @@ suspected-abuse and insufficient-evidence returns, and the release was regenerat
   - `tests/returns_release.py`
   - `tests/unit/returns/test_returns_dataset.py`, `test_returns_fixture_privacy.py`,
     `test_returns_verify.py`
-  - `tests/integration/test_returns_dataset.py`
+  - `tests/integration/test_returns_dataset.py`, renamed by the corrective commit to
+    `tests/integration/test_returns_dataset_integration.py`. Command rows above that name the
+    old path record what was run at the time.
 - **Modified:**
   - `src/ecommerce_search/returns/cli.py` (adds `verify`)
   - `tests/unit/returns/test_returns_cli.py` (the command-set pin now includes `verify`)
@@ -292,9 +297,42 @@ suspected-abuse and insufficient-evidence returns, and the release was regenerat
 The full unit suite, the isolation wrapper and the full integration suite were not run. The
 local isolation timeout stays **FAILED**, separate from CI.
 
+### CI failure on `4821bbd` and corrective fix (2026-10-26)
+
+- **Failure (reported by the owner; this session cannot open the private run):** CI on
+  `4821bbd` failed during collection with pytest's "import file mismatch".
+  - `tests/integration/test_returns_dataset.py` and `tests/unit/returns/test_returns_dataset.py`
+    have the same module basename.
+  - The test directories have no `__init__.py`, and pytest's default import mode puts both
+    under the name `test_returns_dataset`.
+  - The hermetic unit job collects the whole `tests/` tree and filters by marker only, so it
+    collects both files.
+- **Why the local checks missed it:** M18-03C ran the two files in separate pytest
+  invocations, never in one combined collection.
+- **Fix:** `git mv` of the integration file to
+  `tests/integration/test_returns_dataset_integration.py`, plus the one reference to it in the
+  `tests/unit/returns/test_returns_verify.py` docstring.
+  - Unchanged: test assertions, the dataset, application code, the pytest import mode, the
+    package structure and the CI selection.
+  - A stale, git-ignored `.pyc` of the old name was deleted from
+    `tests/integration/__pycache__`.
+
+| Command | Result |
+|---|---|
+| Hermetic collection exactly as the CI job runs it (`POSTGRES_*`, `DB_*`, `APP_ENV*`, `LOG_LEVEL*`, `EMBEDDING_*`, `SEARCH_*` and `RERANKER_*` unset; `ECOMMERCE_SEARCH_HERMETIC_CHILD=1 POSTGRES_PASSWORD=""`; `uv run --frozen python -m pytest -m "not integration and not real_model" -q -p no:cacheprovider -ra --collect-only`), **before** the rename | reproduced: 1 error, `import file mismatch` on `tests/unit/returns/test_returns_dataset.py` (5667/6714 collected) |
+| Same command, **after** the rename | exit 0: 5695/6742 tests collected (1047 deselected), no errors |
+| `uv run --frozen python -m pytest tests/integration -m "integration and not real_model" -q -p no:cacheprovider --collect-only` (with a placeholder `POSTGRES_PASSWORD`; collection only, no connection) | 1029/1047 collected (18 deselected), no errors |
+| Duplicate `test_*.py` basenames anywhere under `tests/` | none |
+| `uv run pytest tests/integration/test_returns_dataset_integration.py -q -p no:cacheprovider` | **10 passed** |
+| `uv run pytest tests/unit/returns -q -p no:cacheprovider` | **511 passed** |
+| `uv run ruff check .` / `uv run ruff format --check .` | all checks passed / 509 files already formatted |
+
+The Windows outer isolation wrapper was not launched; its local timeout stays **FAILED**. Local
+results are not CI results.
+
 ### Next task
 
-1. CI on the pushed M18-03C SHA (the owner checks it if the private run is not accessible).
+1. CI on the corrective SHA (the owner checks it; the private run is not accessible here).
 2. With separate approval: **M18-04 Protected Backend API**.
 
 ## State at the end of the M18-03B session (2026-10-26)

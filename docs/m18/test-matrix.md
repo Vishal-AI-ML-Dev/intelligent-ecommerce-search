@@ -182,6 +182,13 @@ Details are in `handoff.md`.
 | Review checkpoint: `tests/integration/test_returns_dataset.py` (renames only) | database integration | **10 passed** |
 | Review checkpoint: `--check`; Ruff; AC-14 protected diff; M17 listing | recorded command / lint | exit 0; all checks passed and 509 files formatted; exit 0; 10 OK |
 | Full unit suite, nested isolation test, full integration suite | — | **not run**. The M18-02 local isolation timeout stays **FAILED**. CI on `4d495c8` is green as confirmed by the owner (not independently verified) and does not cover these changes. |
+| **CI on `4821bbd`** (M18-03C commit) | CI | **FAILED during collection**, as reported by the owner (not observed here): "import file mismatch". The integration and unit `test_returns_dataset.py` files share a module basename, and the hermetic job collects both. |
+| Corrective: CI-equivalent hermetic `--collect-only` (same unset prefixes, `ECOMMERCE_SEARCH_HERMETIC_CHILD=1`, empty `POSTGRES_PASSWORD`, same pytest options) | recorded command | before the rename: the same error, reproduced locally; after the rename to `tests/integration/test_returns_dataset_integration.py`: exit 0, 5695/6742 collected |
+| Corrective: integration-job `--collect-only` | recorded command | 1029/1047 collected, no errors |
+| Corrective: `tests/integration/test_returns_dataset_integration.py` / `tests/unit/returns` / Ruff | database integration / hermetic unit / lint | **10 passed** / **511 passed** / clean, 509 files formatted |
+
+The rows above that name `tests/integration/test_returns_dataset.py` record runs made before
+the rename. The tests themselves are unchanged; only the file name changed.
 
 **What the new tests cover:**
 

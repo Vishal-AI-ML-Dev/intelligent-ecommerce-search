@@ -1,7 +1,7 @@
 """M18-03C `returns verify` without a database: the declared surface, an invalid release that
 never reaches the database, the fixed storage error, and the CLI adapter (exit codes, no
 label, messages without paths or credentials). The stored-side comparison is covered by
-`tests/integration/test_returns_dataset.py`."""
+`tests/integration/test_returns_dataset_integration.py`."""
 
 import json
 
