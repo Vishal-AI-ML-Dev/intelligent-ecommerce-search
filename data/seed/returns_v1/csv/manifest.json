@@ -1,0 +1,84 @@
+{
+  "contract_version": "return-data-v1",
+  "dataset": {
+    "dataset_id": "synthetic-returns",
+    "dataset_version": 1,
+    "source_type": "synthetic",
+    "source_name": "M18 synthetic return dataset",
+    "source_description": "Project-authored deterministic synthetic return data produced by scripts/generate_returns_dataset.py@1. It links to the synthetic catalog synthetic-seed version 1 through its product IDs, raw catalog line hashes and catalog prices. Every record is synthetic.",
+    "rights_note": "Authored by this project for development and testing. Not derived from any retailer, marketplace or customer data. No formal licence identifier has been assigned.",
+    "license_identifier": null,
+    "authored_on": "2026-10-26",
+    "generator": "scripts/generate_returns_dataset.py@1",
+    "is_synthetic": true,
+    "notes": "Return proportions, reasons and texts are generator choices, not market evidence. Scenario intents in scenarios.json are generator intent, not labels, and are never imported."
+  },
+  "files": [
+    {
+      "name": "correction_case_evidence.csv",
+      "entity": "correction_case_evidence",
+      "sha256": "fe9b75b0857f867da2e8120db5e0322b259b2dd165e2aab80a382d0d42ea615d",
+      "rows": 132
+    },
+    {
+      "name": "correction_cases.csv",
+      "entity": "correction_cases",
+      "sha256": "ca4b5da48e7cbe01867e5988b96213bc7cde22c245945accfab3e671f00bac4b",
+      "rows": 20
+    },
+    {
+      "name": "customer_reviews.csv",
+      "entity": "customer_reviews",
+      "sha256": "61a619b4d874641d12b77033ea7ba5bf34a43a8e84ea34deeb26c3a737e506fc",
+      "rows": 150
+    },
+    {
+      "name": "delivery_events.csv",
+      "entity": "delivery_events",
+      "sha256": "7b823b323150e7b6f0f8d69dd4c92eff04c13d4c8ddc04dc2969cf2d6c18df3c",
+      "rows": 2365
+    },
+    {
+      "name": "inspection_observations.csv",
+      "entity": "inspection_observations",
+      "sha256": "67c8ba15c5b9e6c2039fb60ce5cc1ae51c0e5aa53e0df7e067ffb00af8705eb4",
+      "rows": 145
+    },
+    {
+      "name": "order_items.csv",
+      "entity": "order_items",
+      "sha256": "d6a9f59195e226fba78943158a36bfd4e3e65d33c491b2f48363faf85055799b",
+      "rows": 900
+    },
+    {
+      "name": "orders.csv",
+      "entity": "orders",
+      "sha256": "7f64e402eedc7faa0dc020724ead1217fedbdc16662f079cbb506f0c9eba18ba",
+      "rows": 600
+    },
+    {
+      "name": "return_comments.csv",
+      "entity": "return_comments",
+      "sha256": "aa317aa056a39205003e84c800f534fd0bec0fdc8ad38f00c228618b0a4b8d3f",
+      "rows": 161
+    },
+    {
+      "name": "returns.csv",
+      "entity": "returns",
+      "sha256": "52502eb9617b36ec1075beef355846a02e53b8f650bd01d38df6f5399e437da6",
+      "rows": 180
+    },
+    {
+      "name": "shipments.csv",
+      "entity": "shipments",
+      "sha256": "27a7d6335ca4b7ba15721dee534f3219305b81abf6d7768bf6de1549f3a8aba8",
+      "rows": 600
+    },
+    {
+      "name": "support_complaints.csv",
+      "entity": "support_complaints",
+      "sha256": "f74448a0505663323453667c873f95664cb9783222be8a93a8f88a51456d8db4",
+      "rows": 60
+    }
+  ]
+}

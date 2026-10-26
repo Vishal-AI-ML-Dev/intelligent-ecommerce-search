@@ -1,0 +1,3722 @@
+{
+  "dataset_id": "synthetic-returns",
+  "dataset_version": 1,
+  "generator": "scripts/generate_returns_dataset.py@1",
+  "label_status": "generator_intent_not_label",
+  "note": "Generator intent only. These entries describe what the generator meant to build; they are not labels, not human-reviewed, not ground truth for M19 or M20, and not model inputs. The listing truth of every scenario is unknown. Never import this file.",
+  "scenarios": [
+    {
+      "scenario_id": "cat-change-of-mind-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00097"
+        ],
+        "order_items": [
+          "SYN-OI-00638"
+        ],
+        "orders": [
+          "SYN-ORD-00415"
+        ],
+        "return_comments": [
+          "SYN-RCM-00112"
+        ],
+        "returns": [
+          "SYN-RET-00125"
+        ],
+        "shipments": [
+          "SYN-SHP-00415"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-change-of-mind-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00134"
+        ],
+        "order_items": [
+          "SYN-OI-00220"
+        ],
+        "orders": [
+          "SYN-ORD-00141"
+        ],
+        "return_comments": [
+          "SYN-RCM-00151"
+        ],
+        "returns": [
+          "SYN-RET-00168"
+        ],
+        "shipments": [
+          "SYN-SHP-00141"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-change-of-mind-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00073"
+        ],
+        "order_items": [
+          "SYN-OI-00155"
+        ],
+        "orders": [
+          "SYN-ORD-00100"
+        ],
+        "return_comments": [
+          "SYN-RCM-00084"
+        ],
+        "returns": [
+          "SYN-RET-00096"
+        ],
+        "shipments": [
+          "SYN-SHP-00100"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-change-of-mind-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00020"
+        ],
+        "order_items": [
+          "SYN-OI-00551"
+        ],
+        "orders": [
+          "SYN-ORD-00356"
+        ],
+        "return_comments": [
+          "SYN-RCM-00022"
+        ],
+        "returns": [
+          "SYN-RET-00026"
+        ],
+        "shipments": [
+          "SYN-SHP-00356"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-change-of-mind-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00142"
+        ],
+        "order_items": [
+          "SYN-OI-00403"
+        ],
+        "orders": [
+          "SYN-ORD-00264"
+        ],
+        "returns": [
+          "SYN-RET-00177"
+        ],
+        "shipments": [
+          "SYN-SHP-00264"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-change-of-mind-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00066"
+        ],
+        "orders": [
+          "SYN-ORD-00047"
+        ],
+        "return_comments": [
+          "SYN-RCM-00103"
+        ],
+        "returns": [
+          "SYN-RET-00115"
+        ],
+        "shipments": [
+          "SYN-SHP-00047"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-change-of-mind-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00101"
+        ],
+        "order_items": [
+          "SYN-OI-00363"
+        ],
+        "orders": [
+          "SYN-ORD-00234"
+        ],
+        "return_comments": [
+          "SYN-RCM-00116"
+        ],
+        "returns": [
+          "SYN-RET-00129"
+        ],
+        "shipments": [
+          "SYN-SHP-00234"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-change-of-mind-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "change of mind",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00033"
+        ],
+        "order_items": [
+          "SYN-OI-00584"
+        ],
+        "orders": [
+          "SYN-ORD-00378"
+        ],
+        "return_comments": [
+          "SYN-RCM-00040"
+        ],
+        "returns": [
+          "SYN-RET-00045"
+        ],
+        "shipments": [
+          "SYN-SHP-00378"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00006|inspection_observation|SYN-INS-00012",
+          "SYN-CASE-00006|return_comment|SYN-RCM-00011",
+          "SYN-CASE-00006|return|SYN-RET-00015",
+          "SYN-CASE-00006|support_complaint|SYN-CMP-00028"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00006"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00012"
+        ],
+        "order_items": [
+          "SYN-OI-00720"
+        ],
+        "orders": [
+          "SYN-ORD-00475"
+        ],
+        "return_comments": [
+          "SYN-RCM-00011"
+        ],
+        "returns": [
+          "SYN-RET-00015"
+        ],
+        "shipments": [
+          "SYN-SHP-00475"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00028"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00051"
+        ],
+        "order_items": [
+          "SYN-OI-00640"
+        ],
+        "orders": [
+          "SYN-ORD-00416"
+        ],
+        "return_comments": [
+          "SYN-RCM-00064"
+        ],
+        "returns": [
+          "SYN-RET-00072"
+        ],
+        "shipments": [
+          "SYN-SHP-00416"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00016"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00018|inspection_observation|SYN-INS-00059",
+          "SYN-CASE-00018|return_comment|SYN-RCM-00070",
+          "SYN-CASE-00018|return|SYN-RET-00080"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00018"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00059"
+        ],
+        "order_items": [
+          "SYN-OI-00276"
+        ],
+        "orders": [
+          "SYN-ORD-00178"
+        ],
+        "return_comments": [
+          "SYN-RCM-00070"
+        ],
+        "returns": [
+          "SYN-RET-00080"
+        ],
+        "shipments": [
+          "SYN-SHP-00178"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00103"
+        ],
+        "order_items": [
+          "SYN-OI-00574"
+        ],
+        "orders": [
+          "SYN-ORD-00373"
+        ],
+        "return_comments": [
+          "SYN-RCM-00118"
+        ],
+        "returns": [
+          "SYN-RET-00131"
+        ],
+        "shipments": [
+          "SYN-SHP-00373"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00116"
+        ],
+        "orders": [
+          "SYN-ORD-00076"
+        ],
+        "returns": [
+          "SYN-RET-00046"
+        ],
+        "shipments": [
+          "SYN-SHP-00076"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00045"
+        ],
+        "order_items": [
+          "SYN-OI-00020"
+        ],
+        "orders": [
+          "SYN-ORD-00015"
+        ],
+        "returns": [
+          "SYN-RET-00067"
+        ],
+        "shipments": [
+          "SYN-SHP-00015"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00002"
+        ],
+        "order_items": [
+          "SYN-OI-00614"
+        ],
+        "orders": [
+          "SYN-ORD-00398"
+        ],
+        "return_comments": [
+          "SYN-RCM-00003"
+        ],
+        "returns": [
+          "SYN-RET-00004"
+        ],
+        "shipments": [
+          "SYN-SHP-00398"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-colour-image-mismatch-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00116"
+        ],
+        "order_items": [
+          "SYN-OI-00635"
+        ],
+        "orders": [
+          "SYN-ORD-00412"
+        ],
+        "return_comments": [
+          "SYN-RCM-00134"
+        ],
+        "returns": [
+          "SYN-RET-00148"
+        ],
+        "shipments": [
+          "SYN-SHP-00412"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-00297"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00086"
+        ],
+        "order_items": [
+          "SYN-OI-00112"
+        ],
+        "orders": [
+          "SYN-ORD-00074"
+        ],
+        "return_comments": [
+          "SYN-RCM-00096"
+        ],
+        "returns": [
+          "SYN-RET-00109"
+        ],
+        "shipments": [
+          "SYN-SHP-00074"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-00535"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00001"
+        ],
+        "order_items": [
+          "SYN-OI-00207"
+        ],
+        "orders": [
+          "SYN-ORD-00133"
+        ],
+        "return_comments": [
+          "SYN-RCM-00002"
+        ],
+        "returns": [
+          "SYN-RET-00002"
+        ],
+        "shipments": [
+          "SYN-SHP-00133"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00019|delivery_event|SYN-DEV-00219",
+          "SYN-CASE-00019|inspection_observation|SYN-INS-00036",
+          "SYN-CASE-00019|return_comment|SYN-RCM-00047",
+          "SYN-CASE-00019|return|SYN-RET-00052"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00019"
+        ],
+        "delivery_events": [
+          "SYN-DEV-00219"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00036"
+        ],
+        "order_items": [
+          "SYN-OI-00080"
+        ],
+        "orders": [
+          "SYN-ORD-00055"
+        ],
+        "return_comments": [
+          "SYN-RCM-00047"
+        ],
+        "returns": [
+          "SYN-RET-00052"
+        ],
+        "shipments": [
+          "SYN-SHP-00055"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-00292"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00062"
+        ],
+        "order_items": [
+          "SYN-OI-00108"
+        ],
+        "orders": [
+          "SYN-ORD-00073"
+        ],
+        "return_comments": [
+          "SYN-RCM-00073"
+        ],
+        "returns": [
+          "SYN-RET-00083"
+        ],
+        "shipments": [
+          "SYN-SHP-00073"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00485"
+        ],
+        "orders": [
+          "SYN-ORD-00318"
+        ],
+        "returns": [
+          "SYN-RET-00030"
+        ],
+        "shipments": [
+          "SYN-SHP-00318"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00041"
+        ],
+        "order_items": [
+          "SYN-OI-00738"
+        ],
+        "orders": [
+          "SYN-ORD-00491"
+        ],
+        "returns": [
+          "SYN-RET-00062"
+        ],
+        "shipments": [
+          "SYN-SHP-00491"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00009"
+        ],
+        "order_items": [
+          "SYN-OI-00569"
+        ],
+        "orders": [
+          "SYN-ORD-00368"
+        ],
+        "return_comments": [
+          "SYN-RCM-00008"
+        ],
+        "returns": [
+          "SYN-RET-00012"
+        ],
+        "shipments": [
+          "SYN-SHP-00368"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-damaged-product-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "damaged product",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00064"
+        ],
+        "order_items": [
+          "SYN-OI-00353"
+        ],
+        "orders": [
+          "SYN-ORD-00228"
+        ],
+        "return_comments": [
+          "SYN-RCM-00075"
+        ],
+        "returns": [
+          "SYN-RET-00085"
+        ],
+        "shipments": [
+          "SYN-SHP-00228"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00010|customer_review|SYN-REV-00085",
+          "SYN-CASE-00010|inspection_observation|SYN-INS-00039",
+          "SYN-CASE-00010|return_comment|SYN-RCM-00051",
+          "SYN-CASE-00010|return|SYN-RET-00055"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00010"
+        ],
+        "customer_reviews": [
+          "SYN-REV-00085"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00039"
+        ],
+        "order_items": [
+          "SYN-OI-00082"
+        ],
+        "orders": [
+          "SYN-ORD-00056"
+        ],
+        "return_comments": [
+          "SYN-RCM-00051"
+        ],
+        "returns": [
+          "SYN-RET-00055"
+        ],
+        "shipments": [
+          "SYN-SHP-00056"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "customer_reviews": [
+          "SYN-REV-00107"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00004"
+        ],
+        "order_items": [
+          "SYN-OI-00202"
+        ],
+        "orders": [
+          "SYN-ORD-00129"
+        ],
+        "return_comments": [
+          "SYN-RCM-00004"
+        ],
+        "returns": [
+          "SYN-RET-00007"
+        ],
+        "shipments": [
+          "SYN-SHP-00129"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00011|inspection_observation|SYN-INS-00121",
+          "SYN-CASE-00011|return_comment|SYN-RCM-00140",
+          "SYN-CASE-00011|return|SYN-RET-00154"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00011"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00121"
+        ],
+        "order_items": [
+          "SYN-OI-00512"
+        ],
+        "orders": [
+          "SYN-ORD-00335"
+        ],
+        "return_comments": [
+          "SYN-RCM-00140"
+        ],
+        "returns": [
+          "SYN-RET-00154"
+        ],
+        "shipments": [
+          "SYN-SHP-00335"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00042"
+        ],
+        "order_items": [
+          "SYN-OI-00768"
+        ],
+        "orders": [
+          "SYN-ORD-00510"
+        ],
+        "return_comments": [
+          "SYN-RCM-00056"
+        ],
+        "returns": [
+          "SYN-RET-00063"
+        ],
+        "shipments": [
+          "SYN-SHP-00510"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00165"
+        ],
+        "orders": [
+          "SYN-ORD-00106"
+        ],
+        "return_comments": [
+          "SYN-RCM-00035"
+        ],
+        "returns": [
+          "SYN-RET-00042"
+        ],
+        "shipments": [
+          "SYN-SHP-00106"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00782"
+        ],
+        "orders": [
+          "SYN-ORD-00517"
+        ],
+        "returns": [
+          "SYN-RET-00088"
+        ],
+        "shipments": [
+          "SYN-SHP-00517"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00087"
+        ],
+        "order_items": [
+          "SYN-OI-00317"
+        ],
+        "orders": [
+          "SYN-ORD-00204"
+        ],
+        "return_comments": [
+          "SYN-RCM-00098"
+        ],
+        "returns": [
+          "SYN-RET-00110"
+        ],
+        "shipments": [
+          "SYN-SHP-00204"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-expectation-mismatch-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "expectation mismatch",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00053"
+        ],
+        "order_items": [
+          "SYN-OI-00270"
+        ],
+        "orders": [
+          "SYN-ORD-00173"
+        ],
+        "return_comments": [
+          "SYN-RCM-00066"
+        ],
+        "returns": [
+          "SYN-RET-00074"
+        ],
+        "shipments": [
+          "SYN-SHP-00173"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00008|inspection_observation|SYN-INS-00122",
+          "SYN-CASE-00008|return_comment|SYN-RCM-00141",
+          "SYN-CASE-00008|return|SYN-RET-00155"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00008"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00122",
+          "SYN-INS-00123"
+        ],
+        "order_items": [
+          "SYN-OI-00801"
+        ],
+        "orders": [
+          "SYN-ORD-00530"
+        ],
+        "return_comments": [
+          "SYN-RCM-00141"
+        ],
+        "returns": [
+          "SYN-RET-00155"
+        ],
+        "shipments": [
+          "SYN-SHP-00530"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00105",
+          "SYN-INS-00106"
+        ],
+        "order_items": [
+          "SYN-OI-00701"
+        ],
+        "orders": [
+          "SYN-ORD-00460"
+        ],
+        "return_comments": [
+          "SYN-RCM-00121"
+        ],
+        "returns": [
+          "SYN-RET-00133"
+        ],
+        "shipments": [
+          "SYN-SHP-00460"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00016|inspection_observation|SYN-INS-00126",
+          "SYN-CASE-00016|return_comment|SYN-RCM-00143",
+          "SYN-CASE-00016|return|SYN-RET-00158"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00016"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00126"
+        ],
+        "order_items": [
+          "SYN-OI-00732"
+        ],
+        "orders": [
+          "SYN-ORD-00485"
+        ],
+        "return_comments": [
+          "SYN-RCM-00143"
+        ],
+        "returns": [
+          "SYN-RET-00158"
+        ],
+        "shipments": [
+          "SYN-SHP-00485"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00015"
+        ],
+        "order_items": [
+          "SYN-OI-00268"
+        ],
+        "orders": [
+          "SYN-ORD-00172"
+        ],
+        "return_comments": [
+          "SYN-RCM-00016"
+        ],
+        "returns": [
+          "SYN-RET-00019"
+        ],
+        "shipments": [
+          "SYN-SHP-00172"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00143"
+        ],
+        "order_items": [
+          "SYN-OI-00101"
+        ],
+        "orders": [
+          "SYN-ORD-00069"
+        ],
+        "returns": [
+          "SYN-RET-00178"
+        ],
+        "shipments": [
+          "SYN-SHP-00069"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00322"
+        ],
+        "orders": [
+          "SYN-ORD-00208"
+        ],
+        "return_comments": [
+          "SYN-RCM-00017"
+        ],
+        "returns": [
+          "SYN-RET-00020"
+        ],
+        "shipments": [
+          "SYN-SHP-00208"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00085"
+        ],
+        "order_items": [
+          "SYN-OI-00185"
+        ],
+        "orders": [
+          "SYN-ORD-00118"
+        ],
+        "return_comments": [
+          "SYN-RCM-00095"
+        ],
+        "returns": [
+          "SYN-RET-00108"
+        ],
+        "shipments": [
+          "SYN-SHP-00118"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-incorrect-specification-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00054"
+        ],
+        "order_items": [
+          "SYN-OI-00124"
+        ],
+        "orders": [
+          "SYN-ORD-00083"
+        ],
+        "return_comments": [
+          "SYN-RCM-00067"
+        ],
+        "returns": [
+          "SYN-RET-00075"
+        ],
+        "shipments": [
+          "SYN-SHP-00083"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00294"
+        ],
+        "orders": [
+          "SYN-ORD-00191"
+        ],
+        "returns": [
+          "SYN-RET-00142"
+        ],
+        "shipments": [
+          "SYN-SHP-00191"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00053"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00848"
+        ],
+        "orders": [
+          "SYN-ORD-00562"
+        ],
+        "returns": [
+          "SYN-RET-00065"
+        ],
+        "shipments": [
+          "SYN-SHP-00562"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00052"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00627"
+        ],
+        "orders": [
+          "SYN-ORD-00406"
+        ],
+        "returns": [
+          "SYN-RET-00120"
+        ],
+        "shipments": [
+          "SYN-SHP-00406"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00483"
+        ],
+        "orders": [
+          "SYN-ORD-00317"
+        ],
+        "returns": [
+          "SYN-RET-00112"
+        ],
+        "shipments": [
+          "SYN-SHP-00317"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00492"
+        ],
+        "orders": [
+          "SYN-ORD-00323"
+        ],
+        "returns": [
+          "SYN-RET-00018"
+        ],
+        "shipments": [
+          "SYN-SHP-00323"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00274"
+        ],
+        "orders": [
+          "SYN-ORD-00177"
+        ],
+        "returns": [
+          "SYN-RET-00056"
+        ],
+        "shipments": [
+          "SYN-SHP-00177"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00689"
+        ],
+        "orders": [
+          "SYN-ORD-00450"
+        ],
+        "returns": [
+          "SYN-RET-00119"
+        ],
+        "shipments": [
+          "SYN-SHP-00450"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00007"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-insufficient-evidence-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "insufficient evidence",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00700"
+        ],
+        "orders": [
+          "SYN-ORD-00459"
+        ],
+        "returns": [
+          "SYN-RET-00039"
+        ],
+        "shipments": [
+          "SYN-SHP-00459"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00030"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00021"
+        ],
+        "order_items": [
+          "SYN-OI-00134"
+        ],
+        "orders": [
+          "SYN-ORD-00088"
+        ],
+        "return_comments": [
+          "SYN-RCM-00024"
+        ],
+        "returns": [
+          "SYN-RET-00028"
+        ],
+        "shipments": [
+          "SYN-SHP-00088"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00038"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00037"
+        ],
+        "order_items": [
+          "SYN-OI-00368"
+        ],
+        "orders": [
+          "SYN-ORD-00238"
+        ],
+        "return_comments": [
+          "SYN-RCM-00049"
+        ],
+        "returns": [
+          "SYN-RET-00053"
+        ],
+        "shipments": [
+          "SYN-SHP-00238"
+        ],
+        "support_complaints": [
+          "SYN-CMP-00018"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00005|inspection_observation|SYN-INS-00061",
+          "SYN-CASE-00005|return_comment|SYN-RCM-00072",
+          "SYN-CASE-00005|return|SYN-RET-00082"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00005"
+        ],
+        "delivery_events": [
+          "SYN-DEV-01653"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00061"
+        ],
+        "order_items": [
+          "SYN-OI-00633"
+        ],
+        "orders": [
+          "SYN-ORD-00411"
+        ],
+        "return_comments": [
+          "SYN-RCM-00072"
+        ],
+        "returns": [
+          "SYN-RET-00082"
+        ],
+        "shipments": [
+          "SYN-SHP-00411"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-01579"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00081"
+        ],
+        "order_items": [
+          "SYN-OI-00607"
+        ],
+        "orders": [
+          "SYN-ORD-00393"
+        ],
+        "return_comments": [
+          "SYN-RCM-00091"
+        ],
+        "returns": [
+          "SYN-RET-00104"
+        ],
+        "shipments": [
+          "SYN-SHP-00393"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-02175"
+        ],
+        "order_items": [
+          "SYN-OI-00816"
+        ],
+        "orders": [
+          "SYN-ORD-00541"
+        ],
+        "return_comments": [
+          "SYN-RCM-00032"
+        ],
+        "returns": [
+          "SYN-RET-00038"
+        ],
+        "shipments": [
+          "SYN-SHP-00541"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-01628"
+        ],
+        "order_items": [
+          "SYN-OI-00626"
+        ],
+        "orders": [
+          "SYN-ORD-00405"
+        ],
+        "returns": [
+          "SYN-RET-00174"
+        ],
+        "shipments": [
+          "SYN-SHP-00405"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-01366"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00011"
+        ],
+        "order_items": [
+          "SYN-OI-00521"
+        ],
+        "orders": [
+          "SYN-ORD-00340"
+        ],
+        "return_comments": [
+          "SYN-RCM-00010"
+        ],
+        "returns": [
+          "SYN-RET-00014"
+        ],
+        "shipments": [
+          "SYN-SHP-00340"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-logistics-delay-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "logistics delay",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-00526"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00080"
+        ],
+        "order_items": [
+          "SYN-OI-00205"
+        ],
+        "orders": [
+          "SYN-ORD-00131"
+        ],
+        "return_comments": [
+          "SYN-RCM-00090"
+        ],
+        "returns": [
+          "SYN-RET-00103"
+        ],
+        "shipments": [
+          "SYN-SHP-00131"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00018",
+          "SYN-INS-00019"
+        ],
+        "order_items": [
+          "SYN-OI-00394"
+        ],
+        "orders": [
+          "SYN-ORD-00257"
+        ],
+        "return_comments": [
+          "SYN-RCM-00021"
+        ],
+        "returns": [
+          "SYN-RET-00024"
+        ],
+        "shipments": [
+          "SYN-SHP-00257"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00091",
+          "SYN-INS-00092"
+        ],
+        "order_items": [
+          "SYN-OI-00820"
+        ],
+        "orders": [
+          "SYN-ORD-00543"
+        ],
+        "return_comments": [
+          "SYN-RCM-00104"
+        ],
+        "returns": [
+          "SYN-RET-00116"
+        ],
+        "shipments": [
+          "SYN-SHP-00543"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00020|inspection_observation|SYN-INS-00024",
+          "SYN-CASE-00020|return_comment|SYN-RCM-00027",
+          "SYN-CASE-00020|return|SYN-RET-00032"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00020"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00024"
+        ],
+        "order_items": [
+          "SYN-OI-00283"
+        ],
+        "orders": [
+          "SYN-ORD-00185"
+        ],
+        "return_comments": [
+          "SYN-RCM-00027"
+        ],
+        "returns": [
+          "SYN-RET-00032"
+        ],
+        "shipments": [
+          "SYN-SHP-00185"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00120"
+        ],
+        "order_items": [
+          "SYN-OI-00715"
+        ],
+        "orders": [
+          "SYN-ORD-00470"
+        ],
+        "return_comments": [
+          "SYN-RCM-00139"
+        ],
+        "returns": [
+          "SYN-RET-00153"
+        ],
+        "shipments": [
+          "SYN-SHP-00470"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00078"
+        ],
+        "orders": [
+          "SYN-ORD-00054"
+        ],
+        "returns": [
+          "SYN-RET-00003"
+        ],
+        "shipments": [
+          "SYN-SHP-00054"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-00535"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00063"
+        ],
+        "order_items": [
+          "SYN-OI-00208"
+        ],
+        "orders": [
+          "SYN-ORD-00133"
+        ],
+        "returns": [
+          "SYN-RET-00084"
+        ],
+        "shipments": [
+          "SYN-SHP-00133"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00144"
+        ],
+        "order_items": [
+          "SYN-OI-00204"
+        ],
+        "orders": [
+          "SYN-ORD-00130"
+        ],
+        "return_comments": [
+          "SYN-RCM-00159"
+        ],
+        "returns": [
+          "SYN-RET-00179"
+        ],
+        "shipments": [
+          "SYN-SHP-00130"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-manufacturing-defect-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "manufacturing defect",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00107"
+        ],
+        "order_items": [
+          "SYN-OI-00693"
+        ],
+        "orders": [
+          "SYN-ORD-00453"
+        ],
+        "return_comments": [
+          "SYN-RCM-00122"
+        ],
+        "returns": [
+          "SYN-RET-00134"
+        ],
+        "shipments": [
+          "SYN-SHP-00453"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00009|inspection_observation|SYN-INS-00013",
+          "SYN-CASE-00009|return_comment|SYN-RCM-00013",
+          "SYN-CASE-00009|return|SYN-RET-00016"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00009"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00013"
+        ],
+        "order_items": [
+          "SYN-OI-00311"
+        ],
+        "orders": [
+          "SYN-ORD-00202"
+        ],
+        "return_comments": [
+          "SYN-RCM-00013"
+        ],
+        "returns": [
+          "SYN-RET-00016"
+        ],
+        "shipments": [
+          "SYN-SHP-00202"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00090"
+        ],
+        "order_items": [
+          "SYN-OI-00281"
+        ],
+        "orders": [
+          "SYN-ORD-00183"
+        ],
+        "return_comments": [
+          "SYN-RCM-00101"
+        ],
+        "returns": [
+          "SYN-RET-00114"
+        ],
+        "shipments": [
+          "SYN-SHP-00183"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00015|inspection_observation|SYN-INS-00007",
+          "SYN-CASE-00015|return_comment|SYN-RCM-00006",
+          "SYN-CASE-00015|return|SYN-RET-00010"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00015"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00007"
+        ],
+        "order_items": [
+          "SYN-OI-00292"
+        ],
+        "orders": [
+          "SYN-ORD-00190"
+        ],
+        "return_comments": [
+          "SYN-RCM-00006"
+        ],
+        "returns": [
+          "SYN-RET-00010"
+        ],
+        "shipments": [
+          "SYN-SHP-00190"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00095"
+        ],
+        "order_items": [
+          "SYN-OI-00307"
+        ],
+        "orders": [
+          "SYN-ORD-00200"
+        ],
+        "return_comments": [
+          "SYN-RCM-00110"
+        ],
+        "returns": [
+          "SYN-RET-00123"
+        ],
+        "shipments": [
+          "SYN-SHP-00200"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00076"
+        ],
+        "orders": [
+          "SYN-ORD-00052"
+        ],
+        "return_comments": [
+          "SYN-RCM-00023"
+        ],
+        "returns": [
+          "SYN-RET-00027"
+        ],
+        "shipments": [
+          "SYN-SHP-00052"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00648"
+        ],
+        "orders": [
+          "SYN-ORD-00421"
+        ],
+        "returns": [
+          "SYN-RET-00141"
+        ],
+        "shipments": [
+          "SYN-SHP-00421"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00010"
+        ],
+        "order_items": [
+          "SYN-OI-00233"
+        ],
+        "orders": [
+          "SYN-ORD-00150"
+        ],
+        "return_comments": [
+          "SYN-RCM-00009"
+        ],
+        "returns": [
+          "SYN-RET-00013"
+        ],
+        "shipments": [
+          "SYN-SHP-00150"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-product-quality-defect-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00050"
+        ],
+        "order_items": [
+          "SYN-OI-00776"
+        ],
+        "orders": [
+          "SYN-ORD-00515"
+        ],
+        "return_comments": [
+          "SYN-RCM-00063"
+        ],
+        "returns": [
+          "SYN-RET-00071"
+        ],
+        "shipments": [
+          "SYN-SHP-00515"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00004|inspection_observation|SYN-INS-00138",
+          "SYN-CASE-00004|return_comment|SYN-RCM-00157",
+          "SYN-CASE-00004|return|SYN-RET-00172"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00004"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00138"
+        ],
+        "order_items": [
+          "SYN-OI-00141"
+        ],
+        "orders": [
+          "SYN-ORD-00093"
+        ],
+        "return_comments": [
+          "SYN-RCM-00157"
+        ],
+        "returns": [
+          "SYN-RET-00172"
+        ],
+        "shipments": [
+          "SYN-SHP-00093"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00128"
+        ],
+        "order_items": [
+          "SYN-OI-00609"
+        ],
+        "orders": [
+          "SYN-ORD-00395"
+        ],
+        "return_comments": [
+          "SYN-RCM-00144"
+        ],
+        "returns": [
+          "SYN-RET-00160"
+        ],
+        "shipments": [
+          "SYN-SHP-00395"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00012|inspection_observation|SYN-INS-00099",
+          "SYN-CASE-00012|return_comment|SYN-RCM-00114",
+          "SYN-CASE-00012|return|SYN-RET-00127"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00012"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00099"
+        ],
+        "order_items": [
+          "SYN-OI-00135"
+        ],
+        "orders": [
+          "SYN-ORD-00089"
+        ],
+        "return_comments": [
+          "SYN-RCM-00114"
+        ],
+        "returns": [
+          "SYN-RET-00127"
+        ],
+        "shipments": [
+          "SYN-SHP-00089"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00145"
+        ],
+        "order_items": [
+          "SYN-OI-00677"
+        ],
+        "orders": [
+          "SYN-ORD-00443"
+        ],
+        "return_comments": [
+          "SYN-RCM-00160"
+        ],
+        "returns": [
+          "SYN-RET-00180"
+        ],
+        "shipments": [
+          "SYN-SHP-00443"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00003"
+        ],
+        "order_items": [
+          "SYN-OI-00067"
+        ],
+        "orders": [
+          "SYN-ORD-00048"
+        ],
+        "returns": [
+          "SYN-RET-00005"
+        ],
+        "shipments": [
+          "SYN-SHP-00048"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00719"
+        ],
+        "orders": [
+          "SYN-ORD-00474"
+        ],
+        "return_comments": [
+          "SYN-RCM-00043"
+        ],
+        "returns": [
+          "SYN-RET-00048"
+        ],
+        "shipments": [
+          "SYN-SHP-00474"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00098"
+        ],
+        "order_items": [
+          "SYN-OI-00461"
+        ],
+        "orders": [
+          "SYN-ORD-00301"
+        ],
+        "return_comments": [
+          "SYN-RCM-00113"
+        ],
+        "returns": [
+          "SYN-RET-00126"
+        ],
+        "shipments": [
+          "SYN-SHP-00301"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-sizing-fit-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00056"
+        ],
+        "order_items": [
+          "SYN-OI-00668"
+        ],
+        "orders": [
+          "SYN-ORD-00434"
+        ],
+        "return_comments": [
+          "SYN-RCM-00068"
+        ],
+        "returns": [
+          "SYN-RET-00077"
+        ],
+        "shipments": [
+          "SYN-SHP-00434"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00112",
+          "SYN-INS-00113"
+        ],
+        "order_items": [
+          "SYN-OI-00396"
+        ],
+        "orders": [
+          "SYN-ORD-00258"
+        ],
+        "return_comments": [
+          "SYN-RCM-00129"
+        ],
+        "returns": [
+          "SYN-RET-00143"
+        ],
+        "shipments": [
+          "SYN-SHP-00258"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00048",
+          "SYN-INS-00049"
+        ],
+        "order_items": [
+          "SYN-OI-00407"
+        ],
+        "orders": [
+          "SYN-ORD-00266"
+        ],
+        "return_comments": [
+          "SYN-RCM-00061"
+        ],
+        "returns": [
+          "SYN-RET-00070"
+        ],
+        "shipments": [
+          "SYN-SHP-00266"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00071"
+        ],
+        "order_items": [
+          "SYN-OI-00031"
+        ],
+        "orders": [
+          "SYN-ORD-00023"
+        ],
+        "return_comments": [
+          "SYN-RCM-00081"
+        ],
+        "returns": [
+          "SYN-RET-00094"
+        ],
+        "shipments": [
+          "SYN-SHP-00023"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00031"
+        ],
+        "order_items": [
+          "SYN-OI-00032"
+        ],
+        "orders": [
+          "SYN-ORD-00024"
+        ],
+        "return_comments": [
+          "SYN-RCM-00037"
+        ],
+        "returns": [
+          "SYN-RET-00043"
+        ],
+        "shipments": [
+          "SYN-SHP-00024"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00017"
+        ],
+        "order_items": [
+          "SYN-OI-00148"
+        ],
+        "orders": [
+          "SYN-ORD-00096"
+        ],
+        "returns": [
+          "SYN-RET-00022"
+        ],
+        "shipments": [
+          "SYN-SHP-00096"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00022"
+        ],
+        "order_items": [
+          "SYN-OI-00164"
+        ],
+        "orders": [
+          "SYN-ORD-00105"
+        ],
+        "returns": [
+          "SYN-RET-00029"
+        ],
+        "shipments": [
+          "SYN-SHP-00105"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00034"
+        ],
+        "order_items": [
+          "SYN-OI-00412"
+        ],
+        "orders": [
+          "SYN-ORD-00270"
+        ],
+        "return_comments": [
+          "SYN-RCM-00042"
+        ],
+        "returns": [
+          "SYN-RET-00047"
+        ],
+        "shipments": [
+          "SYN-SHP-00270"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-suspected-abuse-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "suspected abuse (investigation only)",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00130"
+        ],
+        "order_items": [
+          "SYN-OI-00571"
+        ],
+        "orders": [
+          "SYN-ORD-00370"
+        ],
+        "return_comments": [
+          "SYN-RCM-00146"
+        ],
+        "returns": [
+          "SYN-RET-00162"
+        ],
+        "shipments": [
+          "SYN-SHP-00370"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-conflicting-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00028"
+        ],
+        "order_items": [
+          "SYN-OI-00423"
+        ],
+        "orders": [
+          "SYN-ORD-00275"
+        ],
+        "return_comments": [
+          "SYN-RCM-00031"
+        ],
+        "returns": [
+          "SYN-RET-00036"
+        ],
+        "shipments": [
+          "SYN-SHP-00275"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-conflicting-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "conflicting",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00094"
+        ],
+        "order_items": [
+          "SYN-OI-00227"
+        ],
+        "orders": [
+          "SYN-ORD-00145"
+        ],
+        "return_comments": [
+          "SYN-RCM-00109"
+        ],
+        "returns": [
+          "SYN-RET-00122"
+        ],
+        "shipments": [
+          "SYN-SHP-00145"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-consistent-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00002|inspection_observation|SYN-INS-00131",
+          "SYN-CASE-00002|return_comment|SYN-RCM-00148",
+          "SYN-CASE-00002|return|SYN-RET-00164"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00002"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00131"
+        ],
+        "order_items": [
+          "SYN-OI-00707"
+        ],
+        "orders": [
+          "SYN-ORD-00464"
+        ],
+        "return_comments": [
+          "SYN-RCM-00148"
+        ],
+        "returns": [
+          "SYN-RET-00164"
+        ],
+        "shipments": [
+          "SYN-SHP-00464"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-consistent-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "consistent",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00040"
+        ],
+        "order_items": [
+          "SYN-OI-00665"
+        ],
+        "orders": [
+          "SYN-ORD-00432"
+        ],
+        "return_comments": [
+          "SYN-RCM-00052"
+        ],
+        "returns": [
+          "SYN-RET-00057"
+        ],
+        "shipments": [
+          "SYN-SHP-00432"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-missing_evidence-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00038"
+        ],
+        "order_items": [
+          "SYN-OI-00239"
+        ],
+        "orders": [
+          "SYN-ORD-00155"
+        ],
+        "returns": [
+          "SYN-RET-00054"
+        ],
+        "shipments": [
+          "SYN-SHP-00155"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-missing_evidence-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "missing_evidence",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00001"
+        ],
+        "orders": [
+          "SYN-ORD-00001"
+        ],
+        "return_comments": [
+          "SYN-RCM-00136"
+        ],
+        "returns": [
+          "SYN-RET-00150"
+        ],
+        "shipments": [
+          "SYN-SHP-00001"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-noisy_text-1",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00093"
+        ],
+        "order_items": [
+          "SYN-OI-00328"
+        ],
+        "orders": [
+          "SYN-ORD-00212"
+        ],
+        "return_comments": [
+          "SYN-RCM-00108"
+        ],
+        "returns": [
+          "SYN-RET-00121"
+        ],
+        "shipments": [
+          "SYN-SHP-00212"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "cat-wrong-item-delivered-noisy_text-2",
+      "family": "category_evidence_shape",
+      "generator_intent": "wrong item delivered",
+      "evidence_shape": "noisy_text",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00079"
+        ],
+        "order_items": [
+          "SYN-OI-00235"
+        ],
+        "orders": [
+          "SYN-ORD-00152"
+        ],
+        "return_comments": [
+          "SYN-RCM-00089"
+        ],
+        "returns": [
+          "SYN-RET-00102"
+        ],
+        "shipments": [
+          "SYN-SHP-00152"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "control-no-longer-needed",
+      "family": "plain_control",
+      "generator_intent": "change of mind",
+      "evidence_shape": "plain",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00005",
+          "SYN-INS-00030",
+          "SYN-INS-00046",
+          "SYN-INS-00069",
+          "SYN-INS-00076",
+          "SYN-INS-00115",
+          "SYN-INS-00125",
+          "SYN-INS-00127"
+        ],
+        "order_items": [
+          "SYN-OI-00004",
+          "SYN-OI-00083",
+          "SYN-OI-00131",
+          "SYN-OI-00138",
+          "SYN-OI-00178",
+          "SYN-OI-00200",
+          "SYN-OI-00249",
+          "SYN-OI-00251",
+          "SYN-OI-00286",
+          "SYN-OI-00320",
+          "SYN-OI-00459",
+          "SYN-OI-00529",
+          "SYN-OI-00842",
+          "SYN-OI-00845"
+        ],
+        "orders": [
+          "SYN-ORD-00003",
+          "SYN-ORD-00057",
+          "SYN-ORD-00087",
+          "SYN-ORD-00091",
+          "SYN-ORD-00114",
+          "SYN-ORD-00128",
+          "SYN-ORD-00160",
+          "SYN-ORD-00161",
+          "SYN-ORD-00186",
+          "SYN-ORD-00207",
+          "SYN-ORD-00300",
+          "SYN-ORD-00344",
+          "SYN-ORD-00558",
+          "SYN-ORD-00560"
+        ],
+        "return_comments": [
+          "SYN-RCM-00001",
+          "SYN-RCM-00033",
+          "SYN-RCM-00034",
+          "SYN-RCM-00053",
+          "SYN-RCM-00058",
+          "SYN-RCM-00078",
+          "SYN-RCM-00087",
+          "SYN-RCM-00124",
+          "SYN-RCM-00131",
+          "SYN-RCM-00133"
+        ],
+        "returns": [
+          "SYN-RET-00001",
+          "SYN-RET-00008",
+          "SYN-RET-00025",
+          "SYN-RET-00040",
+          "SYN-RET-00041",
+          "SYN-RET-00049",
+          "SYN-RET-00058",
+          "SYN-RET-00059",
+          "SYN-RET-00068",
+          "SYN-RET-00091",
+          "SYN-RET-00099",
+          "SYN-RET-00118",
+          "SYN-RET-00135",
+          "SYN-RET-00145",
+          "SYN-RET-00147",
+          "SYN-RET-00157",
+          "SYN-RET-00159",
+          "SYN-RET-00165"
+        ],
+        "shipments": [
+          "SYN-SHP-00003",
+          "SYN-SHP-00057",
+          "SYN-SHP-00087",
+          "SYN-SHP-00091",
+          "SYN-SHP-00114",
+          "SYN-SHP-00128",
+          "SYN-SHP-00160",
+          "SYN-SHP-00161",
+          "SYN-SHP-00186",
+          "SYN-SHP-00207",
+          "SYN-SHP-00300",
+          "SYN-SHP-00344",
+          "SYN-SHP-00558",
+          "SYN-SHP-00560"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "control-other",
+      "family": "plain_control",
+      "generator_intent": "other",
+      "evidence_shape": "plain",
+      "record_ids": {
+        "delivery_events": [
+          "SYN-DEV-00292"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00008",
+          "SYN-INS-00044",
+          "SYN-INS-00052",
+          "SYN-INS-00068",
+          "SYN-INS-00083",
+          "SYN-INS-00102",
+          "SYN-INS-00118",
+          "SYN-INS-00132"
+        ],
+        "order_items": [
+          "SYN-OI-00009",
+          "SYN-OI-00109",
+          "SYN-OI-00117",
+          "SYN-OI-00147",
+          "SYN-OI-00272",
+          "SYN-OI-00309",
+          "SYN-OI-00346",
+          "SYN-OI-00433",
+          "SYN-OI-00561",
+          "SYN-OI-00603",
+          "SYN-OI-00688",
+          "SYN-OI-00733",
+          "SYN-OI-00765",
+          "SYN-OI-00829",
+          "SYN-OI-00851"
+        ],
+        "orders": [
+          "SYN-ORD-00005",
+          "SYN-ORD-00073",
+          "SYN-ORD-00077",
+          "SYN-ORD-00095",
+          "SYN-ORD-00175",
+          "SYN-ORD-00201",
+          "SYN-ORD-00224",
+          "SYN-ORD-00281",
+          "SYN-ORD-00363",
+          "SYN-ORD-00390",
+          "SYN-ORD-00450",
+          "SYN-ORD-00486",
+          "SYN-ORD-00508",
+          "SYN-ORD-00548",
+          "SYN-ORD-00564"
+        ],
+        "return_comments": [
+          "SYN-RCM-00007",
+          "SYN-RCM-00020",
+          "SYN-RCM-00046",
+          "SYN-RCM-00054",
+          "SYN-RCM-00055",
+          "SYN-RCM-00065",
+          "SYN-RCM-00080",
+          "SYN-RCM-00106",
+          "SYN-RCM-00117",
+          "SYN-RCM-00125",
+          "SYN-RCM-00132",
+          "SYN-RCM-00137",
+          "SYN-RCM-00147",
+          "SYN-RCM-00150"
+        ],
+        "returns": [
+          "SYN-RET-00006",
+          "SYN-RET-00011",
+          "SYN-RET-00023",
+          "SYN-RET-00051",
+          "SYN-RET-00060",
+          "SYN-RET-00061",
+          "SYN-RET-00066",
+          "SYN-RET-00073",
+          "SYN-RET-00090",
+          "SYN-RET-00093",
+          "SYN-RET-00106",
+          "SYN-RET-00117",
+          "SYN-RET-00130",
+          "SYN-RET-00136",
+          "SYN-RET-00146",
+          "SYN-RET-00151",
+          "SYN-RET-00163",
+          "SYN-RET-00166"
+        ],
+        "shipments": [
+          "SYN-SHP-00005",
+          "SYN-SHP-00073",
+          "SYN-SHP-00077",
+          "SYN-SHP-00095",
+          "SYN-SHP-00175",
+          "SYN-SHP-00201",
+          "SYN-SHP-00224",
+          "SYN-SHP-00281",
+          "SYN-SHP-00363",
+          "SYN-SHP-00390",
+          "SYN-SHP-00450",
+          "SYN-SHP-00486",
+          "SYN-SHP-00508",
+          "SYN-SHP-00548",
+          "SYN-SHP-00564"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "hotspot-headphone-colour",
+      "family": "sku_hotspot",
+      "generator_intent": "colour/image mismatch",
+      "evidence_shape": "pattern",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00003|return_comment|SYN-RCM-00014",
+          "SYN-CASE-00003|return_comment|SYN-RCM-00030",
+          "SYN-CASE-00003|return_comment|SYN-RCM-00038",
+          "SYN-CASE-00003|return_comment|SYN-RCM-00069",
+          "SYN-CASE-00003|return_comment|SYN-RCM-00130",
+          "SYN-CASE-00003|return_comment|SYN-RCM-00138",
+          "SYN-CASE-00003|return|SYN-RET-00017",
+          "SYN-CASE-00003|return|SYN-RET-00034",
+          "SYN-CASE-00003|return|SYN-RET-00035",
+          "SYN-CASE-00003|return|SYN-RET-00044",
+          "SYN-CASE-00003|return|SYN-RET-00079",
+          "SYN-CASE-00003|return|SYN-RET-00144",
+          "SYN-CASE-00003|return|SYN-RET-00152",
+          "SYN-CASE-00003|return|SYN-RET-00156"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00003"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00014",
+          "SYN-INS-00026",
+          "SYN-INS-00027",
+          "SYN-INS-00032",
+          "SYN-INS-00058",
+          "SYN-INS-00114",
+          "SYN-INS-00119",
+          "SYN-INS-00124"
+        ],
+        "order_items": [
+          "SYN-OI-00152",
+          "SYN-OI-00195",
+          "SYN-OI-00351",
+          "SYN-OI-00636",
+          "SYN-OI-00646",
+          "SYN-OI-00741",
+          "SYN-OI-00769",
+          "SYN-OI-00834"
+        ],
+        "orders": [
+          "SYN-ORD-00098",
+          "SYN-ORD-00123",
+          "SYN-ORD-00227",
+          "SYN-ORD-00413",
+          "SYN-ORD-00419",
+          "SYN-ORD-00493",
+          "SYN-ORD-00510",
+          "SYN-ORD-00551"
+        ],
+        "return_comments": [
+          "SYN-RCM-00014",
+          "SYN-RCM-00030",
+          "SYN-RCM-00038",
+          "SYN-RCM-00069",
+          "SYN-RCM-00130",
+          "SYN-RCM-00138"
+        ],
+        "returns": [
+          "SYN-RET-00017",
+          "SYN-RET-00034",
+          "SYN-RET-00035",
+          "SYN-RET-00044",
+          "SYN-RET-00079",
+          "SYN-RET-00144",
+          "SYN-RET-00152",
+          "SYN-RET-00156"
+        ],
+        "shipments": [
+          "SYN-SHP-00098",
+          "SYN-SHP-00123",
+          "SYN-SHP-00227",
+          "SYN-SHP-00413",
+          "SYN-SHP-00419",
+          "SYN-SHP-00493",
+          "SYN-SHP-00510",
+          "SYN-SHP-00551"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "hotspot-laptop-specification",
+      "family": "sku_hotspot",
+      "generator_intent": "incorrect specification",
+      "evidence_shape": "pattern",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00007|return_comment|SYN-RCM-00071",
+          "SYN-CASE-00007|return_comment|SYN-RCM-00076",
+          "SYN-CASE-00007|return_comment|SYN-RCM-00088",
+          "SYN-CASE-00007|return_comment|SYN-RCM-00092",
+          "SYN-CASE-00007|return_comment|SYN-RCM-00128",
+          "SYN-CASE-00007|return_comment|SYN-RCM-00135",
+          "SYN-CASE-00007|return|SYN-RET-00078",
+          "SYN-CASE-00007|return|SYN-RET-00081",
+          "SYN-CASE-00007|return|SYN-RET-00089",
+          "SYN-CASE-00007|return|SYN-RET-00100",
+          "SYN-CASE-00007|return|SYN-RET-00105",
+          "SYN-CASE-00007|return|SYN-RET-00140",
+          "SYN-CASE-00007|return|SYN-RET-00149",
+          "SYN-CASE-00007|return|SYN-RET-00167"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00007"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00057",
+          "SYN-INS-00060",
+          "SYN-INS-00067",
+          "SYN-INS-00077",
+          "SYN-INS-00082",
+          "SYN-INS-00111",
+          "SYN-INS-00117",
+          "SYN-INS-00133"
+        ],
+        "order_items": [
+          "SYN-OI-00228",
+          "SYN-OI-00232",
+          "SYN-OI-00573",
+          "SYN-OI-00597",
+          "SYN-OI-00652",
+          "SYN-OI-00711",
+          "SYN-OI-00772",
+          "SYN-OI-00822"
+        ],
+        "orders": [
+          "SYN-ORD-00145",
+          "SYN-ORD-00149",
+          "SYN-ORD-00372",
+          "SYN-ORD-00387",
+          "SYN-ORD-00423",
+          "SYN-ORD-00468",
+          "SYN-ORD-00512",
+          "SYN-ORD-00544"
+        ],
+        "return_comments": [
+          "SYN-RCM-00071",
+          "SYN-RCM-00076",
+          "SYN-RCM-00088",
+          "SYN-RCM-00092",
+          "SYN-RCM-00128",
+          "SYN-RCM-00135"
+        ],
+        "returns": [
+          "SYN-RET-00078",
+          "SYN-RET-00081",
+          "SYN-RET-00089",
+          "SYN-RET-00100",
+          "SYN-RET-00105",
+          "SYN-RET-00140",
+          "SYN-RET-00149",
+          "SYN-RET-00167"
+        ],
+        "shipments": [
+          "SYN-SHP-00145",
+          "SYN-SHP-00149",
+          "SYN-SHP-00372",
+          "SYN-SHP-00387",
+          "SYN-SHP-00423",
+          "SYN-SHP-00468",
+          "SYN-SHP-00512",
+          "SYN-SHP-00544"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "hotspot-packaging-damage",
+      "family": "sku_hotspot",
+      "generator_intent": "damaged product",
+      "evidence_shape": "pattern",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00001|delivery_event|SYN-DEV-01004",
+          "SYN-CASE-00001|delivery_event|SYN-DEV-01089",
+          "SYN-CASE-00001|delivery_event|SYN-DEV-01718",
+          "SYN-CASE-00001|return_comment|SYN-RCM-00005",
+          "SYN-CASE-00001|return_comment|SYN-RCM-00019",
+          "SYN-CASE-00001|return_comment|SYN-RCM-00029",
+          "SYN-CASE-00001|return_comment|SYN-RCM-00057",
+          "SYN-CASE-00001|return_comment|SYN-RCM-00060",
+          "SYN-CASE-00001|return_comment|SYN-RCM-00079",
+          "SYN-CASE-00001|return|SYN-RET-00009",
+          "SYN-CASE-00001|return|SYN-RET-00021",
+          "SYN-CASE-00001|return|SYN-RET-00033",
+          "SYN-CASE-00001|return|SYN-RET-00037",
+          "SYN-CASE-00001|return|SYN-RET-00064",
+          "SYN-CASE-00001|return|SYN-RET-00069",
+          "SYN-CASE-00001|return|SYN-RET-00092",
+          "SYN-CASE-00001|return|SYN-RET-00175"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00001"
+        ],
+        "delivery_events": [
+          "SYN-DEV-01004",
+          "SYN-DEV-01089",
+          "SYN-DEV-01718"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00006",
+          "SYN-INS-00016",
+          "SYN-INS-00025",
+          "SYN-INS-00029",
+          "SYN-INS-00043",
+          "SYN-INS-00047",
+          "SYN-INS-00070",
+          "SYN-INS-00140"
+        ],
+        "order_items": [
+          "SYN-OI-00190",
+          "SYN-OI-00365",
+          "SYN-OI-00386",
+          "SYN-OI-00414",
+          "SYN-OI-00657",
+          "SYN-OI-00696",
+          "SYN-OI-00758",
+          "SYN-OI-00802"
+        ],
+        "orders": [
+          "SYN-ORD-00121",
+          "SYN-ORD-00235",
+          "SYN-ORD-00250",
+          "SYN-ORD-00271",
+          "SYN-ORD-00427",
+          "SYN-ORD-00456",
+          "SYN-ORD-00503",
+          "SYN-ORD-00530"
+        ],
+        "return_comments": [
+          "SYN-RCM-00005",
+          "SYN-RCM-00019",
+          "SYN-RCM-00029",
+          "SYN-RCM-00057",
+          "SYN-RCM-00060",
+          "SYN-RCM-00079"
+        ],
+        "returns": [
+          "SYN-RET-00009",
+          "SYN-RET-00021",
+          "SYN-RET-00033",
+          "SYN-RET-00037",
+          "SYN-RET-00064",
+          "SYN-RET-00069",
+          "SYN-RET-00092",
+          "SYN-RET-00175"
+        ],
+        "shipments": [
+          "SYN-SHP-00121",
+          "SYN-SHP-00235",
+          "SYN-SHP-00250",
+          "SYN-SHP-00271",
+          "SYN-SHP-00427",
+          "SYN-SHP-00456",
+          "SYN-SHP-00503",
+          "SYN-SHP-00530"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "hotspot-phone-defect",
+      "family": "sku_hotspot",
+      "generator_intent": "product-quality defect",
+      "evidence_shape": "pattern",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00013|return_comment|SYN-RCM-00045",
+          "SYN-CASE-00013|return_comment|SYN-RCM-00082",
+          "SYN-CASE-00013|return_comment|SYN-RCM-00111",
+          "SYN-CASE-00013|return_comment|SYN-RCM-00115",
+          "SYN-CASE-00013|return_comment|SYN-RCM-00126",
+          "SYN-CASE-00013|return_comment|SYN-RCM-00154",
+          "SYN-CASE-00013|return|SYN-RET-00050",
+          "SYN-CASE-00013|return|SYN-RET-00076",
+          "SYN-CASE-00013|return|SYN-RET-00095",
+          "SYN-CASE-00013|return|SYN-RET-00101",
+          "SYN-CASE-00013|return|SYN-RET-00124",
+          "SYN-CASE-00013|return|SYN-RET-00128",
+          "SYN-CASE-00013|return|SYN-RET-00137",
+          "SYN-CASE-00013|return|SYN-RET-00170"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00013"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00035",
+          "SYN-INS-00055",
+          "SYN-INS-00072",
+          "SYN-INS-00078",
+          "SYN-INS-00096",
+          "SYN-INS-00100",
+          "SYN-INS-00108",
+          "SYN-INS-00136"
+        ],
+        "order_items": [
+          "SYN-OI-00059",
+          "SYN-OI-00087",
+          "SYN-OI-00312",
+          "SYN-OI-00431",
+          "SYN-OI-00460",
+          "SYN-OI-00501",
+          "SYN-OI-00778",
+          "SYN-OI-00806"
+        ],
+        "orders": [
+          "SYN-ORD-00042",
+          "SYN-ORD-00059",
+          "SYN-ORD-00202",
+          "SYN-ORD-00280",
+          "SYN-ORD-00301",
+          "SYN-ORD-00330",
+          "SYN-ORD-00516",
+          "SYN-ORD-00533"
+        ],
+        "return_comments": [
+          "SYN-RCM-00045",
+          "SYN-RCM-00082",
+          "SYN-RCM-00111",
+          "SYN-RCM-00115",
+          "SYN-RCM-00126",
+          "SYN-RCM-00154"
+        ],
+        "returns": [
+          "SYN-RET-00050",
+          "SYN-RET-00076",
+          "SYN-RET-00095",
+          "SYN-RET-00101",
+          "SYN-RET-00124",
+          "SYN-RET-00128",
+          "SYN-RET-00137",
+          "SYN-RET-00170"
+        ],
+        "shipments": [
+          "SYN-SHP-00042",
+          "SYN-SHP-00059",
+          "SYN-SHP-00202",
+          "SYN-SHP-00280",
+          "SYN-SHP-00301",
+          "SYN-SHP-00330",
+          "SYN-SHP-00516",
+          "SYN-SHP-00533"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "hotspot-shoe-sizing-a",
+      "family": "sku_hotspot",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "pattern",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00014|return_comment|SYN-RCM-00085",
+          "SYN-CASE-00014|return_comment|SYN-RCM-00120",
+          "SYN-CASE-00014|return_comment|SYN-RCM-00127",
+          "SYN-CASE-00014|return_comment|SYN-RCM-00145",
+          "SYN-CASE-00014|return_comment|SYN-RCM-00152",
+          "SYN-CASE-00014|return_comment|SYN-RCM-00158",
+          "SYN-CASE-00014|return|SYN-RET-00086",
+          "SYN-CASE-00014|return|SYN-RET-00097",
+          "SYN-CASE-00014|return|SYN-RET-00132",
+          "SYN-CASE-00014|return|SYN-RET-00139",
+          "SYN-CASE-00014|return|SYN-RET-00161",
+          "SYN-CASE-00014|return|SYN-RET-00169",
+          "SYN-CASE-00014|return|SYN-RET-00173",
+          "SYN-CASE-00014|return|SYN-RET-00176"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00014"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00065",
+          "SYN-INS-00074",
+          "SYN-INS-00104",
+          "SYN-INS-00110",
+          "SYN-INS-00129",
+          "SYN-INS-00135",
+          "SYN-INS-00139",
+          "SYN-INS-00141"
+        ],
+        "order_items": [
+          "SYN-OI-00035",
+          "SYN-OI-00439",
+          "SYN-OI-00576",
+          "SYN-OI-00653",
+          "SYN-OI-00694",
+          "SYN-OI-00713",
+          "SYN-OI-00753",
+          "SYN-OI-00797"
+        ],
+        "orders": [
+          "SYN-ORD-00026",
+          "SYN-ORD-00287",
+          "SYN-ORD-00374",
+          "SYN-ORD-00424",
+          "SYN-ORD-00454",
+          "SYN-ORD-00469",
+          "SYN-ORD-00500",
+          "SYN-ORD-00527"
+        ],
+        "return_comments": [
+          "SYN-RCM-00085",
+          "SYN-RCM-00120",
+          "SYN-RCM-00127",
+          "SYN-RCM-00145",
+          "SYN-RCM-00152",
+          "SYN-RCM-00158"
+        ],
+        "returns": [
+          "SYN-RET-00086",
+          "SYN-RET-00097",
+          "SYN-RET-00132",
+          "SYN-RET-00139",
+          "SYN-RET-00161",
+          "SYN-RET-00169",
+          "SYN-RET-00173",
+          "SYN-RET-00176"
+        ],
+        "shipments": [
+          "SYN-SHP-00026",
+          "SYN-SHP-00287",
+          "SYN-SHP-00374",
+          "SYN-SHP-00424",
+          "SYN-SHP-00454",
+          "SYN-SHP-00469",
+          "SYN-SHP-00500",
+          "SYN-SHP-00527"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "hotspot-shoe-sizing-b",
+      "family": "sku_hotspot",
+      "generator_intent": "sizing/fit",
+      "evidence_shape": "pattern",
+      "record_ids": {
+        "correction_case_evidence": [
+          "SYN-CASE-00017|return_comment|SYN-RCM-00026",
+          "SYN-CASE-00017|return_comment|SYN-RCM-00086",
+          "SYN-CASE-00017|return_comment|SYN-RCM-00093",
+          "SYN-CASE-00017|return_comment|SYN-RCM-00099",
+          "SYN-CASE-00017|return_comment|SYN-RCM-00100",
+          "SYN-CASE-00017|return_comment|SYN-RCM-00156",
+          "SYN-CASE-00017|return|SYN-RET-00031",
+          "SYN-CASE-00017|return|SYN-RET-00087",
+          "SYN-CASE-00017|return|SYN-RET-00098",
+          "SYN-CASE-00017|return|SYN-RET-00107",
+          "SYN-CASE-00017|return|SYN-RET-00111",
+          "SYN-CASE-00017|return|SYN-RET-00113",
+          "SYN-CASE-00017|return|SYN-RET-00138",
+          "SYN-CASE-00017|return|SYN-RET-00171"
+        ],
+        "correction_cases": [
+          "SYN-CASE-00017"
+        ],
+        "inspection_observations": [
+          "SYN-INS-00023",
+          "SYN-INS-00066",
+          "SYN-INS-00075",
+          "SYN-INS-00084",
+          "SYN-INS-00088",
+          "SYN-INS-00089",
+          "SYN-INS-00109",
+          "SYN-INS-00137"
+        ],
+        "order_items": [
+          "SYN-OI-00077",
+          "SYN-OI-00225",
+          "SYN-OI-00243",
+          "SYN-OI-00375",
+          "SYN-OI-00393",
+          "SYN-OI-00610",
+          "SYN-OI-00670",
+          "SYN-OI-00673"
+        ],
+        "orders": [
+          "SYN-ORD-00053",
+          "SYN-ORD-00143",
+          "SYN-ORD-00157",
+          "SYN-ORD-00244",
+          "SYN-ORD-00256",
+          "SYN-ORD-00396",
+          "SYN-ORD-00436",
+          "SYN-ORD-00439"
+        ],
+        "return_comments": [
+          "SYN-RCM-00026",
+          "SYN-RCM-00086",
+          "SYN-RCM-00093",
+          "SYN-RCM-00099",
+          "SYN-RCM-00100",
+          "SYN-RCM-00156"
+        ],
+        "returns": [
+          "SYN-RET-00031",
+          "SYN-RET-00087",
+          "SYN-RET-00098",
+          "SYN-RET-00107",
+          "SYN-RET-00111",
+          "SYN-RET-00113",
+          "SYN-RET-00138",
+          "SYN-RET-00171"
+        ],
+        "shipments": [
+          "SYN-SHP-00053",
+          "SYN-SHP-00143",
+          "SYN-SHP-00157",
+          "SYN-SHP-00244",
+          "SYN-SHP-00256",
+          "SYN-SHP-00396",
+          "SYN-SHP-00436",
+          "SYN-SHP-00439"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "overlay-allowlisted-personal-data",
+      "family": "text_overlay",
+      "generator_intent": "allowlisted-personal-data",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "return_comments": [
+          "SYN-RCM-00018",
+          "SYN-RCM-00028",
+          "SYN-RCM-00036",
+          "SYN-RCM-00050",
+          "SYN-RCM-00059",
+          "SYN-RCM-00074",
+          "SYN-RCM-00077",
+          "SYN-RCM-00094",
+          "SYN-RCM-00097",
+          "SYN-RCM-00123"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "overlay-devanagari",
+      "family": "text_overlay",
+      "generator_intent": "devanagari",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "return_comments": [
+          "SYN-RCM-00012",
+          "SYN-RCM-00025",
+          "SYN-RCM-00048",
+          "SYN-RCM-00161"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "overlay-markup",
+      "family": "text_overlay",
+      "generator_intent": "markup",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "return_comments": [
+          "SYN-RCM-00039",
+          "SYN-RCM-00107",
+          "SYN-RCM-00119",
+          "SYN-RCM-00155"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "overlay-near-limit",
+      "family": "text_overlay",
+      "generator_intent": "near-limit",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "return_comments": [
+          "SYN-RCM-00015",
+          "SYN-RCM-00044",
+          "SYN-RCM-00083",
+          "SYN-RCM-00142"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "overlay-prompt-injection",
+      "family": "text_overlay",
+      "generator_intent": "prompt-injection",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "return_comments": [
+          "SYN-RCM-00041",
+          "SYN-RCM-00062",
+          "SYN-RCM-00102",
+          "SYN-RCM-00105",
+          "SYN-RCM-00149",
+          "SYN-RCM-00153"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "structure-cancellation-chains",
+      "family": "structural_rule",
+      "generator_intent": "control",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00008",
+          "SYN-INS-00046",
+          "SYN-INS-00115",
+          "SYN-INS-00118"
+        ],
+        "order_items": [
+          "SYN-OI-00004",
+          "SYN-OI-00083",
+          "SYN-OI-00178",
+          "SYN-OI-00309",
+          "SYN-OI-00561",
+          "SYN-OI-00851"
+        ],
+        "orders": [
+          "SYN-ORD-00003",
+          "SYN-ORD-00057",
+          "SYN-ORD-00114",
+          "SYN-ORD-00201",
+          "SYN-ORD-00363",
+          "SYN-ORD-00564"
+        ],
+        "return_comments": [
+          "SYN-RCM-00001",
+          "SYN-RCM-00007",
+          "SYN-RCM-00034",
+          "SYN-RCM-00053",
+          "SYN-RCM-00054",
+          "SYN-RCM-00055",
+          "SYN-RCM-00058",
+          "SYN-RCM-00131",
+          "SYN-RCM-00132",
+          "SYN-RCM-00133",
+          "SYN-RCM-00137",
+          "SYN-RCM-00147"
+        ],
+        "returns": [
+          "SYN-RET-00001",
+          "SYN-RET-00011",
+          "SYN-RET-00041",
+          "SYN-RET-00058",
+          "SYN-RET-00060",
+          "SYN-RET-00061",
+          "SYN-RET-00068",
+          "SYN-RET-00145",
+          "SYN-RET-00146",
+          "SYN-RET-00147",
+          "SYN-RET-00151",
+          "SYN-RET-00163"
+        ],
+        "shipments": [
+          "SYN-SHP-00003",
+          "SYN-SHP-00057",
+          "SYN-SHP-00114",
+          "SYN-SHP-00201",
+          "SYN-SHP-00363",
+          "SYN-SHP-00564"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "structure-cancelled-alone",
+      "family": "structural_rule",
+      "generator_intent": "control",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "order_items": [
+          "SYN-OI-00131",
+          "SYN-OI-00249",
+          "SYN-OI-00251",
+          "SYN-OI-00272",
+          "SYN-OI-00433",
+          "SYN-OI-00688"
+        ],
+        "orders": [
+          "SYN-ORD-00087",
+          "SYN-ORD-00160",
+          "SYN-ORD-00161",
+          "SYN-ORD-00175",
+          "SYN-ORD-00281",
+          "SYN-ORD-00450"
+        ],
+        "return_comments": [
+          "SYN-RCM-00020",
+          "SYN-RCM-00080",
+          "SYN-RCM-00125"
+        ],
+        "returns": [
+          "SYN-RET-00023",
+          "SYN-RET-00025",
+          "SYN-RET-00059",
+          "SYN-RET-00093",
+          "SYN-RET-00118",
+          "SYN-RET-00136"
+        ],
+        "shipments": [
+          "SYN-SHP-00087",
+          "SYN-SHP-00160",
+          "SYN-SHP-00161",
+          "SYN-SHP-00175",
+          "SYN-SHP-00281",
+          "SYN-SHP-00450"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    },
+    {
+      "scenario_id": "structure-shared-quantity",
+      "family": "structural_rule",
+      "generator_intent": "control",
+      "evidence_shape": "n/a",
+      "record_ids": {
+        "inspection_observations": [
+          "SYN-INS-00076",
+          "SYN-INS-00127"
+        ],
+        "order_items": [
+          "SYN-OI-00459"
+        ],
+        "orders": [
+          "SYN-ORD-00300"
+        ],
+        "return_comments": [
+          "SYN-RCM-00087"
+        ],
+        "returns": [
+          "SYN-RET-00099",
+          "SYN-RET-00159"
+        ],
+        "shipments": [
+          "SYN-SHP-00300"
+        ]
+      },
+      "listing_truth": "unknown",
+      "label_status": "generator_intent_not_label"
+    }
+  ]
+}

@@ -383,6 +383,7 @@ RETURNS_MODULES = (
     "redaction",
     "service",
     "validation",
+    "verify",
     "versions",
 )
 # No route or code path refunds, orders, bans, sanctions or infers fraud or responsibility.

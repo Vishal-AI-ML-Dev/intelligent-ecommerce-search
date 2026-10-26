@@ -1,6 +1,303 @@
 # M18 — Handoff
 
-## Current state (2026-10-26, end of the M18-03B session)
+## Current state (2026-10-26, end of the M18-03C session)
+
+- **HEAD at start:** `4d495c8a5a72aa70e1b0c1def32bd74c52032c25` (M18-03B), as expected.
+  - **CI on `4d495c8`:** green **as confirmed by the owner**. This session could not open the
+    private run, so this is owner-confirmed, not independently verified.
+- **M18-03C (Synthetic Dataset & Verification): implemented and focused-verified.** After the
+  review checkpoint below, the owner authorized one scoped commit and a normal push for CI. The
+  SHA and the CI result are reported in the session summary, not in this file.
+  - The full unit suite, the isolation wrapper and the full integration suite were not run.
+  - M18 is not accepted, and M18-04 has not started.
+- Unrelated working-tree items are unchanged: `docs/m12-diagnostic-tooling.md` (modified),
+  untracked `.claude/`, `docs/m17-handoff.md` and `evals/results/m17/unsupported-claims/`.
+- **Not done:**
+  - no dev or staging writes, migrations or grant changes (the development database was read
+    only and is still at `0004`);
+  - no installs, provider calls, deployments or AWS actions;
+  - no API, frontend, classifier, root-cause or approval work.
+
+  The already-running local Docker database was used for scratch-database tests only.
+- The local full-unit-suite isolation timeout from M18-02 is still **FAILED** (not rerun). This
+  is separate from CI evidence.
+
+### What M18-03C delivers
+
+**Generator:** `scripts/generate_returns_dataset.py@1` (contracts §1, §8).
+- It is deterministic: no randomness, clock or network. Variation comes from SHA-256 of fixed
+  keys. `--check` regenerates every file in memory, compares the bytes, and reports extra files.
+- It reads the committed catalog through the existing `load_catalog` and checks it against
+  its provenance. It uses:
+  - the actual product IDs;
+  - the SHA-256 of each raw catalog line;
+  - the normalized catalog price (`unit_price` equals it).
+
+  No catalog fact is altered or invented.
+- Record hashes and `records_sha256` come from the existing `contracts`/`canonical` modules,
+  so a change there also fails `--check`. Unlike the self-contained catalog generator, this one
+  imports the application.
+- Record IDs are numbered in hash-shuffled order where an ID could otherwise reveal its
+  scenario (returns, reviews, complaints, cases).
+
+**Release:** `data/seed/returns_v1/`, 15 files, LF line ends only.
+- `.gitattributes` gains `data/seed/returns_v1/** text eol=lf`, so checkouts with
+  `autocrlf=true` keep the checksums.
+- `bundle/returns_v1.json`: 1.1 MB, one record per line.
+- `csv/`: `manifest.json` plus 11 CSVs, every field quoted, LF line ends.
+- `provenance.json` records:
+  - `records_sha256`
+    `497cebbd99fed434d2759be1a1ec8790d4d242e5a95b31e74c5347a76d9763ca`;
+  - the descriptor hash and both `bundle_sha256` values (JSON and CSV);
+  - per-entity counts and the catalog checksum;
+  - the SHA-256 of every other file.
+- `scenarios.json`: 112 scenarios, outside both import directories.
+  - Every entry has `listing_truth: "unknown"` and
+    `label_status: "generator_intent_not_label"`.
+  - It is generator intent: not labels, and not M19/M20 ground truth.
+- Dataset descriptor: `synthetic-returns` v1, `source_type` synthetic, `authored_on`
+  2026-10-26, no licence identifier. Every record has `is_synthetic: true`.
+
+**Generated counts** (5,313 records):
+
+| Entity | Count | §8 design |
+|---|---|---|
+| orders / customers | 600 / 400 | 600 / 400 |
+| order items | 900 (every product ≥ 2; each hotspot product 20) | 900 |
+| shipments / delivery events | 600 / 2,365 | 600 / about 2,400 |
+| returns | 180 = 96 category × shape + 48 hotspot + 36 controls; 12 cancelled | 180 |
+| return comments | 161 (133 base + 28 overlays) | about 150 |
+| inspection observations | 145 | about 140 |
+| customer reviews / support complaints | 150 / 60 | 150 / 60 |
+| correction cases / evidence links | 20 / 132 | 20 / about 120 |
+
+**`returns verify`:** `src/ecommerce_search/returns/verify.py` (§4.1, §4.7), and the CLI
+command `python -m ecommerce_search.returns verify <bundle.json | csv-dir>`.
+- **Release side:** the given upload, through the existing Phase A (`validate_upload`).
+- **Stored side:** read in one READ ONLY, REPEATABLE READ transaction: the dataset row, then
+  `source_record_id` and `record_sha256` of each entity.
+  - It reads no raw contents, catalog table or free text, and takes no lock.
+  - It runs as the API role or as the importer.
+- **`VerifyReport`:**
+  - `status`: `match`, `mismatch` or `invalid`;
+  - `dataset_stored` and `descriptor_matches`;
+  - the expected and stored `records_sha256`;
+  - per entity: `expected`, `stored`, `missing`, `extra` and `changed`.
+- **CLI exit codes:** 0 `match`; 1 `mismatch` or `invalid`; 2 an error (`VerifyStorageError`,
+  fixed message). No importer label is needed.
+- **Surface:** `service.__all__` (the pinned import surface) is unchanged. Verify has its own
+  pinned surface, and the forbidden-name check now covers it.
+
+### Interpretations made in M18-03C (frozen text unchanged; owner review requested)
+
+1. **Insufficient evidence (8):** every instance has `NOT_PROVIDED`, no comment and no
+   inspection (the §8 rule). The four shapes can therefore differ only through other records:
+   - `conflicting`: a support complaint with topic `damaged`;
+   - `noisy_text`: a Hinglish complaint;
+   - `consistent` and `missing_evidence` have the same record shape (return, order and
+     shipment only).
+2. **Suspected abuse (8):** the inspection observation (`item_differs_from_order`) is the only
+   signal, so every instance keeps it.
+   - `missing_evidence` means no comment.
+   - `conflicting` adds a second, disagreeing inspection (`as_new`).
+   - The 8 customers each have exactly one order and no complaint.
+   - No correction case is opened.
+3. **Overlays** are extra comments, not rewrites of existing comments.
+   - They go only on existing, non-cancelled returns that already have a comment.
+   - Nothing is added to a missing-comment or insufficient-evidence return, and no extra
+     return is created.
+   - Counts: 10 allowlisted personal-data-like, 6 prompt-injection, 4 markup, 4 near-limit
+     (2,000, 2,000, 1,999 and 1,998 code points), 4 Devanagari.
+4. **Correction cases (20):**
+   - one per hotspot (6);
+   - 14 on category returns: instance 1 of `consistent` for the 9 categories that have a focus
+     area, plus instance 1 of `conflicting` for the first 5 of them;
+   - none for change of mind, suspected abuse or insufficient evidence;
+   - `opened_at` falls after the evidence (2026-06-20 to 2026-06-24).
+5. **"About" sizes:** the generated values are listed above, and tests pin them exactly. The
+   tests also check that they are within 15% of the §8 "about" values. That 15% band is an
+   M18-03C test choice, not a previously approved rule.
+6. **Scenario families:**
+   - Drivers: `category_evidence_shape` (96), `sku_hotspot` (6), `plain_control` (2).
+   - `structural_rule` (3) and `text_overlay` (5) reference records that are already in a
+     driver. The three structural rules are cancellation chains, cancelled returns on their
+     own, and two returns on one quantity-2 item.
+   - `record_ids` maps each entity to its sorted IDs; evidence uses `case|type|id`.
+7. **Undelivered orders:** 26 of the latest 36 orders (2026-06-15 to 2026-06-24) are
+   `in_transit`, `pending`, `delivery_failed`, `returned_to_origin` or `unknown`. None is
+   returned.
+8. **Verify semantics:**
+   - `changed` means the same natural key, stored with a different `record_sha256`.
+   - `match` also requires an equal stored descriptor.
+   - A dataset version that is not stored gives `mismatch` with `dataset_stored: false`, and
+     every record is `missing`.
+9. **§5.3 scan scope:**
+   - It covers the release files and `tests/returns_samples.py`.
+   - Exemptions are narrow in field and form (narrowed at the review checkpoint below). A
+     value is skipped only in two cases:
+     - it is 64 lowercase hex digits under a named SHA-256 field, or inside the provenance
+       `files` and `bundle_sha256` maps;
+     - it is a canonical amount under `unit_price`.
+
+     Object keys are scanned.
+   - Hostile strings inside test code are not fixtures; they were reviewed in M18-03A.
+   - There are no frontend fixtures yet (M18-05).
+
+### Commands run and actual results (2026-10-26, M18-03C)
+
+| Command | Result |
+|---|---|
+| `git rev-parse HEAD`; `git status --short` | `4d495c8a5a72…`; only the four unrelated items |
+| Dev DB `alembic_version` (read only); scratch databases; `m18t_*` roles | `0004`; 0; 0 (before and after the integration runs) |
+| `uv run python scripts/generate_returns_dataset.py` | wrote 15 files, 5,313 records |
+| `uv run python scripts/generate_returns_dataset.py --check` | exit 0: 15 files regenerate byte-for-byte |
+| `uv run pytest tests/unit/returns -q -p no:cacheprovider` | **510 passed**: the earlier 458, plus 28 dataset, 16 privacy and 8 verify tests. The CLI command-set test was rewritten. |
+| `uv run pytest tests/unit/catalog/test_catalog_seed_loader_report.py tests/unit/search/test_benchmark_provenance.py -q -p no:cacheprovider` | **32 passed** (`.gitattributes` and seed checks) |
+| `uv run pytest tests/integration/test_returns_dataset.py -q -p no:cacheprovider` | **10 passed** (16.9 s) |
+| `uv run pytest tests/integration/test_returns_import.py -q -p no:cacheprovider` (CLI changed) | **80 passed** (28.0 s) |
+| `uv run python -m ecommerce_search.returns --help` | exit 0; commands `validate`, `import`, `verify` |
+| `uv run ruff check .` / `uv run ruff format --check .` | all checks passed / 509 files already formatted |
+| `git diff --exit-code bf67d11 -- <AC-14 protected paths>` | exit 0 |
+| AC-14 M17 listing: `sha256sum -c` of the M18-02 `ac14-m17-untracked.sha256` | listing SHA-256 starts with `cf74568d`; 10 OK, exit 0. The 10 listed paths are `docs/m17-handoff.md` plus 9 files under `evals/results/m17/unsupported-claims/`; "9 files present" counted only that directory (reconciled at the checkpoint below). |
+
+**Development notes:** on their first run, two new dataset tests failed because of mistakes
+in the tests, which were then fixed:
+- the dataset `notes` legitimately name `scenarios.json`;
+- a 13th CSV part also triggers `too_many_files`.
+
+Separately, the generator was changed to keep the generic `return_process` complaints off
+suspected-abuse and insufficient-evidence returns, and the release was regenerated after that.
+
+**Not run:**
+- the full unit suite and the recursive isolation wrapper (the local timeout stays **FAILED**);
+- the full integration suite;
+- CI on these changes (not yet pushed when this table was recorded).
+
+### Files changed by M18-03C (in the scoped M18-03C commit)
+
+- **New:**
+  - `scripts/generate_returns_dataset.py`
+  - `data/seed/returns_v1/` (15 generated files)
+  - `src/ecommerce_search/returns/verify.py`
+  - `tests/returns_release.py`
+  - `tests/unit/returns/test_returns_dataset.py`, `test_returns_fixture_privacy.py`,
+    `test_returns_verify.py`
+  - `tests/integration/test_returns_dataset.py`
+- **Modified:**
+  - `src/ecommerce_search/returns/cli.py` (adds `verify`)
+  - `tests/unit/returns/test_returns_cli.py` (the command-set pin now includes `verify`)
+  - `tests/unit/returns/test_returns_import_service.py` (the forbidden-name check covers
+    `verify`)
+  - `.gitattributes`
+  - `docs/m18/handoff.md`, `docs/m18/test-matrix.md`
+
+### Remaining gaps
+
+- **ACs not closed.** AC-06 to AC-10, AC-13 and AC-14 have domain and fixture evidence. They
+  still need M18-04, the full regression and CI. The M18-04 parts are:
+  - API 413 and 429, and the temp-file check;
+  - response schemas and the route inventory;
+  - the API privacy surfaces.
+- **Phase B memory** is still not measured. The release imports within seconds in the
+  integration tests, but no memory or time measurement was made.
+- **CLI choices** that the contract does not fix: the `verify` exit codes and its JSON shape.
+- The local isolation-test timeout decision is still open.
+
+### Review checkpoint (2026-10-26, one bounded pass before the M18-03C commit)
+
+**1. Scenario coverage is generator intent, not measured diversity.**
+- The 96 category × shape slots are **96 generated examples, not 96 distinct evidence
+  patterns**.
+- A one-off scratch count gave **48 distinct structural signatures** across them. It is not a
+  test and not an independent assessment. The signature is the reason code, the number of base
+  comments, the inspection conditions, the complaint topics, the review ratings, and the
+  delay/damage event types; text content and product are ignored.
+- Per category this is 3 to 6 signatures. Two cases are identical by construction:
+  - **Insufficient evidence:** `consistent` and `missing_evidence` are identical (return, order
+    and shipment only, `NOT_PROVIDED`; interpretation 1).
+  - **Change of mind:** `conflicting` differs from `consistent` only in comment text.
+- Scenario diversity has **not** been independently assessed.
+- `generator_intent` is what the generator meant to build:
+  - it is not a label, not human-reviewed and not an independent evaluation;
+  - "suspected abuse (investigation only)" is **not a misconduct label** and says nothing about
+    any customer;
+  - no generated record carries an intent.
+- No data was regenerated to add coverage.
+
+**2. Trust boundary of `returns verify`.**
+- **What it compares:** the release's recomputed `record_sha256` values with the
+  `record_sha256` **column stored with each row** (keyed by `source_record_id`). It does
+  **not** recompute hashes from the stored business-field values.
+- **Contract check:**
+  - Frozen §4.7 says verify "computes `records_sha256` over the stored rows".
+  - `records_sha256` is defined over the lines `entity \t source_record_id \t record_sha256`,
+    so the stored `record_sha256` is its defined input.
+  - Field-level recomputation is not required. It would also be impossible for the five
+    free-text entities: stored text is redacted, while `record_sha256` covers the raw text,
+    which sits only in the restricted contents that neither the API role nor the importer can
+    read (§2, §5.1).
+  - **No contract gap was found and nothing was weakened.**
+- **Consequence:** verify proves that the stored record set and its recorded hashes equal the
+  release. It does not prove that the stored business columns still correspond to those
+  hashes. Protections against such drift:
+  - the append-only triggers (UPDATE/DELETE/TRUNCATE blocked);
+  - the importer computes `record_sha256` and writes it with the row in one transaction;
+  - the grants (no UPDATE for either role).
+
+  A schema owner bypassing the triggers would not be detected by verify. A field-level check
+  would be new semantics and needs owner approval.
+
+**3. Fixture-scan exemptions narrowed (fix).**
+- **Finding:** the earlier filter skipped every value under any key matching
+  `.*sha256|unit_price|files`, whatever its form. That included the whole manifest `files`
+  list (file names and entities), and object keys were never scanned. This was broader than
+  hash/money.
+- **Fix:**
+  - an exemption needs both the named field and the form (64-hex hash, canonical amount);
+  - keys are scanned;
+  - a new test, `test_the_exemptions_are_narrow_in_field_and_form`, shows that
+    personal-data-like text under exempt names, hash or money forms in other fields, and keys
+    are all still flagged.
+- The full release still passes the scan.
+
+**4. M17 listing reconciled.**
+- The original M18-02 listing (`ac14-m17-untracked.sha256`, its own SHA-256 starting with
+  `cf74568d`) names exactly 10 paths:
+  - `docs/m17-handoff.md`;
+  - 3 files each under `abe-v1-live-002`, `-003` and `-004` in
+    `evals/results/m17/unsupported-claims/`.
+- All 10 exist, and `sha256sum -c` reports 10 OK. "9 files present" counted only the
+  directory.
+- No new baseline was made.
+
+**5. Wording corrected.**
+- Test and generator text no longer calls the release "committed" before the commit.
+- The 15% band is labelled as an M18-03C test choice.
+- Generated counts are kept apart from scenario diversity (item 1).
+- No generator, schema, CLI or data semantics changed: `--check` still reproduces
+  `records_sha256` `497cebbd…63ca`.
+
+**Checkpoint commands and actual results:**
+
+| Command | Result |
+|---|---|
+| `uv run pytest tests/unit/returns/test_returns_fixture_privacy.py -q -p no:cacheprovider` | first runs: 2 failed, then 1 failed (bugs in the new test helper and in one test input; fixed). Final: **17 passed** |
+| `uv run python scripts/generate_returns_dataset.py --check` | exit 0, same `records_sha256` |
+| `uv run pytest tests/unit/returns -q -p no:cacheprovider` | **511 passed** (adds the exemption-boundary test) |
+| `uv run pytest tests/integration/test_returns_dataset.py -q -p no:cacheprovider` | **10 passed** (renames only) |
+| `uv run ruff check .` / `uv run ruff format --check .` | all checks passed / 509 files already formatted |
+| AC-14 protected-path diff; M17 listing | exit 0; 10 OK, exit 0 |
+| Dev DB `alembic_version`; scratch databases; `m18t_*` roles | `0004`; 0; 0 |
+
+The full unit suite, the isolation wrapper and the full integration suite were not run. The
+local isolation timeout stays **FAILED**, separate from CI.
+
+### Next task
+
+1. CI on the pushed M18-03C SHA (the owner checks it if the private run is not accessible).
+2. With separate approval: **M18-04 Protected Backend API**.
+
+## State at the end of the M18-03B session (2026-10-26)
 
 - **HEAD at start:** `797c6e40461ea35af242c2e4dc3fd65cf3186e81` (M18-03A), as expected.
   M18-03A is pushed, and CI run 40215398031 succeeded on that SHA. The 2026-10-25 section

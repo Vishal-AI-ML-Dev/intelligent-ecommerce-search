@@ -1,8 +1,8 @@
 # M18 — Acceptance and test matrix
 
 Status: **FROZEN — approved by the owner on 2026-10-24 with the M18-01 design.** The planned
-tests below are unchanged. M18-02 results (2026-10-24) are recorded in the next
-section.
+tests below are unchanged. Actual results are recorded per package (M18-02, M18-03A,
+M18-03B, M18-03C) in the next sections.
 
 ## M18-02 results (actual, 2026-10-24)
 
@@ -158,6 +158,113 @@ lock before releasing it.
 - AC-08: partial; `verify` is assigned to M18-03C.
 - AC-13 (5): the service surface is pinned (unit). AC-13 as a whole still needs M18-04.
 - AC-09/10/11/12: API parts are M18-04.
+
+## M18-03C results (actual, 2026-10-26; in the scoped M18-03C commit after the review checkpoint)
+
+M18-03C adds:
+- the deterministic generator;
+- the generated release files `data/seed/returns_v1/` (5,313 records);
+- the §5.3 fixture scan;
+- `returns verify`.
+
+Details are in `handoff.md`.
+
+| Run | Kind | Result |
+|---|---|---|
+| `uv run python scripts/generate_returns_dataset.py --check` | recorded command | exit 0: 15 files regenerate byte-for-byte |
+| `uv run pytest tests/unit/returns -q -p no:cacheprovider` (458 earlier + 28 dataset + 16 privacy + 8 verify) | hermetic unit | **510 passed** |
+| `tests/unit/catalog/test_catalog_seed_loader_report.py` + `tests/unit/search/test_benchmark_provenance.py` | hermetic unit | **32 passed** |
+| `tests/integration/test_returns_dataset.py` (scratch database with the real 240-product catalog ingested; real per-module `m18t_*` roles with `returns-grants-1`; imports as the importer, verify as the API role) | database integration | **10 passed** |
+| `tests/integration/test_returns_import.py` (rerun because `cli.py` changed) | database integration | **80 passed** |
+| `ruff check .` / `ruff format --check .` | lint | all checks passed / 509 files formatted |
+| AC-14 protected-path diff; M17 SHA-256 listing | recorded command | exit 0 / exit 0 (10 OK) |
+| Review checkpoint: `tests/unit/returns` (adds the exemption-boundary test) | hermetic unit | **511 passed** |
+| Review checkpoint: `tests/integration/test_returns_dataset.py` (renames only) | database integration | **10 passed** |
+| Review checkpoint: `--check`; Ruff; AC-14 protected diff; M17 listing | recorded command / lint | exit 0; all checks passed and 509 files formatted; exit 0; 10 OK |
+| Full unit suite, nested isolation test, full integration suite | — | **not run**. The M18-02 local isolation timeout stays **FAILED**. CI on `4d495c8` is green as confirmed by the owner (not independently verified) and does not cover these changes. |
+
+**What the new tests cover:**
+
+- **AC-14 (generator and release):**
+  - Two generations are byte-identical, and they equal the release files on disk exactly (no
+    extra files).
+  - `--check` exits 0.
+  - Files contain no CR, and `.gitattributes` pins LF.
+  - `provenance.json` holds the SHA-256 of every file, both `bundle_sha256` values, the
+    descriptor hash, the counts and `records_sha256`.
+  - `scenarios.json` is refused as an import part:
+    - in Phase A, for the JSON and the CSV form;
+    - through the service commit, alone or next to the bundle, with no writes;
+    - through a CLI import of a CSV directory that holds it, with no writes.
+- **Format equivalence (AC-08):**
+  - JSON and CSV give identical `(source_record_id, record_sha256)` sets, the same descriptor
+    and the release `records_sha256`.
+  - Their `bundle_sha256` values differ.
+- **References and coverage (§8):**
+  - With nothing stored, `check_stored` reports no error. That covers every reference, time
+    order, one shipment per order, the quantity rule and every evidence relation.
+  - Exact generated entity counts. The "about" sizes are also checked to be within 15%; that
+    band is an M18-03C test choice, not an approved rule.
+  - These are generated counts, not assessed diversity: the 96 category × shape slots give 48
+    distinct structural signatures (scratch count; see `handoff.md`, review checkpoint).
+    Scenario diversity was not independently assessed, and `generator_intent` is not a label.
+  - Every record is synthetic, with the synthetic ID prefixes.
+  - Catalog links: actual products, raw-line hashes and catalog prices; every product in at
+    least 2 items.
+  - 400 customers; 1–3 items per order.
+  - Every timestamp falls inside the window, at +05:30.
+  - Every return belongs to exactly one driver scenario (96 / 48 / 36), and the categories
+    cover 12 × 4 × 2.
+  - Category applicability holds, and there are 6 hotspots of 8 returns on products with 20
+    items each.
+  - Suspected abuse and insufficient evidence follow the §8 rules.
+  - At least 12 cancelled returns, with cancellation chains, and the quantity rule holds.
+  - The overlay minimums are met, on existing returns only.
+- **Scenarios kept separate:**
+  - No scenario ID, intent or label text appears in any record.
+  - `scenarios.json` is not an import shape and sits outside both import directories.
+- **AC-10 (§5.3 fixture scan):**
+  - Every `redaction-1` match in the release and in `tests/returns_samples.py` is on the
+    closed allowlist.
+  - The scan is not vacuous: all four kinds are present.
+  - The allowlist rejects values outside it.
+  - IDs, actor refs, carriers and dataset text have no match.
+  - Redacted free text has no match.
+  - Exemptions (hash and money) are narrow in field and form, and object keys are scanned
+    (boundary test added at the review checkpoint).
+- **AC-08 (`returns verify`):** it compares release hashes with the stored `record_sha256`
+  metadata. It does not recompute from stored business fields; that matches frozen §4.7 (see
+  the trust boundary in `handoff.md`).
+  - **Full import:** after the JSON release is imported as the importer, verify gives `match`,
+    with expected = stored = the provenance `records_sha256`.
+  - **Idempotency:** the same bytes again give `already_imported` with the same batch; the CSV
+    form gives `no_new_records`; nothing is written.
+  - **Partial, then the rest:**
+    - after the parents only, verify reports `missing` = the counts of the other 7 entities;
+    - after the rest is imported (referencing the stored parents), verify gives `match`, and
+      the stored `records_sha256` equals the release value.
+  - **Extra and changed:**
+    - one extra stored review gives `extra = 1`;
+    - a changed review in the release gives `changed = 1`.
+  - **Descriptor and absent version:** a different descriptor gives `descriptor_matches:
+    false`; an unstored version gives everything `missing`.
+  - **Read only:**
+    - verify runs in a READ ONLY, REPEATABLE READ transaction, as the API role and as the
+      importer;
+    - all 15 M18 table counts are unchanged;
+    - an invalid release never reaches the database.
+  - **CLI:** `verify` on the release bundle and on the release CSV directory both give
+    `match` (exit 0).
+  - Stored comment text is redacted, with non-zero counts, and every stored row is synthetic.
+
+**AC status after M18-03C.** Partial. No AC is marked complete, because the API parts, the
+full regression and CI are still open.
+- **AC-08:** the domain side is now covered, including `verify`.
+- **AC-10:** the domain side and the fixture scan are covered; the API surfaces are M18-04.
+- **AC-14:** the generator, `--check`, the release checksums and the `scenarios.json` refusal
+  are covered. The protected-path and M17 checks repeat at every package end.
+- **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
+- **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
 "Kind" uses the reporting labels required by MASTER_PLAN §28:
 - hermetic unit;

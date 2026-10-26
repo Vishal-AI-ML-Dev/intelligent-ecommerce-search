@@ -1,0 +1,51 @@
+{
+  "dataset_id": "synthetic-returns",
+  "dataset_version": 1,
+  "contract_version": "return-data-v1",
+  "generator": "scripts/generate_returns_dataset.py@1",
+  "is_synthetic": true,
+  "descriptor_sha256": "10daea612b9d334b1f24f0d99c8ad3420319959d7cff8a2fe95ca205a2ad1382",
+  "catalog": {
+    "dataset_id": "synthetic-seed",
+    "dataset_version": "1",
+    "file": "data/seed/catalog_seed_v1.jsonl",
+    "checksum_sha256": "2c1c5fa43eec5f7346df40c17e57c07f6594ab1833c5d9d4c862e6d2e8bbbbc8"
+  },
+  "record_counts": {
+    "orders": 600,
+    "order_items": 900,
+    "shipments": 600,
+    "delivery_events": 2365,
+    "returns": 180,
+    "return_comments": 161,
+    "inspection_observations": 145,
+    "customer_reviews": 150,
+    "support_complaints": 60,
+    "correction_cases": 20,
+    "correction_case_evidence": 132
+  },
+  "total_records": 5313,
+  "records_sha256": "497cebbd99fed434d2759be1a1ec8790d4d242e5a95b31e74c5347a76d9763ca",
+  "bundle_sha256": {
+    "json": "d7a9f535cbfa20092724973b963d30d27c76136f563e375d121e1985625f1ffb",
+    "csv": "547c15a871804d6bd74faa90190adbcd325505cb402e61f681028a62684727a4"
+  },
+  "files": {
+    "bundle/returns_v1.json": "86a9698454755be14703b3dd65c52e8a9028da7cb97d1f1fd3fab536caf1325e",
+    "csv/correction_case_evidence.csv": "fe9b75b0857f867da2e8120db5e0322b259b2dd165e2aab80a382d0d42ea615d",
+    "csv/correction_cases.csv": "ca4b5da48e7cbe01867e5988b96213bc7cde22c245945accfab3e671f00bac4b",
+    "csv/customer_reviews.csv": "61a619b4d874641d12b77033ea7ba5bf34a43a8e84ea34deeb26c3a737e506fc",
+    "csv/delivery_events.csv": "7b823b323150e7b6f0f8d69dd4c92eff04c13d4c8ddc04dc2969cf2d6c18df3c",
+    "csv/inspection_observations.csv": "67c8ba15c5b9e6c2039fb60ce5cc1ae51c0e5aa53e0df7e067ffb00af8705eb4",
+    "csv/manifest.json": "206809200ced5b0c26fca510daec70e679a9ccebb1b31e797f410a366dad5fff",
+    "csv/order_items.csv": "d6a9f59195e226fba78943158a36bfd4e3e65d33c491b2f48363faf85055799b",
+    "csv/orders.csv": "7f64e402eedc7faa0dc020724ead1217fedbdc16662f079cbb506f0c9eba18ba",
+    "csv/return_comments.csv": "aa317aa056a39205003e84c800f534fd0bec0fdc8ad38f00c228618b0a4b8d3f",
+    "csv/returns.csv": "52502eb9617b36ec1075beef355846a02e53b8f650bd01d38df6f5399e437da6",
+    "csv/shipments.csv": "27a7d6335ca4b7ba15721dee534f3219305b81abf6d7768bf6de1549f3a8aba8",
+    "csv/support_complaints.csv": "f74448a0505663323453667c873f95664cb9783222be8a93a8f88a51456d8db4",
+    "scenarios.json": "fef2e8f1b068873f95fffe533fca252a035da766ca069b587f29582f5b0ccb79"
+  },
+  "label_status": "generator_intent_not_label",
+  "notes": "Import bundle/returns_v1.json or the csv directory, never scenarios.json. Reproduce with: uv run python scripts/generate_returns_dataset.py --check"
+}

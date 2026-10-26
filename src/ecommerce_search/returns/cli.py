@@ -1,23 +1,27 @@
-"""Return data command line (contracts §4.1): `validate` and `import`.
+"""Return data command line (contracts §4.1): `validate`, `import` and `verify`.
 
     python -m ecommerce_search.returns validate <bundle.json | csv-dir>
     python -m ecommerce_search.returns import <bundle.json | csv-dir>
+    python -m ecommerce_search.returns verify <bundle.json | csv-dir>
 
-Both commands call the same domain service as the API (`returns.service`).
+`validate` and `import` call the same domain service as the API (`returns.service`). `verify`
+(§4.7, `returns.verify`) compares a release with the stored records of its dataset version and
+never writes.
 
 **Input.** A file argument is the set's `bundle.json`; its local name is not used. A directory
 gives one part per regular file, named by its file name, so only allowlisted names are
 accepted and any other file is reported as `unexpected part #n`. Each file is read with a cap
 just above the per-file limit, so oversized input is reported by Phase A, not loaded whole.
 
-**Connection.** Both commands connect with the POSTGRES_* settings. `import` requires
+**Connection.** Every command connects with the POSTGRES_* settings. `import` requires
 RETURNS_IMPORTER_LABEL, which is supplied provenance and not an authenticated identity. Before
 any write, `import` refuses every role except the least-privilege importer. There is no
-fallback to other credentials. `verify` (§4.7) is not part of this adapter yet.
+fallback to other credentials. `validate` and `verify` read in READ ONLY transactions.
 
-**Output.** The `ImportReport` is printed as JSON on stdout. Exit status:
-- 0: `valid`, `imported`, `already_imported` or `no_new_records`;
-- 1: `invalid`;
+**Output.** The `ImportReport` (or, for `verify`, the `VerifyReport`) is printed as JSON on
+stdout. Exit status:
+- 0: `valid`, `imported`, `already_imported` or `no_new_records`; for `verify`, `match`;
+- 1: `invalid`; for `verify`, `mismatch` or `invalid`;
 - 2: a usage, input, configuration, role or database error, with a fixed message on stderr.
 
 Messages never contain credentials, connection strings, paths or input values.
@@ -40,6 +44,7 @@ from ecommerce_search.returns.service import (
     commit_import,
     validate_import,
 )
+from ecommerce_search.returns.verify import VerifyReport, VerifyStorageError, verify_dataset
 
 EXIT_OK = 0
 EXIT_INVALID = 1
@@ -78,7 +83,7 @@ def read_parts(path: Path) -> list[Part]:
     raise CliError("the input is not a file or a directory")
 
 
-def _run(command: str, path: Path) -> ImportReport:
+def _run(command: str, path: Path) -> ImportReport | VerifyReport:
     settings = _settings()
     label = settings.returns_importer_label
     if command == "import" and label is None:
@@ -88,6 +93,8 @@ def _run(command: str, path: Path) -> ImportReport:
     try:
         if command == "import":
             return commit_import(engine, parts, imported_by_label=label)
+        if command == "verify":
+            return verify_dataset(engine, parts)
         return validate_import(engine, parts)
     finally:
         engine.dispose()
@@ -96,19 +103,22 @@ def _run(command: str, path: Path) -> ImportReport:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m ecommerce_search.returns",
-        description="Validate or import a return-data-v1 bundle.json or CSV-set directory.",
+        description=(
+            "Validate, import or verify a return-data-v1 bundle.json or CSV-set directory."
+        ),
     )
     commands = parser.add_subparsers(dest="command", required=True)
     for name, help_text in (
         ("validate", "check an upload against stored data; never writes"),
         ("import", "validate and commit an upload as the importer role"),
+        ("verify", "compare a release with its stored records (records_sha256); never writes"),
     ):
         commands.add_parser(name, help=help_text).add_argument("path", type=Path)
     args = parser.parse_args(argv)
     try:
         report = _run(args.command, args.path)
-    except (CliError, ImportRoleError, ImportStorageError) as exc:
+    except (CliError, ImportRoleError, ImportStorageError, VerifyStorageError) as exc:
         print(f"returns {args.command}: {exc}", file=sys.stderr)
         return EXIT_ERROR
     print(report.model_dump_json(indent=2))
-    return EXIT_INVALID if report.status == "invalid" else EXIT_OK
+    return EXIT_INVALID if report.status in ("invalid", "mismatch") else EXIT_OK

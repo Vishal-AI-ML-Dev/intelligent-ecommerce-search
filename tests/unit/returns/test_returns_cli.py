@@ -184,9 +184,14 @@ def test_role_and_storage_errors_exit_2_with_a_fixed_message(
     assert FAKE_PW not in captured.err and "postgresql" not in captured.err
 
 
-def test_only_validate_and_import_are_commands(capsys):
+def test_only_validate_import_and_verify_are_commands(capsys):
+    """`verify` was added by M18-03C (contracts §4.1); no other command or flag exists."""
+    for argv in (["delete", "x"], ["import", "x", "--database", "other"], ["verify"]):
+        with pytest.raises(SystemExit) as caught:
+            cli.main(argv)
+        assert caught.value.code == 2
     with pytest.raises(SystemExit) as caught:
-        cli.main(["verify", "x"])
-    assert caught.value.code == 2
-    with pytest.raises(SystemExit):
-        cli.main(["import", "x", "--database", "other"])
+        cli.main(["--help"])
+    assert caught.value.code == 0
+    out = capsys.readouterr().out
+    assert "validate" in out and "import" in out and "verify" in out
