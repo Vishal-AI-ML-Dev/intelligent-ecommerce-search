@@ -273,6 +273,69 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
+## M18-04A results (actual, 2026-10-26; uncommitted, awaiting owner review)
+
+M18-04A adds retailer access control, the commit gate, the lazy importer engine, safe
+`/returns` errors with `no-store`, and `GET /returns/capabilities`. All evidence is **hermetic
+unit (API through TestClient, no database)**. There is no database-integration or browser
+evidence in 04A.
+
+| Run | Kind | Result |
+|---|---|---|
+| `tests/unit/returns/test_returns_api_access.py` (first run) | hermetic unit | 1 failed, 97 passed (test bug: assertions read the test client's own URL log; fixed) |
+| `tests/unit/returns/test_returns_api_access.py` | hermetic unit | **122 passed** |
+| Focused set before the pin update (access file, settings, app, observability, dependencies, engine, compose, `tests/unit/search`, assistant API) | hermetic unit | 2 failed, 3126 passed, 3 skipped (the two app path-set pins; updated) |
+| **Final focused set:** `tests/unit/returns` + settings, app, observability, dependencies, engine, compose, frontend serving, `tests/unit/search`, assistant API | hermetic unit | **3647 passed, 3 skipped** |
+| `ruff check .` / `ruff format --check .` | lint | all checks passed / 511 files formatted |
+| CI-equivalent hermetic `--collect-only`; integration `--collect-only`; duplicate basenames | recorded command | 5817/6864, no errors; 1029/1047, no errors; 0 |
+| AC-14 protected-path diff; M17 SHA-256 listing | recorded command | exit 0 / 10 OK |
+| Full unit suite, isolation wrapper, integration suite, CI | — | **not run**; local isolation timeout stays **FAILED** |
+
+**What the new tests cover:**
+- **AC-11 (access):**
+  - configuration cases: none (503, even with a token), viewer only, importer only, both;
+  - 16 malformed, unknown or oversized `Authorization` values (including 100,000 characters),
+    non-ASCII bytes, repeated headers, case-insensitive scheme, tokens in cookies or query
+    parameters ignored → 401 with `WWW-Authenticate: Bearer`;
+  - viewer and importer scopes; 403 for a missing scope (test-only route on the production
+    route class);
+  - only digests kept; both digests compared for every token; an unset slot never matches;
+  - rotation (rebuilt app: old token 401, new 200) and emergency revocation (503);
+  - settings: lengths 31/32/43/256/257, invalid characters, equal tokens (init and env),
+    both-or-neither DB credentials, user ≠ `POSTGRES_USER`, role-name form, strict boolean;
+    no token or password in any validation error, `repr` or URL string.
+- **Commit gate:** all 16 combinations of the four conditions; only all four give
+  `can_commit` for the importer; the viewer never can; the importer token alone never can; the
+  engine holder exists only with the gate open, builds nothing at startup, builds one separate
+  engine (importer user, one connection) on first use and is disposed at shutdown.
+- **AC-10 (API surfaces in 04A):** 422 carries parameter names and codes only (hostile values
+  absent from response and app logs); a forced Pydantic error and a library error with a
+  connection-string-like message become a safe 500 that logs only the type; `HTTPException`
+  detail never echoed; denials logged by code only; no token in any log.
+- **Capabilities:** exact field set, exact §4.4 limits, reason codes; no token, password, user,
+  label, host or gate detail; `no-store`; no cookie.
+- **Unmatched paths:** `/returns`, `/returns/`, unknown and hostile paths, slash redirects →
+  safe 404 with `no-store` and no `Location`; wrong methods → safe 405 with `Allow`; HEAD gets
+  `no-store`; `/returnsx` keeps the buyer 404.
+- **Buyer isolation (AC-17, partial):** with and without retailer tokens configured, and with
+  and without `Authorization` headers, buyer responses (FastAPI 422 shape, 404, 405) are
+  identical and carry no `no-store` or `WWW-Authenticate`.
+- **AC-13 (1), partial:** OpenAPI paths equal the pre-M18 set plus `/returns/capabilities`
+  only. The final 7-route inventory is 04C.
+
+**Review checkpoint (2026-10-27).** One fix: a Starlette `HTTPException` on a `/returns`
+route now maps to the fixed `request_failed` shape instead of a 500 (new case in
+`test_http_exception_details_are_not_echoed`). After it: the access file (123 tests) plus
+`tests/unit/test_observability.py` → **148 passed** (hermetic unit); Ruff clean, 511 files
+formatted. The whole-stack logging review is a configuration read (uvicorn access-log filter
+covered by the existing M24A unit tests; Caddy and AWS not run). Contract amendments A1 (token
+syntax and cap) and A2 (422 `parameters`) were approved and applied as `contracts.md` §6.2
+(documentation only; the tests already cover both). CI result: see `handoff.md`.
+
+**AC status after M18-04A.** Partial; no AC is closed. AC-11 is covered for capabilities and
+the access dependency; the full 7-route matrix is 04C. AC-09, AC-12 and the rest of AC-10/13
+need 04B/04C.
+
 "Kind" uses the reporting labels required by MASTER_PLAN §28:
 - hermetic unit;
 - database integration (scratch pgvector database, real per-test roles where stated);

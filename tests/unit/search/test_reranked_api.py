@@ -1569,6 +1569,7 @@ def test_frozen_operations_and_components_are_byte_identical_to_head(make_settin
         "/search/routed",
         "/assistant/answer",
         "/assistant/status",
+        "/returns/capabilities",  # Milestone 18 (retailer API; M18-04A)
     }
     v3_only = {
         "RerankedSearchRequest",

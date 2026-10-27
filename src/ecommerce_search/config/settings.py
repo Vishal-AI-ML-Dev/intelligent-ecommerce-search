@@ -1,3 +1,4 @@
+import hmac
 import re
 from decimal import Decimal
 from functools import lru_cache
@@ -6,7 +7,15 @@ from pathlib import Path
 from typing import Any, Literal, get_args
 from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, AliasPath, Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    AliasPath,
+    Field,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 from sqlalchemy.engine import URL
@@ -32,6 +41,20 @@ _JEV_PINNED_MODEL = re.compile(r"jev-\d+\.\d+\.\d+")
 V4_JEV_MODEL = "jev-1.13.0"
 # A plain generation model id (letters, digits, dots and hyphens); no URL, path or whitespace.
 _GENERATION_MODEL_ID = re.compile(r"[a-z0-9][a-z0-9.-]{0,63}")
+# Retailer bearer tokens (contracts §6): at least 32 characters (`secrets.token_urlsafe(32)` gives
+# 43), at most 256, RFC 6750 b64token characters only.
+RETURNS_TOKEN_MIN_LENGTH = 32
+RETURNS_TOKEN_MAX_LENGTH = 256
+RETURNS_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9\-._~+/]+=*")
+# A plain PostgreSQL role name (lower case, as created unquoted).
+_ROLE_NAME = re.compile(r"[a-z_][a-z0-9_]{0,62}")
+
+
+def is_returns_token(value: str) -> bool:
+    return (
+        RETURNS_TOKEN_MIN_LENGTH <= len(value) <= RETURNS_TOKEN_MAX_LENGTH
+        and RETURNS_TOKEN_PATTERN.fullmatch(value) is not None
+    )
 
 
 def _secret_input_names(fields: dict[str, FieldInfo]) -> frozenset[str]:
@@ -243,6 +266,16 @@ class Settings(BaseSettings):
     # Milestone 18: the label recorded on return import batches committed by the CLI (contracts
     # §6). Supplied provenance, not an authenticated identity. Unset = CLI imports are refused.
     returns_importer_label: str | None = None
+    # Milestone 18 retailer access (contracts §6, D1): two static bearer tokens. Empty means unset;
+    # with neither set every /returns route fails closed (503). Never logged or echoed.
+    returns_viewer_token: SecretStr | None = None
+    returns_importer_token: SecretStr | None = None
+    # The API commit path also needs the importer token, the importer database credentials and
+    # RETURNS_IMPORTER_LABEL (`api/returns.py` `CommitGate`). Off by default.
+    returns_import_commit_enabled: bool = False
+    # The scoped `returns_importer` role, used only by the API commit engine; both or neither.
+    returns_importer_db_user: str | None = None
+    returns_importer_db_password: SecretStr | None = None
 
     @field_validator("returns_importer_label", mode="before")
     @classmethod
@@ -255,6 +288,58 @@ class Settings(BaseSettings):
                 "must not look like personal data"
             )
         return value
+
+    @field_validator(
+        "returns_viewer_token",
+        "returns_importer_token",
+        "returns_importer_db_password",
+        mode="before",
+    )
+    @classmethod
+    def _empty_returns_secret_is_unset(cls, value: object) -> object:
+        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+        return None if isinstance(raw, str) and raw == "" else value
+
+    @field_validator("returns_viewer_token", "returns_importer_token")
+    @classmethod
+    def _returns_token_format(
+        cls, value: SecretStr | None, info: ValidationInfo
+    ) -> SecretStr | None:
+        # RFC 6750 b64token characters, so the token can be sent in an Authorization header.
+        if value is not None and not is_returns_token(value.get_secret_value()):
+            raise ValueError(
+                f"{info.field_name} must be {RETURNS_TOKEN_MIN_LENGTH}-{RETURNS_TOKEN_MAX_LENGTH} "
+                "letters, digits or '-._~+/=' characters"
+            )
+        return value
+
+    @field_validator("returns_importer_db_user", mode="before")
+    @classmethod
+    def _importer_db_user(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        if not isinstance(value, str) or not _ROLE_NAME.fullmatch(value):
+            raise ValueError("returns_importer_db_user must be a plain role name")
+        return value
+
+    @model_validator(mode="after")
+    def _returns_access_is_configured_consistently(self) -> "Settings":
+        viewer, importer = self.returns_viewer_token, self.returns_importer_token
+        if (
+            viewer is not None
+            and importer is not None
+            and hmac.compare_digest(
+                viewer.get_secret_value().encode(), importer.get_secret_value().encode()
+            )
+        ):
+            raise ValueError("returns_viewer_token and returns_importer_token must differ")
+        if (self.returns_importer_db_user is None) != (self.returns_importer_db_password is None):
+            raise ValueError(
+                "set both returns_importer_db_user and returns_importer_db_password or neither"
+            )
+        if self.returns_importer_db_user == self.postgres_user:
+            raise ValueError("returns_importer_db_user must differ from postgres_user")
+        return self
 
     @field_validator("frontend_dist_dir")
     @classmethod
@@ -382,7 +467,13 @@ class Settings(BaseSettings):
             raise ValueError("must be a string")
         return value
 
-    @field_validator("reranker_enabled", "jev_enabled", "search_v4_jev_enabled", mode="before")
+    @field_validator(
+        "reranker_enabled",
+        "jev_enabled",
+        "search_v4_jev_enabled",
+        "returns_import_commit_enabled",
+        mode="before",
+    )
     @classmethod
     def _strict_boolean(cls, value: object) -> object:
         # Only a real bool or the words true/false (any case); no 1/0, yes/no, on/off.
@@ -532,6 +623,16 @@ class Settings(BaseSettings):
             host=self.postgres_host,
             port=self.postgres_port,
             database=database or self.postgres_db,
+        )
+
+    def returns_importer_database_url(self) -> URL | None:
+        """The same server and database as the app, as the scoped importer role; None while the
+        importer credentials are unset."""
+        if self.returns_importer_db_user is None or self.returns_importer_db_password is None:
+            return None
+        return self.database_url().set(
+            username=self.returns_importer_db_user,
+            password=self.returns_importer_db_password.get_secret_value(),
         )
 
 

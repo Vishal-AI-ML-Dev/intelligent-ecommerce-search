@@ -569,6 +569,9 @@ def test_secret_fields_are_derived_from_secretstr_annotations():
         "postgres_password",
         "typesafe_api_key",
         "gemini_api_key",
+        "returns_viewer_token",
+        "returns_importer_token",
+        "returns_importer_db_password",
     }
 
 

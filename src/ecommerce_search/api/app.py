@@ -19,6 +19,12 @@ from ecommerce_search.api.observability import (
     install_access_log_redaction,
 )
 from ecommerce_search.api.reranked import router as reranked_router
+from ecommerce_search.api.returns import (
+    ReturnsAccess,
+    ReturnsPathMiddleware,
+    build_importer_engine,
+)
+from ecommerce_search.api.returns import router as returns_router
 from ecommerce_search.api.routed import LazyJevProvider
 from ecommerce_search.api.routed import router as routed_router
 from ecommerce_search.api.search import router as search_router
@@ -70,6 +76,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             if app.state.v4_jev_provider is not None:
                 app.state.v4_jev_provider.close()
+            if app.state.returns_importer_engine is not None:
+                app.state.returns_importer_engine.dispose()
             close = getattr(app.state.generation_provider, "close", None)
             if callable(close):
                 close()
@@ -77,6 +85,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             logger.info("engine disposed")
 
     app = FastAPI(title="Intelligent E-commerce Search", version=__version__, lifespan=lifespan)
+    # Milestone 18: `/returns` paths only (no-store, safe errors where no route answered). Added
+    # first, so it runs inside RequestIdMiddleware and its responses carry the request ID too.
+    app.add_middleware(ReturnsPathMiddleware)
     # Milestone 24A: request IDs, one completion log per request, query-free access logs.
     app.add_middleware(RequestIdMiddleware)
     install_access_log_redaction()
@@ -104,6 +115,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if app.state.generation_provider is None
         else LazyEligibility(settings.assistant_country_db_path, settings.assistant_country_db_sha1)
     )
+    # Milestone 18: retailer access (token digests and the commit gate) and the commit engine,
+    # built lazily and only while every commit condition holds.
+    app.state.returns_access = ReturnsAccess.from_settings(settings)
+    app.state.returns_importer_engine = build_importer_engine(
+        settings, app.state.returns_access.gate
+    )
     app.include_router(health_router)
     app.include_router(search_router)
     app.include_router(dense_router)
@@ -112,6 +129,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reranked_router)
     app.include_router(routed_router)
     app.include_router(assistant_router)
+    app.include_router(returns_router)
     if settings.frontend_dist_dir is not None:
         mount_frontend(app, settings.frontend_dist_dir)
     return app

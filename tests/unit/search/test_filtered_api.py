@@ -1443,6 +1443,7 @@ def test_frozen_operations_and_components_are_unchanged_from_head(make_settings)
         "/search/routed",  # experimental V4 (Milestone 12)
         "/assistant/answer",  # Milestone 16
         "/assistant/status",  # Milestone 16
+        "/returns/capabilities",  # Milestone 18 (retailer API; M18-04A)
     }
     # The same app without the V2 router publishes byte-identical frozen operations.
     legacy = FastAPI(title="Intelligent E-commerce Search", version=schema["info"]["version"])

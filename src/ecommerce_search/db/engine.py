@@ -1,7 +1,15 @@
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import URL, Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from ecommerce_search.config import Settings
+
+
+def _connect_args(settings: Settings) -> dict:
+    return {
+        "connect_timeout": settings.db_connect_timeout_seconds,
+        # Value is a validated int, so nothing user-controlled reaches the options string.
+        "options": f"-c statement_timeout={settings.db_statement_timeout_ms}",
+    }
 
 
 def create_db_engine(settings: Settings) -> Engine:
@@ -11,11 +19,20 @@ def create_db_engine(settings: Settings) -> Engine:
         pool_size=settings.db_pool_size,
         max_overflow=settings.db_max_overflow,
         pool_timeout=settings.db_pool_timeout_seconds,
-        connect_args={
-            "connect_timeout": settings.db_connect_timeout_seconds,
-            # Value is a validated int, so nothing user-controlled reaches the options string.
-            "options": f"-c statement_timeout={settings.db_statement_timeout_ms}",
-        },
+        connect_args=_connect_args(settings),
+    )
+
+
+def create_importer_engine(settings: Settings, url: URL) -> Engine:
+    """The Milestone 18 API commit engine: the scoped importer role, one connection (imports are
+    single-flight), same server and timeouts as the app engine. Never used for reads."""
+    return create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout=settings.db_pool_timeout_seconds,
+        connect_args=_connect_args(settings),
     )
 
 

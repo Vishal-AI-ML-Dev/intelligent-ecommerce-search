@@ -1,6 +1,243 @@
 # M18 — Handoff
 
-## Current state (2026-10-26, end of the M18-03C session)
+## Current state (2026-10-27, M18-04A reviewed; amendments A1/A2 applied; scoped commit authorized)
+
+- **Owner decision (2026-10-27):** A1 and A2 approved and applied as `contracts.md` §6.2, with
+  the strict single-space Bearer parsing recorded there. The wording matches the existing
+  implementation (`RETURNS_TOKEN_PATTERN` `[A-Za-z0-9\-._~+/]+=*`, 32–256 characters;
+  `parameters` built from `errors.safe_key` names and `[a-z_]{1,40}` codes or `invalid`); no
+  implementation mismatch found. Scoped 04A commit and fast-forward push authorized; the commit
+  SHA and CI result are reported to the owner (this file is part of that commit).
+
+### M18-04A review checkpoint (2026-10-27, one bounded pass)
+
+HEAD still `ca8b7ab2197c…`; status shows only the 04A files and the four unrelated items. No
+commit authorization exists (the 04A approval excluded commits), so **nothing was committed or
+pushed**; CI for 04A therefore does not exist.
+
+**Findings and fixes:**
+- **Fixed (correctness):** `ReturnsRoute` caught only FastAPI's `HTTPException`, so a
+  Starlette `HTTPException` (what Starlette raises, for example while parsing a request body,
+  relevant to 04B) would have become a 500. It now catches Starlette's class, which includes
+  FastAPI's subclass. New test case `starlette-http-error` → 400 `request_failed`, detail not
+  echoed.
+- **Confirmed, no change:** order 503 → 401 → 403; all four commit conditions required
+  (16-combination test); importer engine built only with the gate open, lazily, as the
+  importer role, one connection, disposed in the lifespan; middleware acts only on `/returns`
+  and `/returns/…` (no catch-all frontend route can shadow it, and no `--root-path` or prefix
+  stripping is configured in the Dockerfile or Caddyfile); buyer responses unchanged.
+
+**Contract compatibility:**
+- **Duplicate `Authorization` → 401:** compatible. `Authorization` is a single-value field, so
+  two of them are "malformed" (§6). Likewise more than one space after `Bearer` (RFC 6750
+  allows `1*SP`) is refused as malformed; standard clients send one space.
+- **401 before 422:** compatible, and needed: §6 requires 503 "on every `/returns` route", which
+  only holds if access is checked before parameters.
+- **Lower-case importer role name:** compatible. §6 sets no form for the setting, and the §2.1
+  role `returns_importer` satisfies it. It does not stop a privileged role name such as
+  `postgres`; the runtime role check (`ImportRoleError`, D3/D5) stays the control in 04B.
+- **Token syntax and 256 cap — amendment A1 proposed, not applied.** §6 says only "≥32 chars";
+  the code also refuses tokens over 256 characters or outside the RFC 6750 b64token set (such a
+  setting fails at startup). Every token made by the §6 rotation procedure passes. Proposed
+  minimal text for the §6 table row: "`RETURNS_VIEWER_TOKEN` (`SecretStr`, 32–256 RFC 6750
+  b64token characters)". Alternative: remove the extra checks from the code.
+- **422 `parameters` list — amendment A2 proposed, not applied.** §7 fixes the error body as
+  `{"detail": str, "code": str}`, while §5.1 says the route-scoped 422 "returns parameter name
+  and code only". The two cannot both hold literally; the code adds
+  `parameters: [{"name", "code"}]` to 422 `invalid_parameter` only. Proposed minimal text after
+  the §7 error-body sentence: "A 422 `invalid_parameter` adds `parameters`, a list of
+  `{name, code}` (§5.1)." Alternative: drop the list (then §5.1 is not met).
+
+**Logging across the stack (read only; nothing changed):**
+- **App:** the request log writes the route template, method, status and duration only;
+  `/returns` events carry fixed codes and the exception type only.
+- **uvicorn** (Dockerfile: default logging, access log on): the M24A `AccessLogRedactionFilter`
+  strips the query string and client address; uvicorn's access format holds no headers, so
+  `Authorization` is never in it. Evidence: the existing `test_observability.py` tests pin the
+  format against the installed uvicorn source and check the filter (passed in this review). A
+  real uvicorn process was not run.
+- **Caddy 2.11.6 (EC2):** no `log` directive, so no access log. Caddy's error log can include a
+  request URI with its query string (for example when the app is unreachable); by Caddy's
+  documented default it redacts `Authorization` and cookies (no `log_credentials` here). Not
+  verified by running Caddy. Caddy's HTTP→HTTPS redirect echoes the path and query; a client
+  that sends a token over plain HTTP has exposed it before the app is involved.
+- **AWS Terraform (`infra/staging`):** no ALB, CloudFront or WAF access logging is configured.
+- **Limitation (corrected 2026-10-27):** in the Caddy error-log case above, the whole query
+  string can be written, so **any sensitive query data** can be exposed there: list filters,
+  cursors and any value a client puts in a URL (a mis-sent token is only one example). Tokens
+  are accepted only in the header. Proxy and deployment configuration is unchanged in this
+  task; this stays an open deploy-kit item (M18-06/07).
+
+**Blockers:** no security blocker found. The commit was waiting on owner decisions on A1 and
+A2 and on commit authorization; both were given on 2026-10-27 (above).
+
+**Checks run in this review:**
+
+| Command | Result |
+|---|---|
+| `git rev-parse HEAD`; `git status --short`; `git diff --stat` | `ca8b7ab…`; 04A files + four unrelated items |
+| `uv run --frozen python -m pytest tests/unit/returns/test_returns_api_access.py tests/unit/test_observability.py -q -p no:cacheprovider` (after the fix) | **148 passed** |
+| same access file `--co` | 123 tests (122 + the new case) |
+| `uv run --frozen ruff check .` / `ruff format --check .` | all checks passed / 511 files already formatted |
+| `git diff --check` on the tracked 04A paths | exit 0 |
+| `git diff --no-index --check /dev/null <new file>` for the two new files; trailing-whitespace grep; final newline | no whitespace errors reported (exit 1 only means the files differ); none; present |
+| secret-pattern grep (AWS/GitHub/Google/OpenAI keys, private keys, `KEY=value`, credentialed URLs) over the 04A diff and new files | one hit: the test's fake `postgresql://user:{DB_PASSWORD}@host` message built from the fake `DB_PASSWORD`; no real secret |
+| a broad repository grep for logging/proxy settings | stopped after 120 s with no output used; replaced by the targeted reads above |
+| Pre-commit (2026-10-27): `git diff --cached --check` on the 12 staged 04A files | exit 0 |
+| Pre-commit: secret-pattern grep over `git diff --cached`; staged `.env` check | two hits, both the fake test connection string (in the test and quoted in this table); no `.env` staged |
+| Pre-commit: `git diff --exit-code bf67d11 -- <AC-14 protected paths>` | exit 0 |
+| Pre-commit: AC-14 M17 SHA-256 listing | **not run: the listing file (own SHA-256 `cf74568d…`) no longer exists**; its session temp directory was cleaned. It was not recreated, because a new listing cannot prove the files are unchanged since before M18-02. The untracked M17 items are not staged or touched. The owner decides how to re-baseline. |
+
+Not rerun: the 3647-test focused set, collect-only and AC-14 (the review changed one source
+line and one test file; no protected path). Not run: the full unit suite, the isolation wrapper
+(local timeout stays **FAILED**, separate from CI), the integration suite, CI.
+
+## State before the review checkpoint (2026-10-26, M18-04A implemented)
+
+- **HEAD at start:** `ca8b7ab2197ccade8356eb8c5b1e77083485e25d`, as expected. CI on `ca8b7ab`
+  is green **as confirmed by the owner**; this session cannot open the private run, so it is
+  not independently verified.
+- **M18-04 plan:** three bounded subparts (04A access and safe errors, 04B upload/validate/
+  import, 04C read APIs and package verification). The owner approved **04A only**, with
+  decisions D1–D5 (below). D6–D8 are **not** accepted yet.
+- **M18-04A: implemented and focused-verified. Not committed.** 04B and 04C have not started.
+  M18 is not accepted.
+- Unrelated working-tree items are unchanged: `docs/m12-diagnostic-tooling.md` (modified),
+  untracked `.claude/`, `docs/m17-handoff.md` and `evals/results/m17/unsupported-claims/`.
+- **Not done:** no database access of any kind (all 04A tests are hermetic), no installs,
+  migrations, grants, credentials, deployments, provider calls, AWS actions, commits or
+  pushes. The full unit suite, the isolation wrapper and the integration suite were not run;
+  the local isolation timeout stays **FAILED**.
+
+### Owner decisions for M18-04 (2026-10-26)
+
+- **D1:** 04B should use a maintained multipart library's low-level in-memory interface, not a
+  hand-written parser. Nothing installed in 04A. At the 04B checkpoint: confirm the version,
+  the dependency and lockfile changes, and bounded callback behaviour before installing. No
+  temp-file spill stays mandatory.
+- **D2:** canonical multipart field names; client filenames ignored; unknown or duplicate parts
+  rejected under the existing contracts.
+- **D3 (provisional for 04B):** 415 `unsupported_media_type`, 400 `malformed_upload`, 503
+  `import_storage_unavailable`, and `ImportRoleError` on the API commit path → 403
+  `import_commit_disabled`. No database text, credential, token or role detail in responses.
+- **D4:** contract correction removing `RETURNS_VIEWER_LABEL` (applied as `contracts.md` §6.1;
+  original clause quoted there). A search before the edit found no other use.
+- **D5:** importer DB user and password both or neither, and the user must differ from
+  `POSTGRES_USER`. This does not replace the runtime least-privilege role check.
+
+### What M18-04A implements
+
+**Settings** (`config/settings.py`):
+- `RETURNS_VIEWER_TOKEN`, `RETURNS_IMPORTER_TOKEN`: `SecretStr`, empty = unset, 32–256 RFC 6750
+  b64token characters, must differ (compared with `hmac.compare_digest`).
+- `RETURNS_IMPORT_COMMIT_ENABLED`: strict `true`/`false`, default false.
+- `RETURNS_IMPORTER_DB_USER` (plain lower-case role name) and `RETURNS_IMPORTER_DB_PASSWORD`
+  (`SecretStr`): both or neither; the user must differ from `POSTGRES_USER` (D5).
+- `returns_importer_database_url()`: the app's host, port and database as the importer role.
+- All three secrets are masked at every settings source (existing `_SecretInputSource`);
+  validation errors name the field only.
+
+**`api/returns.py`:**
+- `ReturnsAccess`: keeps only SHA-256 digests of the tokens (never the tokens). Every presented
+  token is compared with both digests with `hmac.compare_digest`. Viewer scopes: `returns:read`,
+  `returns:validate`; importer adds `returns:import`.
+- `bearer_token`: exactly one `Authorization` header, at most 263 characters, scheme `Bearer`
+  (case-insensitive), one space, a b64token of valid length. Anything else is a 401; oversized
+  values are refused without hashing. Cookies and query parameters are never read.
+- `require_scope`: 503 `retailer_access_not_configured` when neither token is set, 401
+  `unauthorized` (with `WWW-Authenticate: Bearer`), 403 `forbidden`. Denials log
+  `returns_access_denied` with the code only.
+- `CommitGate`: importer token **and** commit flag **and** importer DB credentials **and**
+  importer label. `LazyImporterEngine` exists only while the gate is open, builds its engine on
+  first `get()` (`db/engine.py` `create_importer_engine`: one connection, no overflow, the app
+  timeouts) and is disposed at shutdown. Nothing calls `get()` yet (04B).
+- `ReturnsRoute` (route class of the `/returns` router): `ReturnsError` → fixed
+  `{"detail","code"}`; `RequestValidationError` → 422 `invalid_parameter` with
+  `parameters: [{name, code}]` (safe keys and Pydantic type codes only); other
+  `HTTPException` → fixed text (`not_found`, `method_not_allowed` or `request_failed`); any
+  other exception → 500 `internal_error`, logging only `returns_internal_error` and the type.
+- `ReturnsPathMiddleware` (paths `/returns` and `/returns/…` only, inside the request-ID
+  middleware): adds `Cache-Control: no-store` to every response, and replaces responses that
+  no `/returns` route produced: an unmatched path → 404 `not_found`; a slash redirect → 404
+  `not_found` (its `Location` would echo the query string); a wrong method → 405
+  `method_not_allowed` with `Allow` kept. Every other path passes through untouched.
+- `GET /returns/capabilities` (read scope, no database access): `contract_version`, `scopes`,
+  `can_validate`, `can_commit` (import scope and the gate open), `limits` (§4.4) and
+  `reason_codes`. No credential, user, label, host or gate detail.
+
+**App** (`api/app.py`): the middleware, `app.state.returns_access`,
+`app.state.returns_importer_engine` (disposed in the lifespan) and the router.
+
+### Interpretations made in M18-04A (for owner review)
+
+1. **Token format:** 32–256 RFC 6750 b64token characters. §6 says only "≥32 chars"; the
+   character set keeps a token sendable in a header, and the cap bounds header handling.
+2. **Role name:** `RETURNS_IMPORTER_DB_USER` must be a plain lower-case role name.
+3. **422 body:** `{"detail","code","parameters":[{"name","code"}]}`. The extra `parameters`
+   list implements §5.1 "parameter name and code only".
+4. **Repeated `Authorization` headers** are 401 even when both are valid.
+5. **Capabilities:** `limits` holds every §4.4 row plus `request_body_bytes` and
+   `concurrent_imports`; `reason_codes` is the code list (its version is not a field).
+6. **Ordering:** the access dependency runs while FastAPI solves parameters, so an
+   unauthenticated request with a bad parameter gets 401, not 422.
+
+### Boundaries reported (not waived; owner review requested)
+
+- **Unmatched `/returns` paths** get 404 `not_found` (and 405 for wrong methods) whatever the
+  token configuration: no route exists, so the §6 503/401 rules (which name routes) do not
+  apply. They carry `no-store` and the request ID, and echo no path, query or token.
+- **Slash redirects under `/returns`** become 404 instead of Starlette's 307 (`/returns` only;
+  buyer redirects unchanged).
+- **Outside the app:** malformed HTTP or oversized header sections are refused by the server
+  (uvicorn/h11) before the app runs; those responses carry no `no-store` and are not covered.
+- **Not covered by `ReturnsPathMiddleware` rewriting:** any status other than 3xx/404/405 from
+  outside a `/returns` route (none exists today); such a response still gets `no-store`.
+- **OpenAPI** (`/openapi.json`, `/docs`) is public and lists `/returns/capabilities`, as for
+  every other route.
+- **No lockout or rate limit on token guessing** (not in the contract); tokens carry at least
+  32 b64token characters (`token_urlsafe(32)` gives 43, about 256 bits).
+- **`docker-compose.yml` does not forward `RETURNS_*`** to the api service, so the compose API
+  answers 503 on `/returns`. Wiring is deploy-kit work (M18-06/07); not changed here.
+
+### Commands run and actual results (2026-10-26, M18-04A)
+
+| Command | Result |
+|---|---|
+| `git rev-parse HEAD`; `git status --short` | `ca8b7ab2197c…`; only the four unrelated items |
+| `uv run pytest tests/unit/returns/test_returns_api_access.py -q -p no:cacheprovider -x` (first run) | 1 failed, 97 passed: a **test bug**. Log assertions read every logger, and the test client's own `httpx2` logger records full request URLs (the M24A tests already filter it out). Fixed by checking the application's loggers only. |
+| same file, after the fix | **122 passed** |
+| A one-off in-memory smoke script (TestClient: capabilities, unmatched paths, 405, 401, buyer 404) before the tests were written | ran; behaviour as described above; not a test |
+| First focused run: the access file + `test_settings.py`, `test_app.py`, `test_observability.py`, `test_dependencies.py`, `test_engine.py`, `test_compose_config.py`, `tests/unit/search`, `tests/unit/assistant/test_assistant_api.py` | **2 failed, 3126 passed, 3 skipped**. Both failures were the existing app path-set pins in `test_filtered_api.py` and `test_reranked_api.py` (their frozen-operation digests passed). Each pin gained `/returns/capabilities`, as M16 did for its routes; strict equality kept. |
+| **Final focused run:** `uv run pytest tests/unit/returns tests/unit/test_settings.py tests/unit/test_app.py tests/unit/test_observability.py tests/unit/test_dependencies.py tests/unit/test_engine.py tests/unit/test_compose_config.py tests/unit/test_frontend_serving.py tests/unit/search tests/unit/assistant/test_assistant_api.py -q -p no:cacheprovider` | **3647 passed, 3 skipped** (3 min 19 s). Skips: symlink permission on this Windows account. |
+| `uv run ruff check .` / `uv run ruff format --check .` | all checks passed / 511 files already formatted |
+| CI-equivalent hermetic `--collect-only` (same unset prefixes, `ECOMMERCE_SEARCH_HERMETIC_CHILD=1`, empty `POSTGRES_PASSWORD`, `-m "not integration and not real_model"`) | exit 0: **5817/6864** collected (1047 deselected), no errors (+122 from 5695) |
+| Integration-job `--collect-only` (placeholder password, no connection) | 1029/1047 collected, no errors |
+| Duplicate `test_*.py` basenames under `tests/` | 0 |
+| `git diff --exit-code bf67d11 -- <AC-14 protected paths>` | exit 0 |
+| AC-14 M17 listing (`ac14-m17-untracked.sha256`, own SHA-256 starts `cf74568d`), `sha256sum -c` | 10 OK, exit 0 |
+
+Not run: the full unit suite, the isolation wrapper (local timeout stays **FAILED**), the
+integration suite, CI.
+
+### Files changed by M18-04A (uncommitted)
+
+- **New:** `src/ecommerce_search/api/returns.py`,
+  `tests/unit/returns/test_returns_api_access.py`
+- **Modified:** `src/ecommerce_search/config/settings.py`, `src/ecommerce_search/db/engine.py`
+  (shared connect arguments; `create_importer_engine`), `src/ecommerce_search/api/app.py`,
+  `.env.example`, `tests/unit/test_settings.py` (secret-name set),
+  `tests/unit/search/test_filtered_api.py` and `test_reranked_api.py` (path-set pins),
+  `docs/m18/contracts.md` (§6 row and §6.1 correction, D4), `docs/m18/handoff.md`,
+  `docs/m18/test-matrix.md`
+
+### Next task
+
+1. Owner review of M18-04A (interpretations and boundaries above), then a decision on a scoped
+   commit.
+2. With separate approval: **M18-04B**, starting with the D1 checkpoint (multipart library
+   version, dependency and lockfile changes, bounded in-memory callbacks) before any install.
+
+## State at the end of the M18-03C session (2026-10-26)
 
 - **HEAD at start:** `4d495c8a5a72aa70e1b0c1def32bd74c52032c25` (M18-03B), as expected.
   - **CI on `4d495c8`:** green **as confirmed by the owner**. This session could not open the

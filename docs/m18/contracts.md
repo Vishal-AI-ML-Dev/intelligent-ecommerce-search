@@ -2,7 +2,8 @@
 
 Status: **FROZEN — M18-01 design approved by the owner on 2026-10-24** (revision 2, with the
 owner qualifications recorded in `plan.md` §8). Decision IDs refer to `plan.md` §8. Changes
-after the freeze need owner approval. M18-02 (storage, contracts, grants) is implemented;
+after the freeze need owner approval. Owner-approved corrections since the freeze: §6.1
+(2026-10-26), §6.2 (2026-10-27). M18-02 (storage, contracts, grants) is implemented;
 its implementation boundaries are recorded in §10.
 
 ## 1. Versions and conventions
@@ -438,14 +439,16 @@ never printed, logged, echoed in reports or committed.
 
 | Setting | Meaning |
 |---|---|
-| `RETURNS_VIEWER_TOKEN` (`SecretStr`, ≥32 chars) | scopes `returns:read`, `returns:validate` |
+| `RETURNS_VIEWER_TOKEN` (`SecretStr`, 32–256 chars, RFC 6750 `b64token` grammar; amended §6.2) | scopes `returns:read`, `returns:validate` |
 | `RETURNS_IMPORTER_TOKEN` (must differ) | adds `returns:import` |
-| `RETURNS_VIEWER_LABEL`, `RETURNS_IMPORTER_LABEL` | non-secret labels recorded on batches |
+| `RETURNS_IMPORTER_LABEL` | non-secret label recorded on batches (corrected 2026-10-26, §6.1) |
 | `RETURNS_IMPORT_COMMIT_ENABLED` (default `false`) | commit path switch |
 | `RETURNS_IMPORTER_DB_USER` / `_PASSWORD` | separate engine used only for commit |
 
 **Request rules:**
 - Header: `Authorization: Bearer <token>`. Comparison: constant time on SHA-256 digests.
+- Parsing (§6.2): exactly one `Authorization` header; scheme `Bearer` in any case; exactly one
+  space before the token. Anything else is malformed (401).
 - Responses by case:
 
 | Case | Response |
@@ -479,10 +482,39 @@ never printed, logged, echoed in reports or committed.
 This is acceptable only for synthetic demo data. Real data would need per-user identity, which
 is out of M18 scope.
 
+### 6.1 Contract correction (owner decision D4, 2026-10-26, during M18-04A)
+
+- **Original frozen row:** "`RETURNS_VIEWER_LABEL`, `RETURNS_IMPORTER_LABEL` | non-secret labels
+  recorded on batches".
+- **Correction:** `RETURNS_VIEWER_LABEL` is removed. The row now names `RETURNS_IMPORTER_LABEL`
+  only.
+- **Rationale:** batches are written only by commits, and a commit needs the `returns:import`
+  scope, which the viewer token never has. A viewer label could therefore never be recorded on
+  any batch. No other use of the setting existed in the contracts, code or tests (checked
+  before the edit).
+- **Unchanged:** importer attribution (`RETURNS_IMPORTER_LABEL` → `imported_by_label`) and every
+  other provenance field.
+
+### 6.2 Contract amendments A1 and A2 (owner approval 2026-10-27, M18-04A review)
+
+- **A1 (token format).** Original: "`RETURNS_VIEWER_TOKEN` (`SecretStr`, ≥32 chars)".
+  Amended: both tokens are 32–256 characters and match the RFC 6750 `b64token` grammar
+  (letters, digits, `-` `.` `_` `~` `+` `/`, then optional trailing `=`). This is a character
+  rule only; no Base64 decoding is performed or required. A setting outside it fails at startup.
+  `secrets.token_urlsafe(32)` (43 characters) conforms.
+- **Bearer parsing (recorded choice).** Exactly one `Authorization` header and exactly one space
+  between `Bearer` and the token. This is stricter than RFC 6750's `1*SP`; other forms are
+  malformed (401).
+- **A2 (422 body).** Original: "The error body is `{"detail": str, "code": str}`". Amended: a
+  422 `invalid_parameter` may add `parameters`, a list of `{name, code}` pairs. Names are safe
+  keys and codes are fixed validation codes; submitted values are never included (§5.1).
+- **Unchanged:** every other §6 and §7 rule.
+
 ## 7. API contract
 
 The error body is `{"detail": str, "code": str}` (extends the existing shape; confirmed in
-M18-04). Every response carries `X-Request-ID`.
+M18-04). Every response carries `X-Request-ID`. A 422 `invalid_parameter` may add
+`parameters`: a list of safe `{name, code}` pairs, never submitted values (amended §6.2).
 
 **API identity:**
 - A return is identified by (`dataset_id`, `dataset_version`, `return_id`).
