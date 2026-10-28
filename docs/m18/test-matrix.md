@@ -330,6 +330,22 @@ full regression and CI are still open.
 - **AC-13 (2):** a read snapshot is `repeatable read` with `transaction_read_only = on`, and a
   write attempt as the superuser fails with SQLSTATE 25006.
 
+### M18-04B API import integration (2026-10-28)
+
+| Check | Kind | Result |
+|---|---|---|
+| `tests/integration/test_returns_api_import_integration.py`: local commit and idempotent repeat, validate-only (2 tokens), scope-before-gate, commit flag off, read-only role rejected, wrong password, Settings equality boundary | database integration (scratch DB, real `m18t_*` roles) | **9 passed** (first run: 1 failed, a test-helper bug) |
+| Cleanup and secret scan (database/role lists; server log and pytest output) | recorded command | lists identical; 0 secret hits |
+
+- **AC-07/AC-08 through the API:** the import is atomic and idempotent (the repeat writes
+  nothing).
+- **AC-09:** the API path is now live.
+- **AC-11:** the commit gate is checked on a live database.
+- **AC-13 (2):** validate writes nothing as the API role.
+- **AC-13 (3):** least privilege is enforced at commit; a read-only role is refused with
+  `missing_privilege`. Admin/superuser rejection **through the API is untested**; it is
+  covered only at the service and CLI level (M18-03B).
+
 ### Catalog ingest timestamp correction (2026-10-28; outside M18 feature scope)
 
 | Check | Kind | Result |

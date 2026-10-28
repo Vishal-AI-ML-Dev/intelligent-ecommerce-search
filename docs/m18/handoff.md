@@ -1,6 +1,53 @@
 # M18 — Handoff
 
-## Catalog ingest timestamp correction (2026-10-28; outside M18 feature scope; uncommitted)
+## M18-04B API import integration (2026-10-28; uncommitted, awaiting review)
+
+- **CI on `6e961855d1d64939570f6111030becddd73c9b71`:** all jobs green, **as confirmed by the
+  owner** (not independently verified).
+- **Gap closed:** the approved 04B plan listed `tests/integration/test_returns_api_import_integration.py`,
+  but 04B shipped with hermetic unit evidence only. The module now exists. It runs the real
+  path: HTTP → access → commit gate → `LazyImporterEngine` → existing `validate_import` /
+  `commit_import`, as real roles.
+- **No production code, auth ordering or contract changed.** No runtime bug or contract
+  mismatch was found.
+- **Roles:** throwaway `m18t_app_*`, `m18t_imp_*` and `m18t_ro_*`, created by
+  `tests/returns_roles.py`.
+  - The read-only role receives the API role's grants, applied a second time by
+    `apply_grants`.
+  - **Admin/superuser rejection through the API is untested.** The dev cluster's admin role
+    was not used as a rejected importer, because only disposable roles were authorized.
+    Existing evidence covers it below the API only: the M18-03B service test
+    (`test_returns_import.py`, superuser → `ImportRoleError("superuser")`) and the CLI test.
+  - The importer user equal to the app user is tested at its existing boundary: the
+    `Settings` model validator.
+
+| Case | Expected (existing behaviour) | Result |
+|---|---|---|
+| Local import (gate open), importer token | 201 `imported`; identical repeat 200 `already_imported` with the same `batch_id`; repeat writes nothing; `imported_by_label` = the configured label (DB and batch detail API) | passed |
+| Validate as the API role, viewer and importer tokens | 200 `valid`, `error_count` 0, no `batch_id`; all 15 table counts unchanged | passed (2) |
+| Viewer token on `POST /returns/import` (gate open) | 403 `forbidden`: the scope check precedes the gate | passed |
+| Importer token, commit flag off | 403 `import_commit_disabled`; importer engine never built; `can_commit` false | passed |
+| Valid credentials of the read-only role as importer | 403 `import_commit_disabled`; logged `returns_import_role_rejected` with reason `missing_privilege`; counts unchanged | passed |
+| Wrong importer password | 503 `import_storage_unavailable` (never connects); no role-rejection event; counts unchanged | passed |
+| Importer user = app user | `ValidationError` ("must differ from postgres_user"); no password in the message | passed |
+
+| Command | Result |
+|---|---|
+| server identity: `system_identifier` from the host connection vs inside the container | equal (`7697502985140146214`) |
+| `python -m pytest tests/integration/test_returns_api_import_integration.py -m "integration and not real_model"` (first run) | 1 failed, 8 passed: a **test-helper bug** (`returns_import_commit_enabled` passed twice to `app_settings`); fixed by merging overrides |
+| same, rerun | **9 passed** (18 s) |
+| database and role lists before vs after both runs | identical; no scratch database or `m18t_*` role left |
+| server log since start and both pytest outputs: `SCRAM-SHA-256` / `CREATE ROLE` / `PASSWORD` | 0 / 0 / 0. Two expected `password authentication failed` lines (the wrong-password case, once per run) |
+| `ruff check .` / `ruff format --check .` | all checks passed / 520 files formatted |
+| hermetic `--collect-only` / integration `--collect-only` | 6092/7178 / 1068/1086, no errors |
+| duplicate test basenames; AC-14 protected-path diff | 0; exit 0 |
+
+Not run: the full suite, the Windows isolation wrapper (**FAILED**), CI for this change. Still
+open, separately: the three older fixtures' plaintext role passwords, the missing AC-14 M17
+listing, the Windows isolation timeout, the unconfirmed SHA of the catalog-failure run, and the
+deploy-kit items (M18-06/07).
+
+## Catalog ingest timestamp correction (2026-10-28; outside M18 feature scope; committed `6e96185`, CI green as confirmed by the owner)
 
 **Scope exception (owner-authorized):** a pre-M18 catalog ingestion fix, outside M18 feature
 scope. It is a single assignment in `src/ecommerce_search/ingestion/service.py` (last changed in
