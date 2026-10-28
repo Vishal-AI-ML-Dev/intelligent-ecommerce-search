@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "e2e:fixture": "playwright test --project=fixture",
-    "e2e:live": "playwright test --project=live"
+    "e2e:live": "playwright test --project=live",
+    "e2e:returns-live": "playwright test --project=returns-live"
   },
   "dependencies": {
     "react": "19.3.1",

@@ -219,3 +219,71 @@ def test_unexpected_names_or_passwords_are_refused_without_echo(role, password):
     assert not conn.statements
     echoed = password in str(caught.value)
     assert not echoed, "the password was echoed"
+
+
+# ---- the exact `search_app` role (AC-17 live run only) ----------------------------------------
+
+
+class LookupConnection(FakeConnection):
+    """A fake connection whose cursor answers the `pg_roles` lookup."""
+
+    def __init__(self, role_exists: bool) -> None:
+        super().__init__()
+        outer = self
+
+        class LookupCursor(FakeCursor):
+            def fetchone(self):
+                return (1,) if role_exists else None
+
+        class Dbapi:
+            def cursor(self) -> FakeCursor:
+                cursor = LookupCursor(outer.statements, None)
+                outer.cursors.append(cursor)
+                return cursor
+
+        class Proxied:
+            dbapi_connection = Dbapi()
+
+        self.connection = Proxied()
+
+
+def test_the_generic_helper_still_refuses_the_search_app_name():
+    conn = FakeConnection()
+    with pytest.raises(RoleSetupError):
+        create_login_role(conn, returns_roles.SEARCH_APP_ROLE, secrets.token_urlsafe(24))
+    assert conn.statements == []
+
+
+def test_an_existing_search_app_role_is_refused_and_never_altered():
+    conn = LookupConnection(role_exists=True)
+    with pytest.raises(RoleSetupError) as caught:
+        returns_roles.create_absent_search_app_role(conn, secrets.token_urlsafe(24))
+    assert "already exists" in str(caught.value)
+    *guards, lookup, reset = conn.statements
+    assert tuple(guards) == SESSION_GUARDS
+    assert lookup == "SELECT 1 FROM pg_roles WHERE rolname = 'search_app'"
+    assert reset == "RESET ALL"
+    assert not any(s.startswith(("CREATE", "ALTER", "DROP")) for s in conn.statements)
+    assert all(c.closed for c in conn.cursors)
+
+
+def test_an_absent_search_app_role_is_created_with_a_verifier_only(fixed_salt):
+    password = secrets.token_urlsafe(24)
+    conn = LookupConnection(role_exists=False)
+    returns_roles.create_absent_search_app_role(conn, password)
+    *guards, lookup, create, reset = conn.statements
+    assert tuple(guards) == SESSION_GUARDS
+    assert lookup.startswith("SELECT 1 FROM pg_roles")
+    assert reset == "RESET ALL"
+    assert create.startswith('CREATE ROLE "search_app" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE')
+    password_sent = password in "".join(conn.statements)
+    assert not password_sent, "the synthetic password reached the SQL text"
+    verifier_in_create = secret_parts(password)["verifier"] in create
+    assert verifier_in_create, "the CREATE ROLE statement must carry the verifier"
+
+
+def test_the_search_app_helper_refuses_an_unexpected_password_form():
+    conn = LookupConnection(role_exists=False)
+    with pytest.raises(RoleSetupError):
+        returns_roles.create_absent_search_app_role(conn, "short")
+    assert conn.statements == []

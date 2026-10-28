@@ -273,6 +273,56 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
+## M18-06 results (actual, 2026-10-28; uncommitted)
+
+Fixture-backed and live results are reported separately. Details are in `handoff.md`.
+
+**Fixture browser** (mocked API; the FastAPI-served build with its real CSP;
+`frontend/e2e/returns-fixture.spec.ts`, in the `fixture` project and so in the CI `e2e-fixture`
+job):
+
+| Check | Result |
+|---|---|
+| `npx playwright test --project=fixture returns-fixture` | **20 passed** |
+| `npm run e2e:fixture` (all three fixture specs, buyer specs unmodified) | **33 passed**, exit 0 |
+
+**Live browser** (local only; scratch database at `0007`; synthetic catalog ingested and
+embedded; grants script `returns-grants-1` applied; API connected as a **throwaway** app role
+`m18t_liveapp_*` granted by the script; generation `none`, `GEMINI_API_KEY` empty, Jev off,
+Hugging Face offline):
+
+| Run | Result |
+|---|---|
+| `returns-live --grep @commit` (viewer + importer tokens, commit on, throwaway importer role) | **2 passed** |
+| `returns-live --grep @validate-only` (viewer token only, commit off, no importer credentials) | **2 passed** |
+| `live` (existing buyer search test, same database and app role) | **1 passed** |
+
+The first live attempt failed one test (`@commit`: 0 of 180 rows), because the list keeps its
+first load while sections stay mounted (finding U1 in `handoff.md`). The test now reloads with
+Apply filters; the UI was not changed. That attempt's buyer run did not start (driver console
+encoding error), so all three runs were repeated on new owned resources and passed.
+
+**AC status after M18-06:**
+- **AC-16:** fixture and live browser paths pass (import → list → detail, commit mode, then
+  validate-only mode). Closed for local evidence; acceptance is the owner's.
+- **AC-17: NOT complete.**
+  - The real `search_app` role does not exist on the local cluster (one role exists:
+    `ecommerce_search`). The live suite therefore did not run "as the real `search_app` role".
+    The throwaway-role run is supporting evidence only.
+  - By owner direction, the full hermetic unit and `not real_model` integration suites were not
+    rerun locally; the latest owner-reported green CI is reused, not independently verified.
+  - Existing Vitest (176) and both buyer Playwright paths passed.
+
+**Follow-ups (2026-10-28, owner-approved):**
+- U1 fixed: the list and history reload page 1 after an `imported` report, keeping the filters.
+  Vitest 179 passed; fixture project 33 passed; live `@commit` 2 and `@validate-only` 2 passed
+  without Apply filters.
+- The existing buyer `live` test passed **as the real `search_app` role**. The role was created
+  only after a fresh absence check, used with grants only in the run-owned scratch database,
+  and dropped after its ownership comment matched.
+- AC-17 is still **not complete**: the full hermetic unit and integration suites were not rerun
+  (owner direction), and the assistant has no live test.
+
 ## M18-05 results (actual, 2026-10-28; in the scoped M18-05 commit)
 
 | Check | Kind | Result |

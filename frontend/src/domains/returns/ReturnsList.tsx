@@ -56,15 +56,20 @@ const SELECT_FILTERS: [keyof ReturnFilters, string, readonly string[]][] = [
 export function ReturnsList({
   token,
   active,
+  refreshKey,
   onUnauthorized,
 }: {
   token: string;
   active: boolean;
+  /** Changes after an import stored records: reload page 1 with the applied filters. */
+  refreshKey: number;
   onUnauthorized: () => void;
 }) {
   const run = useReturnsRequests(onUnauthorized);
   const [draft, setDraft] = useState<ReturnFilters>(EMPTY_FILTERS);
   const [applied, setApplied] = useState<ReturnFilters>(EMPTY_FILTERS);
+  const appliedRef = useRef<ReturnFilters>(EMPTY_FILTERS);
+  const seenRefreshKey = useRef(refreshKey);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [state, setState] = useState<PageState>({ phase: 'loading' });
   const [detail, setDetail] = useState<DetailState | null>(null);
@@ -73,6 +78,7 @@ export function ReturnsList({
 
   const load = useCallback(
     async (filters: ReturnFilters, stack: (string | null)[]) => {
+      appliedRef.current = filters;
       setApplied(filters);
       setCursors(stack);
       setState({ phase: 'loading' });
@@ -92,6 +98,18 @@ export function ReturnsList({
       void load(EMPTY_FILTERS, [null]);
     }
   }, [active, load]);
+
+  // A list that was never shown loads fresh when first shown; one already loaded keeps its
+  // filters and restarts at page 1, since its cursor chain predates the new records.
+  useEffect(() => {
+    if (refreshKey === seenRefreshKey.current) {
+      return;
+    }
+    seenRefreshKey.current = refreshKey;
+    if (started.current) {
+      void load(appliedRef.current, [null]);
+    }
+  }, [refreshKey, load]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

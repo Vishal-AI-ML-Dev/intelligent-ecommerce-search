@@ -1,5 +1,211 @@
 # M18 — Handoff
 
+## M18-06 Integration & Browser Verification (2026-10-28; uncommitted)
+
+Approved scope: the M18-06 proposal of 2026-10-28 with owner corrections P1–P5. HEAD is still
+`464ab0f3c1b167fe0a6560868d3a351981d39927`. **No backend, client, UI, dependency, CI-workflow or
+deploy-kit change.**
+
+**Changed files:**
+- New: `frontend/e2e/returns-fixture.spec.ts`, `frontend/e2e/returns-live.spec.ts`.
+- Modified:
+  - `frontend/playwright.config.ts`: the returns fixture spec joins the `fixture` project, plus a
+    new local-only `returns-live` project;
+  - `frontend/package.json`: new script `e2e:returns-live`;
+  - `README.md`, `docs/m18/test-matrix.md`, this file.
+
+### M18-06 follow-ups (2026-10-28; owner-approved; uncommitted)
+
+**U1 fix: the list and history refresh after an import.**
+- `SignedIn` keeps an import generation counter. `ImportPanel` raises it, through the new prop
+  `onImported`, only when a report has status `imported`. The statuses `valid`,
+  `already_imported`, `no_new_records` and `invalid` and every error store nothing, so they
+  trigger nothing.
+- `ReturnsList` and `BatchHistory` take a `refreshKey`. If a section has already loaded, it
+  reloads page 1: the list keeps the user's applied filters, and the history reloads its first
+  page. The stale cursor stack is dropped. A section that was never shown still loads fresh when
+  first shown.
+- The reload goes through the existing `useReturnsRequests` guard, so the same-key abort,
+  unmount abort and session keying are unchanged. There is no page reload.
+- New Vitest cases (3) in `ReturnsPage.test.tsx`:
+  - after `imported`, the list reloads as `/returns?status=received` at page 1 (from page 2),
+    with the filter kept, and the history reloads;
+  - after `valid`, `already_imported` and 422 `invalid`, nothing reloads;
+  - a never-opened history is not loaded.
+- **Mutant check:** against the HEAD versions of the four UI files, the two positive cases fail.
+  The "nothing reloads" case passes on both, as intended. My versions were restored afterwards.
+- `returns-live.spec.ts` no longer clicks Apply filters. After the import, history shows 1 batch
+  and the list shows rows without Apply filters or Refresh, and the full 180-row paging count is
+  unchanged.
+
+**AC-17 real-role live check.**
+- **Requirement:** AC-17 (test matrix) requires the "API live suite run **as the real
+  `search_app` role** under the new grants", along with the full hermetic unit suite,
+  integration (`not real_model`), existing Vitest and both Playwright projects.
+- **Helper:** in `tests/returns_roles.py`, `create_login_role` and its `m18t_*` allowlist are
+  unchanged. A new `create_absent_search_app_role` accepts only the exact name `search_app`. On
+  the guarded raw cursor it first runs a constant `pg_roles` lookup and refuses if the role
+  exists, before any `CREATE`. Otherwise it creates the role with
+  `LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT` and a SCRAM verifier.
+- **Helper unit tests (4 new):**
+  - the generic helper still refuses `search_app`;
+  - an existing role is refused with no `CREATE`, `ALTER` or `DROP` sent;
+  - when absent, the role is created with a verifier only;
+  - a bad password form is refused.
+  - The file has 13 passed.
+- **Run (scratchpad driver, mode `search_app`):**
+  1. Fresh `pg_roles` check: absent.
+  2. Created the role with the helper, plus `COMMENT ON ROLE search_app IS 'm18-06 run-owned
+     <hex>'` as the ownership mark. Attributes: super, createdb, createrole, inherit,
+     replication and bypassrls all false; login true.
+  3. Grants applied only in the run-owned scratch database (`returns-grants-1`, app role
+     `search_app`, throwaway importer).
+  4. `live` (existing buyer test) as `search_app`: **1 passed**.
+  5. Teardown: dropped the database, then the importer. `search_app` was dropped only after its
+     comment matched the run's mark.
+  6. Database and role lists before and after: equal (`ecommerce_search` only).
+- `search_app` had the default PUBLIC `CONNECT` on the cluster's other databases while it
+  existed, and no table privileges there. No pre-existing object or privilege was changed.
+
+**U1 live rerun (mode `returns`, throwaway roles):** `@commit` **2 passed**, `@validate-only`
+**2 passed**. Cleanup was verified and the lists were equal.
+
+**Secrets:** 0 hits in 14 scanned files across both runs, and 0 in the raw captured output
+before redaction. The Postgres log since 12:00 UTC has no role, password, verifier or
+`search_app` text.
+
+| Command | Result |
+|---|---|
+| `npx vitest run src/domains/returns` | first run: 1 failed (test-side ambiguous "Page 1" match), then **66 passed** |
+| `npm test` | **179 passed** |
+| `npm run typecheck` / `npm run build` | exit 0 / exit 0 |
+| `npm run e2e:fixture` (rebuilt bundle) | **33 passed** |
+| `pytest` fixture contract, fixture privacy, frontend serving, `test_returns_roles.py` | **102 passed** |
+| `ruff check .` / `ruff format --check .` | all checks passed / 520 files formatted |
+| driver `returns` / driver `search_app` | 2+2 passed / 1 passed; cleanup verified |
+| `git diff --check`; AC-14 diff vs `bf67d11`; `git diff -- data/` | exit 0 / exit 0 / exit 0 |
+
+**AC status:**
+- **AC-16:** fixture (20 + 33 project) and live (`@commit` 2, `@validate-only` 2) pass with the
+  U1 fix. Pending owner acceptance.
+- **AC-17: NOT complete.**
+  - Covered: buyer live as the real `search_app` under the new grants (1 passed), Vitest 179, the
+    fixture project 33, and the generation-off setting.
+  - Not covered: the full hermetic unit suite and `not real_model` integration were not rerun by
+    owner direction; the last green CI is owner-reported, not verified.
+  - The existing live suite has no assistant test, so the assistant was not exercised live.
+
+### Fixture browser (mocked API): 20 tests, all passed
+
+A catch-all route lets only `/` and `/assets/*` reach the server. Buyer search, assistant and
+`/assistant/status` calls get fixed fixture answers. Anything else fails the test.
+
+**Every test asserts:**
+- no page error, dialog or unexpected request;
+- zero `securitypolicyviolation` events (listener installed before any page script);
+- console lines limited to the client's `[api]` logs and Chromium's non-2xx note, with no token
+  in any of them.
+
+| Group | What is checked |
+|---|---|
+| F7 CSP | `/` carries the exact `FRONTEND_PAGE_HEADERS` CSP, `nosniff` and `no-referrer`. A bare `GET /returns` is answered by the API (401/503, JSON, `no-store`, no CSP), never by the page. |
+| F1 gate | `type=password` field. The token goes only to `/returns` routes, as `Bearer`. The input is cleared. 401 shows the fixed text plus the sent request ID, and the server `detail` is not shown. 503 shows the fixed not-configured text. |
+| F2 permissions | Viewer: Validate is shown, Import is absent, plus the disabled text. Importer: Import is shown. A server 403 shows the fixed text. |
+| F3 uploads (`setInputFiles` on the real input) | JSON is sent as part and filename `bundle.json`, whatever the local name. A CSV set keeps its part names. Multipart content type. 422 `invalid` from import shown as a report. Truncation and lower-bound wording. The pre-check stops an empty, oversized or manifest-less upload with no request. |
+| F4 paging/detail/history | Next sends page 1's cursor; Previous resends no cursor. Filters are trimmed into query parameters. Empty, `cursor_mismatch` and `invalid_parameter` states (parameter list shown, `detail` not). Detail columns are side by side, with no conflict/fraud/score wording. Provenance is open for the return and collapsed (then openable) on nested records. "Not recorded". Synthetic badge, "(UTC)". Batch list → batch detail. Empty history. |
+| F5 hostile content | Runtime copies of validated fixtures carry hostile text (image/onerror, script, `javascript:` link, template injection, RTL override and zero-width characters) in comments, a batch file name, a report message and a value preview. All of it displays as literal text; no `img`, `script` or `javascript:` link element exists, and nothing ran. A hostile 401 `detail` is not displayed; the fixed text is. |
+| F6 token/session | The token is absent from `localStorage`, `sessionStorage`, `document.cookie`, browser cookies, the URL, the DOM and input values. IndexedDB database count and Cache Storage key count are both 0 (existence check only; there is no database or cache to hold contents). Buyer search, assistant and status requests made while signed in carry no `Authorization`. Sign-out, a later 401 and a reload drop the session. A held old-session response, answered after sign-out and a second sign-in, changes nothing, and every later request carries only the new token. |
+
+`setInputFiles` does not exercise the OS file picker. No test covers password-manager behaviour.
+
+### Live browser (local stack, no mocks): all passed on the second attempt
+
+A scratchpad driver (not in the repo) does the following:
+- Positively identifies the server: `system_identifier` 7697502985140146214.
+- Records the database and role lists before and after.
+- Creates, per run, one database `ecommerce_search_test_m18e2e_<hex>` and two roles
+  `m18t_liveapp_<hex>` / `m18t_liveimp_<hex>`. The roles come from `tests/returns_roles.py`
+  `create_login_role` (SCRAM verifier, raw cursor, session log guards).
+- Prepares the scratch database:
+  - migrates it to `0007` in process (as `tests/integration/conftest.py` does);
+  - runs `catalog ingest` (240 records), then `search embed` and `embed-status --require-current` (240/240, local pinned snapshot, `HF_HUB_OFFLINE=1`);
+  - applies `returns.grants` (`returns-grants-1`, 68 statements).
+- Runs each Playwright pass on a free port. Each run gets its own environment (`RETURNS_*` removed from the inherited environment, then set per mode).
+  - Playwright 1.64.1 merges `process.env` into the webServer environment. With
+    `reuseExistingServer: false` it refuses a busy port, so no unrelated server can be reused.
+  - The API connected as the throwaway app role.
+- Teardown in `finally`: the server port is checked closed after each run; the database is dropped `WITH (FORCE)`; both roles are dropped; the engine is disposed.
+
+| Run | Result |
+|---|---|
+| `@commit` | **2 passed**: fresh database. Validate gives `valid` with no batch. Import gives 201 `imported` with returns new = 180. Paging the whole list gives 180 unique `synthetic-returns v1` rows. Detail shows the badge, provenance with the batch, and both columns. History has 1 batch, with file `bundle.json`. Re-import gives 200 `already_imported` with the same batch. The CSV set validates as `no_new_records`; still 1 batch. Viewer: data visible, no Import control, 1 batch. A wrong token gets the fixed 401 text. Every `/returns` request carried exactly the signed-in token; no other request carried any. |
+| `@validate-only` | **2 passed**: viewer scopes `returns:read, returns:validate`. Disabled text shown, no Import control. Validate gives `already_imported` and the batch count is unchanged (1). The list still has 180. A direct `POST /returns/import` with the viewer token gets 403, `no-store`. |
+| `live` (buyer) | **1 passed**: 200, results > 0, reranker `applied`, as the throwaway app role under the new grants. |
+
+**First attempt:**
+- `@commit` failed on one assertion: 0 of 180 rows after the import (finding U1).
+- `@validate-only` passed.
+- The buyer run did not start: the driver crashed printing a non-cp1252 character, after teardown.
+
+The test was changed to reload with Apply filters, and the driver to UTF-8 output. All runs were then repeated on new owned resources.
+
+**Cleanup and secrets (both attempts):**
+- Database and role lists are equal before and after (`ecommerce_search`, `postgres`,
+  `template0`, `template1`; role `ecommerce_search`).
+- Development database not touched; it is still at `0004`.
+- No `.env` write, no download, no provider call. Generation was `none` and `GEMINI_API_KEY` was empty.
+- The `db` container was already running and was left running.
+- Secret scan over 10 files (each run's `test-results`, the captured Playwright, server and CLI output) found 0 occurrences of the 5 run secrets (tokens and role passwords). The raw captured output also held 0 before redaction. Values were never printed.
+- Postgres server log since the run: no role, password or verifier text.
+- Recording: trace, screenshot and video stayed off; no HAR and no `storageState`. Tokens were
+  typed with `keyboard.insertText` and compared as booleans.
+
+### Findings
+
+- **U1 (FIXED in the follow-up below):** after an import, the Returns section kept the page it
+  loaded when it was first shown. It says "No returns match these filters." until the user presses Apply filters.
+  - This is the documented design ("each loads when first shown"), and contracts §9 is silent, so
+    it was not treated as a runtime defect.
+  - Smallest fix, if wanted: reload the list from page 1 when an import returns `imported`. One
+    callback from `ImportPanel` to `SignedIn`, plus a Vitest case.
+
+### Coverage
+
+- **AC-16:** fixture and live browser paths pass. Closed on local evidence, pending owner
+  acceptance.
+- **AC-17: NOT complete.**
+  1. **Blocker at the time:** the real `search_app` role does not exist on the local cluster. Per
+     P2, it was not created and not substituted. The throwaway-role buyer run is supporting
+     evidence only. Resolved for the live check by the follow-up below; the other gaps remain.
+  2. Per P4, the full hermetic unit and integration suites were not rerun. The last green CI is
+     owner-reported and not independently verified.
+  3. Vitest 176, the fixture project (33) and buyer live (1) passed.
+
+### Commands and results
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` (after each spec edit) | exit 0 |
+| `npm run build` | exit 0 |
+| `npx playwright test --project=fixture returns-fixture` | runs 1–3 failed: 19, then 8, then 4 failed. Causes were test-side only: an unmocked `/assistant/status`, and the ambiguous names `Import` vs `Import history` and the section vs upload `Import`. Final: **20 passed** |
+| `npm run e2e:fixture` | **33 passed**, exit 0 |
+| `npm test` (Vitest) | **176 passed** |
+| `pytest tests/unit/test_frontend_fixture_contract.py tests/unit/returns/test_returns_fixture_privacy.py tests/unit/test_frontend_serving.py` | **89 passed** |
+| `ruff check .` / `ruff format --check .` | all checks passed / 520 files formatted |
+| live driver attempt 1 / attempt 2 | see above / all 5 tests passed, cleanup verified |
+| `git diff --check`; AC-14 protected-path diff vs `bf67d11`; `git diff -- data/` | exit 0 / exit 0 / exit 0 |
+
+Not run: the full Python unit suite, the integration suite, the Windows isolation wrapper (still **FAILED**), CI, staging.
+
+**Still open, unchanged:**
+- the three older fixtures' plaintext SQL passwords;
+- the missing historical AC-14 M17 checksum listing;
+- the Windows isolation timeout (FAILED);
+- untested API-level admin-role rejection;
+- Compose `RETURNS_*` wiring;
+- Caddy query-log exposure;
+- the unconfirmed SHA of the historical catalog-failure CI run.
+
 ## M18-05 Retailer UI (2026-10-28; in the scoped M18-05 commit after the owner-authorized review checkpoint)
 
 Approved scope: the M18-05 proposal of 2026-10-28, with owner decisions (1) hand-constructed

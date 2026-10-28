@@ -64,16 +64,45 @@ def create_login_role(conn: Connection, role: str, password: str) -> None:
     password or its verifier reaching SQLAlchemy logs, server logs, errors or tracebacks."""
     if not _ROLE.fullmatch(role) or not _PASSWORD.fullmatch(password):
         raise RoleSetupError("refusing an unexpected role name or password form")
+    _create_role(conn, role, password)
+
+
+# The real application role name that AC-17 requires the live buyer check to run as. It is
+# accepted only by `create_absent_search_app_role`, never by `create_login_role`.
+SEARCH_APP_ROLE = "search_app"
+_SEARCH_APP_LOOKUP = "SELECT 1 FROM pg_roles WHERE rolname = 'search_app'"
+
+
+def create_absent_search_app_role(conn: Connection, password: str) -> None:
+    """Create the exact role `search_app` for one run, only if no role of that name exists.
+
+    An existing role is never altered: a fresh `pg_roles` lookup on the guarded session refuses
+    it before any `CREATE ROLE`, and `CREATE ROLE` itself fails (never alters) if one appears in
+    between. The caller owns the new role and drops it; the same secret handling as
+    `create_login_role` applies."""
+    if not _PASSWORD.fullmatch(password):
+        raise RoleSetupError("refusing an unexpected role name or password form")
+    _create_role(conn, SEARCH_APP_ROLE, password, absent_lookup=_SEARCH_APP_LOOKUP)
+
+
+def _create_role(
+    conn: Connection, role: str, password: str, *, absent_lookup: str | None = None
+) -> None:
     failure: str | None = None
     cursor = None
     try:
         cursor = conn.connection.dbapi_connection.cursor()
         for guard in SESSION_GUARDS:
             cursor.execute(guard)
-        cursor.execute(
-            f'CREATE ROLE "{role}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT '
-            f"PASSWORD '{scram_sha256_verifier(password)}'"
-        )
+        if absent_lookup is not None:
+            cursor.execute(absent_lookup)
+            if cursor.fetchone() is not None:
+                failure = f"role {role} already exists; an existing role is never altered"
+        if failure is None:
+            cursor.execute(
+                f'CREATE ROLE "{role}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT '
+                f"PASSWORD '{scram_sha256_verifier(password)}'"
+            )
     except Exception as exc:  # noqa: BLE001 - re-raised below without its message
         failure = f"{type(exc).__name__} (sqlstate {getattr(exc, 'sqlstate', None)})"
     finally:

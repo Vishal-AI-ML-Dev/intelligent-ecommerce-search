@@ -23,10 +23,13 @@ type State =
 export function ImportPanel({
   token,
   capabilities,
+  onImported,
   onUnauthorized,
 }: {
   token: string;
   capabilities: ReturnsCapabilities;
+  /** Called after a report with status `imported` (new records were stored). */
+  onImported: () => void;
   onUnauthorized: () => void;
 }) {
   const run = useReturnsRequests(onUnauthorized);
@@ -69,6 +72,9 @@ export function ImportPanel({
       return;
     }
     setState(result.ok ? { phase: 'report', report: result.data } : { phase: 'error', error: result.error });
+    if (result.ok && result.data.status === 'imported') {
+      onImported();
+    }
   }
 
   return (

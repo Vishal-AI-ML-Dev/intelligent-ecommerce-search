@@ -158,6 +158,9 @@ function SignedIn({
   onUnauthorized: () => void;
 }) {
   const [section, setSection] = useState<Section>('returns');
+  // Raised after each import that stored records, so already loaded lists show them.
+  const [importGeneration, setImportGeneration] = useState(0);
+  const onImported = useCallback(() => setImportGeneration((generation) => generation + 1), []);
   const { token, capabilities } = session;
   return (
     <section aria-labelledby="returns-heading" className="returns-page" data-testid="returns-signed-in">
@@ -184,13 +187,28 @@ function SignedIn({
       </nav>
       {/* Every section stays mounted so switching keeps its state; each loads when first shown. */}
       <div hidden={section !== 'returns'}>
-        <ReturnsList token={token} active={section === 'returns'} onUnauthorized={onUnauthorized} />
+        <ReturnsList
+          token={token}
+          active={section === 'returns'}
+          refreshKey={importGeneration}
+          onUnauthorized={onUnauthorized}
+        />
       </div>
       <div hidden={section !== 'import'}>
-        <ImportPanel token={token} capabilities={capabilities} onUnauthorized={onUnauthorized} />
+        <ImportPanel
+          token={token}
+          capabilities={capabilities}
+          onImported={onImported}
+          onUnauthorized={onUnauthorized}
+        />
       </div>
       <div hidden={section !== 'history'}>
-        <BatchHistory token={token} active={section === 'history'} onUnauthorized={onUnauthorized} />
+        <BatchHistory
+          token={token}
+          active={section === 'history'}
+          refreshKey={importGeneration}
+          onUnauthorized={onUnauthorized}
+        />
       </div>
     </section>
   );

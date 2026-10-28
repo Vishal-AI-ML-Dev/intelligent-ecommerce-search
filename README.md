@@ -762,6 +762,7 @@ npm run typecheck && npm test && npm run build
 npx playwright install chromium        # once
 npm run e2e:fixture                    # mocked API (synthetic fixtures), served by FastAPI
 npm run e2e:live                       # live stack: database, seeded catalog, embeddings, models
+npm run e2e:returns-live -- --grep @commit   # M18-06, local only: see frontend/e2e/returns-live.spec.ts
 cd ..
 FRONTEND_DIST_DIR=frontend/dist uv run uvicorn ecommerce_search.api.app:create_app --factory --port 8000
 ```
@@ -770,6 +771,12 @@ FRONTEND_DIST_DIR=frontend/dist uv run uvicorn ecommerce_search.api.app:create_a
 development only). It does not proxy `/assistant`, so use the FastAPI-served build for the
 assistant tab. Fixture and live browser results are reported separately; see
 `docs/m25a-progress.md`.
+
+The `returns-live` project (M18-06) is never run in CI. It needs a migrated scratch database
+with the synthetic catalog and the returns grants script applied, and the `RETURNS_*` settings
+of one mode in the environment: `@commit` (viewer and importer tokens, commit enabled, importer
+database credentials and label) on an empty database, then `@validate-only` (viewer token only,
+commit off) against the same database. Results are in `docs/m18/handoff.md`.
 
 ## Shopping assistant (Milestone 16)
 

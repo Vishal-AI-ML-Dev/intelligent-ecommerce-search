@@ -20,13 +20,17 @@ type DetailState =
 export function BatchHistory({
   token,
   active,
+  refreshKey,
   onUnauthorized,
 }: {
   token: string;
   active: boolean;
+  /** Changes after an import stored records: reload the first page. */
+  refreshKey: number;
   onUnauthorized: () => void;
 }) {
   const run = useReturnsRequests(onUnauthorized);
+  const seenRefreshKey = useRef(refreshKey);
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [state, setState] = useState<PageState>({ phase: 'loading' });
   const [detail, setDetail] = useState<DetailState>({ phase: 'none' });
@@ -50,6 +54,16 @@ export function BatchHistory({
       void load([null]);
     }
   }, [active, load]);
+
+  useEffect(() => {
+    if (refreshKey === seenRefreshKey.current) {
+      return;
+    }
+    seenRefreshKey.current = refreshKey;
+    if (started.current) {
+      void load([null]);
+    }
+  }, [refreshKey, load]);
 
   async function open(batchId: string) {
     setDetail({ phase: 'loading', batchId });

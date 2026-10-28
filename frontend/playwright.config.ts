@@ -30,12 +30,21 @@ export default defineConfig({
   projects: [
     {
       name: 'fixture',
-      testMatch: ['fixture.spec.ts', 'assistant-fixture.spec.ts'],
+      testMatch: ['fixture.spec.ts', 'assistant-fixture.spec.ts', 'returns-fixture.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'live',
       testMatch: 'live.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // M18-06, local only: retailer returns on a scratch database (see returns-live.spec.ts).
+      // Never in CI. Run once per server configuration with `--grep @commit` or
+      // `--grep @validate-only`.
+      name: 'returns-live',
+      testMatch: 'returns-live.spec.ts',
       timeout: 120_000,
       use: { ...devices['Desktop Chrome'] },
     },

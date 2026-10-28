@@ -357,6 +357,86 @@ describe('import panel', () => {
     expect(screen.getByTestId('error-summary')).toHaveTextContent('1 error.');
   });
 
+  const listPaths = (fetchMock: ReturnType<typeof mockApi>) =>
+    calls(fetchMock)
+      .map(([path]) => path)
+      .filter((p) => p.startsWith('/returns?') || p === '/returns');
+  const historyPaths = (fetchMock: ReturnType<typeof mockApi>) =>
+    calls(fetchMock)
+      .map(([path]) => path)
+      .filter((p) => p.startsWith('/returns/import-batches'));
+
+  it('after an import stores records, reloads the list at page 1 with the applied filters and the history', async () => {
+    const { user, fetchMock } = await importPanel({
+      '/returns': (path) => json(200, path.includes('cursor=') ? f.returnsPage2 : f.returnsPage1),
+      '/returns/import-batches': () => json(200, f.batchesPage),
+      '/returns/import': () => json(201, f.reportImported),
+    });
+    await openSection(user, 'Returns');
+    await user.selectOptions(screen.getByLabelText('Status'), 'received');
+    await user.click(screen.getByRole('button', { name: 'Apply filters' }));
+    await waitFor(() => expect(screen.getAllByTestId('return-row')).toHaveLength(2));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(screen.getByText('Page 2')).toBeInTheDocument());
+    await openSection(user, 'Import history');
+    await screen.findByTestId('batch-table');
+    expect(historyPaths(fetchMock)).toEqual(['/returns/import-batches']);
+
+    await openSection(user, 'Import');
+    await user.upload(screen.getByLabelText('Bundle file'), bundle());
+    await user.click(within(importRegion()).getByRole('button', { name: 'Import' }));
+    expect(await screen.findByTestId('import-report')).toHaveAttribute('data-status', 'imported');
+
+    await waitFor(() =>
+      expect(listPaths(fetchMock)).toEqual([
+        '/returns',
+        '/returns?status=received',
+        '/returns?status=received&cursor=fixture-cursor-page-two',
+        '/returns?status=received',
+      ]),
+    );
+    await waitFor(() => expect(historyPaths(fetchMock)).toEqual(['/returns/import-batches', '/returns/import-batches']));
+    for (const [, init] of calls(fetchMock)) {
+      expect(authHeader(init)).toBe(`Bearer ${TOKEN}`);
+    }
+    await openSection(user, 'Returns');
+    await waitFor(() => expect(screen.getAllByTestId('return-row')).toHaveLength(2));
+    expect(within(screen.getByRole('navigation', { name: 'Returns pages' })).getByText('Page 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Status')).toHaveValue('received');
+  });
+
+  it('does not reload anything after a report that stored nothing', async () => {
+    const alreadyImported = { ...f.reportImported, status: 'already_imported' };
+    const replies = [json(200, alreadyImported), json(422, f.reportImportInvalid)];
+    const { user, fetchMock } = await importPanel({
+      '/returns/import/validate': () => json(200, f.reportValid),
+      '/returns/import': () => replies.shift() as Response,
+      '/returns/import-batches': () => json(200, f.batchesPage),
+    });
+    await openSection(user, 'Import history');
+    await screen.findByTestId('batch-table');
+    await openSection(user, 'Import');
+    await user.upload(screen.getByLabelText('Bundle file'), bundle());
+    await user.click(screen.getByRole('button', { name: 'Validate' }));
+    expect(await screen.findByTestId('import-report')).toHaveAttribute('data-status', 'valid');
+    await user.click(within(importRegion()).getByRole('button', { name: 'Import' }));
+    await waitFor(() => expect(screen.getByTestId('import-report')).toHaveAttribute('data-status', 'already_imported'));
+    await user.click(within(importRegion()).getByRole('button', { name: 'Import' }));
+    await waitFor(() => expect(screen.getByTestId('import-report')).toHaveAttribute('data-status', 'invalid'));
+    expect(listPaths(fetchMock)).toEqual(['/returns']);
+    expect(historyPaths(fetchMock)).toEqual(['/returns/import-batches']);
+  });
+
+  it('does not load a list that was never shown when an import stores records', async () => {
+    const { user, fetchMock } = await importPanel({ '/returns/import': () => json(201, f.reportImported) });
+    await user.upload(screen.getByLabelText('Bundle file'), bundle());
+    await user.click(within(importRegion()).getByRole('button', { name: 'Import' }));
+    expect(await screen.findByTestId('import-report')).toHaveAttribute('data-status', 'imported');
+    // The list loaded once at sign-in reloads; the never-opened history waits until it is shown.
+    await waitFor(() => expect(listPaths(fetchMock)).toEqual(['/returns', '/returns']));
+    expect(historyPaths(fetchMock)).toEqual([]);
+  });
+
   it('shows "Imports are disabled" and no Import button when the caller cannot commit', async () => {
     await importPanel({}, f.capabilitiesViewer);
     expect(screen.getByTestId('imports-disabled')).toHaveTextContent('Imports are disabled on this server.');
