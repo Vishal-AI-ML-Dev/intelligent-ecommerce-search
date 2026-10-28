@@ -9,6 +9,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/search': 'http://127.0.0.1:8000',
+      '/returns': 'http://127.0.0.1:8000',
     },
   },
   build: {

@@ -273,6 +273,56 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
+## M18-05 results (actual, 2026-10-28; in the scoped M18-05 commit)
+
+| Check | Kind | Result |
+|---|---|---|
+| `npm run typecheck` | frontend | exit 0 |
+| `npm test` (Vitest, whole frontend) | frontend unit | **140 passed** in 6 files: returns page 29 and returns API 25 (new), HTTP client 29 (13 existing + 16 new), search 21, assistant 31, comparison 5 (unchanged); 0 `act` warnings |
+| `npm run build` | frontend | exit 0 |
+| `tests/unit/test_frontend_fixture_contract.py` + `tests/unit/returns/test_returns_fixture_privacy.py` + `tests/unit/test_frontend_serving.py` | hermetic unit | **89 passed** |
+| `ruff check .` / `ruff format --check .` | lint | all checks passed / 520 files already formatted |
+| `git diff --check` on changed tracked files; trailing whitespace, CR and final newline on new files | recorded command | exit 0 / none |
+| Secrets scan of every changed and new file | recorded command | one hit, the `type="password"` attribute of the token input; no token, password or key values |
+| AC-14 protected-path diff against `bf67d11`; `git diff -- data/` | recorded command | exit 0 / exit 0 |
+| AC-14 M17 SHA-256 listing | recorded command | **not checked**: still missing (see `handoff.md`) |
+
+**AC-15 coverage (Vitest):** gate success, 401 explanation with request ID, 503 not configured,
+empty token not sent; sign-out and 401-during-session clear the token and data; a response that
+arrives after sign-out is dropped; token absent from `localStorage`, `sessionStorage`, cookies,
+the DOM and console output; every request goes to a `/returns` path with the token; disabled
+import (`can_commit` false) and no upload without `can_validate`; loading; empty list and empty
+history; error with request ID; 422 parameter names without values; "Showing 200 of at least
+345" and "at least N" texts; Next/Previous with the applied filters and cursor; detail with
+statements and observations side by side and no flag; markup and injection rendered as text;
+"Not recorded" for absent evidence; provenance blocks; batch history and file metadata; import
+201, 200 and 422 reports; client-side pre-checks; the third app tab. Fixtures are validated
+against the Pydantic models (`test_frontend_fixture_contract.py`), and the committed vocabulary
+equals `ReturnStatus`, `ReasonCode` and `Category` exactly.
+
+**Not run (by scope):** Playwright (AC-16, M18-06), any database or live API, the full Python
+suite, the Windows isolation wrapper (still **FAILED**), the CI-equivalent `--collect-only` (no
+new Python test module was added; two existing modules were extended).
+
+### M18-05 pre-commit review results (actual, 2026-10-28)
+
+| Check | Kind | Result |
+|---|---|---|
+| `npx vitest run src/domains/returns src/shared/http` | frontend unit | 92 passed (4 files) |
+| Session-isolation and hook guard tests against a mutant without the abort check | recorded mutant run | 4 failed / 5 passed, as intended; file restored (SHA-256 prefix `1090ee56ae10761b` unchanged) |
+| `npm run typecheck` / `npm run build` | frontend | exit 0 / exit 0 |
+| `npm test` | frontend unit | **149 passed** in 7 files (+5 session isolation, +4 `useReturnsRequests`); 0 `act` warnings |
+
+AC-15 additions: a late old-session response (data, 500 or 401) cannot repopulate, overwrite or
+sign out a new session; timestamps are labelled UTC. Finding R1 (token-path dot segments; not
+reachable from current call sites) was fixed with owner approval:
+
+| Check | Kind | Result |
+|---|---|---|
+| `npx vitest run src/shared/http src/domains/returns` (R1 tests) | frontend unit | 119 passed (after one test-expectation correction, see `handoff.md`) |
+| `npm run typecheck` / `npm run build` | frontend | exit 0 / exit 0 |
+| `npm test` | frontend unit | **176 passed** in 7 files (+27 client routing cases); 0 `act` warnings |
+
 ## M18-04C results (actual, 2026-10-28; uncommitted, awaiting diff, schema and OpenAPI review)
 
 | Check | Kind | Result |

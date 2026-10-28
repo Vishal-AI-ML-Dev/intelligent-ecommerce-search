@@ -1,0 +1,4 @@
+{
+  "detail": "The page cursor belongs to different filters.",
+  "code": "cursor_mismatch"
+}

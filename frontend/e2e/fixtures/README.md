@@ -40,3 +40,37 @@ counts and the summary are invented; latencies are fixed placeholder values.
 
 `tests/unit/test_frontend_fixture_contract.py` validates them against the Pydantic
 `AssistantResponse` model.
+
+## Retailer returns fixtures (M18-05)
+
+**Provenance: synthetic, hand-constructed test data. Not captured from any running system.**
+
+The files in `returns/` are mock `/returns` response bodies for the retailer tab's unit tests.
+They were written on 2026-10-28 from the M18 contracts (`docs/m18/contracts.md` §4.8, §7, §7.1)
+and the Pydantic models; no API, database or import was run. A one-off script (kept outside the
+repository) wrote them from hand-written values; its only expansion is the 200 identical-shape
+error rows of the truncated report. Every ID (`FIX-*`, `FIXTURE-*`), batch UUID, hash
+(`aaaa…`-style), byte size, count and time is invented. Customer, inspector and carrier
+references follow the synthetic `SYN-*` / `synthetic-carrier-*` forms. The capabilities limits are
+the server's published `LIMITS`. Return pages use `limit` 2 to stay small; the UI does not send
+`limit`.
+
+| File | Case |
+|---|---|
+| `capabilities-importer.json` / `capabilities-viewer.json` | Importer token with commit enabled / viewer token (`can_commit` false). |
+| `report-valid.json` | Validate: valid, every phase completed, new/unchanged counts. |
+| `report-invalid-truncated.json` | Validate: invalid, 345 errors collected, 200 returned, truncated and a lower bound; one value preview holds markup. |
+| `report-invalid-lower-bound.json` | Validate: invalid after the envelope phase only; 3 errors, a lower bound, not truncated. |
+| `report-imported.json` | Commit: imported, with a batch ID. |
+| `report-import-invalid.json` | Commit: the 422 `invalid` body (one `conflict_existing` error). |
+| `returns-page-1.json` / `returns-page-2.json` / `returns-page-empty.json` | Two pages linked by a cursor; an empty page. |
+| `return-detail-conflict.json` | Customer says "arrived damaged"; the inspection says `as_new` (conflicting evidence, no flag). Comments hold markup and a prompt-injection string; every related kind is present. |
+| `return-detail-not-recorded.json` | `NOT_PROVIDED`, no comments, inspections, shipment, reviews, complaints or cases; the snapshot price is seller text (`"Rs 44,999"`, §7.1 M1). |
+| `batches-page.json` / `batches-page-empty.json` / `batch-detail.json` | Import history, empty history, and one CSV batch with its file metadata. |
+| `error-*.json` | The fixed `{detail, code}` bodies of `unauthorized`, `retailer_access_not_configured`, `import_commit_disabled`, `cursor_mismatch`, and a 422 `invalid_parameter` with `parameters`. |
+
+`tests/unit/test_frontend_fixture_contract.py` validates each file against its Pydantic model (exact
+round trip) and checks the fixed error texts and row-error messages.
+`tests/unit/returns/test_returns_fixture_privacy.py` checks that no file has any `redaction-1` match
+(contracts §5.3), apart from narrowly exempted timestamps, hashes, batch UUIDs and amounts.
+`e2e/fixtures.ts` type-checks the fields the UI reads.

@@ -1,0 +1,78 @@
+{
+  "items": [
+    {
+      "ref": {
+        "dataset_id": "fixture-returns",
+        "dataset_version": 1,
+        "return_id": "FIX-RET-0001"
+      },
+      "requested_at": "2026-03-04T06:30:00.000000Z",
+      "status": "received",
+      "quantity": 1,
+      "customer_reason_code": "ARRIVED_DAMAGED",
+      "product": {
+        "product_id": "FIXTURE-SHO-0001",
+        "sku": "FIXTURE-SHO-0001",
+        "title": "Fixture Runner Shoe",
+        "category": "shoes",
+        "brand": "Fixture Footwear"
+      },
+      "order_id": "FIX-ORD-0001",
+      "order_item_id": "FIX-OI-0001",
+      "comment_count": 3,
+      "inspection_count": 1,
+      "is_synthetic": true,
+      "provenance": {
+        "source_type": "synthetic",
+        "source_name": "Fixture synthetic return dataset",
+        "license": null,
+        "source_record_id": "FIX-RET-0001",
+        "dataset_version": 1,
+        "ingestion_timestamp": "2026-10-20T04:30:00.000000Z",
+        "transformation_version": "returns-import-1",
+        "is_synthetic": true,
+        "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+        "source_file": "bundle.json",
+        "source_row": 1
+      }
+    },
+    {
+      "ref": {
+        "dataset_id": "fixture-returns",
+        "dataset_version": 1,
+        "return_id": "FIX-RET-0002"
+      },
+      "requested_at": "2026-03-02T09:15:00.000000Z",
+      "status": "requested",
+      "quantity": 1,
+      "customer_reason_code": "NOT_PROVIDED",
+      "product": {
+        "product_id": "FIXTURE-LAP-0002",
+        "sku": "FIXTURE-LAP-0002",
+        "title": "Fixture Laptop 14 <b>Pro</b>",
+        "category": "laptop",
+        "brand": "Fixture & Co"
+      },
+      "order_id": "FIX-ORD-0002",
+      "order_item_id": "FIX-OI-0002",
+      "comment_count": 0,
+      "inspection_count": 0,
+      "is_synthetic": true,
+      "provenance": {
+        "source_type": "synthetic",
+        "source_name": "Fixture synthetic return dataset",
+        "license": null,
+        "source_record_id": "FIX-RET-0002",
+        "dataset_version": 1,
+        "ingestion_timestamp": "2026-10-20T04:30:00.000000Z",
+        "transformation_version": "returns-import-1",
+        "is_synthetic": true,
+        "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+        "source_file": "bundle.json",
+        "source_row": 2
+      }
+    }
+  ],
+  "next_cursor": "fixture-cursor-page-two",
+  "limit": 2
+}

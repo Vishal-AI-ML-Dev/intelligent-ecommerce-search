@@ -1,0 +1,97 @@
+{
+  "ref": {
+    "dataset_id": "fixture-returns",
+    "dataset_version": 1,
+    "return_id": "FIX-RET-0002"
+  },
+  "requested_at": "2026-03-02T09:15:00.000000Z",
+  "status": "requested",
+  "quantity": 1,
+  "received_at": null,
+  "order": {
+    "order_id": "FIX-ORD-0002",
+    "customer_ref": "SYN-CUST-00002",
+    "ordered_at": "2026-02-20T04:00:00.000000Z",
+    "currency": "INR",
+    "provenance": {
+      "source_type": "synthetic",
+      "source_name": "Fixture synthetic return dataset",
+      "license": null,
+      "source_record_id": "FIX-ORD-0002",
+      "dataset_version": 1,
+      "ingestion_timestamp": "2026-10-20T04:30:00.000000Z",
+      "transformation_version": "returns-import-1",
+      "is_synthetic": true,
+      "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+      "source_file": "bundle.json",
+      "source_row": 2
+    }
+  },
+  "order_item": {
+    "order_item_id": "FIX-OI-0002",
+    "quantity": 1,
+    "unit_price": "44999.00",
+    "provenance": {
+      "source_type": "synthetic",
+      "source_name": "Fixture synthetic return dataset",
+      "license": null,
+      "source_record_id": "FIX-OI-0002",
+      "dataset_version": 1,
+      "ingestion_timestamp": "2026-10-20T04:30:00.000000Z",
+      "transformation_version": "returns-import-1",
+      "is_synthetic": true,
+      "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+      "source_file": "bundle.json",
+      "source_row": 2
+    }
+  },
+  "product": {
+    "product_id": "FIXTURE-LAP-0002",
+    "sku": "FIXTURE-LAP-0002",
+    "title": "Fixture Laptop 14 <b>Pro</b>",
+    "category": "laptop",
+    "brand": "Fixture & Co"
+  },
+  "listing_snapshot": {
+    "catalog_dataset_id": "synthetic-seed",
+    "catalog_dataset_version": "1",
+    "raw_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "matches_current_catalog": false,
+    "title": "Fixture Laptop 14 <b>Pro</b>",
+    "brand": "Fixture & Co",
+    "category": "laptop",
+    "currency": "INR",
+    "price": "Rs 44,999"
+  },
+  "customer_statements": {
+    "customer_reason_code": "NOT_PROVIDED",
+    "comments": []
+  },
+  "inspection_observations": [],
+  "shipment": null,
+  "related_reviews": [],
+  "related_complaints": [],
+  "correction_cases": [],
+  "evidence_presence": {
+    "return_comments": 0,
+    "inspection_observations": 0,
+    "shipment": 0,
+    "delivery_events": 0,
+    "related_reviews": 0,
+    "related_complaints": 0,
+    "correction_cases": 0
+  },
+  "provenance": {
+    "source_type": "synthetic",
+    "source_name": "Fixture synthetic return dataset",
+    "license": null,
+    "source_record_id": "FIX-RET-0002",
+    "dataset_version": 1,
+    "ingestion_timestamp": "2026-10-20T04:30:00.000000Z",
+    "transformation_version": "returns-import-1",
+    "is_synthetic": true,
+    "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+    "source_file": "bundle.json",
+    "source_row": 2
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "detail": "Invalid request parameters.",
+  "code": "invalid_parameter",
+  "parameters": [
+    {
+      "name": "requested_from",
+      "code": "format"
+    }
+  ]
+}

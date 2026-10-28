@@ -1,0 +1,52 @@
+{
+  "batch_id": "c4e8a1f2-9b3d-4f7a-8e2c-5d1b9a7f3e6d",
+  "dataset_id": "fixture-returns",
+  "dataset_version": 1,
+  "contract_version": "return-data-v1",
+  "transformation_version": "returns-import-1",
+  "redaction_version": "redaction-1",
+  "bundle_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "format": "csv",
+  "file_count": 3,
+  "total_bytes": 4811,
+  "counts": {
+    "orders": {
+      "received": 2,
+      "new": 2,
+      "unchanged": 0
+    },
+    "returns": {
+      "received": 3,
+      "new": 3,
+      "unchanged": 0
+    }
+  },
+  "imported_by_label": "local-importer",
+  "imported_at": "2026-10-21T05:00:00.000000Z",
+  "files": [
+    {
+      "name": "manifest.json",
+      "entity": null,
+      "media_type": "application/json",
+      "size_bytes": 912,
+      "raw_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "row_count": null
+    },
+    {
+      "name": "orders.csv",
+      "entity": "orders",
+      "media_type": "text/csv",
+      "size_bytes": 1433,
+      "raw_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "row_count": 2
+    },
+    {
+      "name": "returns.csv",
+      "entity": "returns",
+      "media_type": "text/csv",
+      "size_bytes": 2466,
+      "raw_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "row_count": 3
+    }
+  ]
+}

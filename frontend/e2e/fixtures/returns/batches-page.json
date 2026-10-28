@@ -1,0 +1,58 @@
+{
+  "items": [
+    {
+      "batch_id": "c4e8a1f2-9b3d-4f7a-8e2c-5d1b9a7f3e6d",
+      "dataset_id": "fixture-returns",
+      "dataset_version": 1,
+      "contract_version": "return-data-v1",
+      "transformation_version": "returns-import-1",
+      "redaction_version": "redaction-1",
+      "bundle_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "format": "csv",
+      "file_count": 3,
+      "total_bytes": 4811,
+      "counts": {
+        "orders": {
+          "received": 2,
+          "new": 2,
+          "unchanged": 0
+        },
+        "returns": {
+          "received": 3,
+          "new": 3,
+          "unchanged": 0
+        }
+      },
+      "imported_by_label": "local-importer",
+      "imported_at": "2026-10-21T05:00:00.000000Z"
+    },
+    {
+      "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+      "dataset_id": "fixture-returns",
+      "dataset_version": 1,
+      "contract_version": "return-data-v1",
+      "transformation_version": "returns-import-1",
+      "redaction_version": "redaction-1",
+      "bundle_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "format": "json",
+      "file_count": 1,
+      "total_bytes": 18342,
+      "counts": {
+        "orders": {
+          "received": 2,
+          "new": 2,
+          "unchanged": 0
+        },
+        "returns": {
+          "received": 3,
+          "new": 3,
+          "unchanged": 0
+        }
+      },
+      "imported_by_label": "local-importer",
+      "imported_at": "2026-10-20T04:30:00.000000Z"
+    }
+  ],
+  "next_cursor": null,
+  "limit": 25
+}

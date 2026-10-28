@@ -1,5 +1,172 @@
 # M18 — Handoff
 
+## M18-05 Retailer UI (2026-10-28; in the scoped M18-05 commit after the owner-authorized review checkpoint)
+
+Approved scope: the M18-05 proposal of 2026-10-28, with owner decisions (1) hand-constructed
+synthetic fixtures validated against the actual Pydantic models, provenance in the fixtures
+README, and (2) a committed vocabulary file with a test of exact agreement with the backend enums
+and the catalog taxonomy. **No backend, contract or dependency change.** HEAD is still
+`24079f011e4618ab944d621cb883705153697d39`.
+
+**What was built (contracts §9, D11):** a third tab, "Retailer returns"
+(`frontend/src/domains/returns/`).
+- **Access gate:** a masked token field. Sign-in calls `GET /returns/capabilities`. The input is
+  cleared on submit. 401 gives the unauthorized explanation with the request ID; 503 gives
+  "Retailer access is not configured on this server."
+- **Sections:** Returns (the §7 filters, Next/Previous over a client cursor stack, the "Synthetic
+  demo data" badge, detail), Import (JSON bundle or CSV set; Validate always when `can_validate`;
+  Import only when `can_commit`, otherwise "Imports are disabled on this server."; advisory
+  pre-checks from the published limits), and Import history (batches, then one batch's file
+  metadata).
+- **Detail:** statements and observations in separate columns side by side, with no flag or
+  score; "Not recorded" for absent evidence; listing snapshot with its catalog version; full
+  provenance for the return and collapsible provenance on every nested record.
+- **Token handling:** React state only. Sign-out or any 401 drops the session; the signed-in
+  view is keyed by the session, so it unmounts, pending requests are aborted, and late
+  responses are dropped. Nothing is written to storage, cookies, the URL or logs.
+- **HTTP client (`shared/http/client.ts`), additive only:** `getJson`/`postJson` take optional
+  `RequestOptions`; `postForm` is new. `authorization` is refused for any path that is not a
+  same-origin `/returns` path. `logPath` logs a fixed route template, so query values and record
+  IDs are never logged. `detailedErrors` adds the request ID, the safe `code` and 422
+  `parameters` (each checked against `[a-z_]{1,40}`); `bodyStatuses` returns the import route's
+  422 `invalid` report as data. Without options, behaviour is unchanged (the existing 13 client
+  tests pass with unmodified bodies; only their import line gained `getJson` and `postForm`).
+- **UI text:** fixed client messages per error code; the server's `detail` and every uploaded or
+  stored text are rendered as React text only.
+- `vite.config.ts`: the dev-server proxy also forwards `/returns` (dev server only).
+
+**Interpretations to review:**
+- A JSON bundle is always sent as the part `bundle.json` (§4.1 canonical name), whatever the
+  local file is called; CSV-set parts keep their file names, and the server judges them.
+- The Import tab hides the Import button when `can_commit` is false and shows the §9 text for
+  every reason (missing scope or closed gate), as §9 states.
+- Without `can_validate`, the panel shows "Your access token does not allow uploads." (no current
+  token lacks it).
+- Timestamps are shown as the server's canonical UTC strings, without local conversion.
+
+| Command | Result |
+|---|---|
+| `npm run typecheck` | exit 0 |
+| `npm test` | 140 passed (6 files), 0 `act` warnings |
+| `npm run build` | exit 0 |
+| `pytest tests/unit/test_frontend_fixture_contract.py tests/unit/returns/test_returns_fixture_privacy.py tests/unit/test_frontend_serving.py` | 89 passed |
+| `ruff check .` / `ruff format --check .` | all checks passed / 520 files formatted |
+| `git diff --check`; new-file whitespace/CR/final-newline scan | exit 0 / none |
+| secrets scan of changed and new files | only `type="password"`; no values |
+| AC-14 protected-path diff vs `bf67d11`; `git diff -- data/` | exit 0 / exit 0 |
+
+Node was run from the user-local `node-v24.22.1-win-x64` install (not on `PATH`). Not run:
+Playwright (M18-06), any database or live API, the full Python suite, the Windows isolation
+wrapper (**FAILED**, unchanged), CI.
+
+**Limitations:**
+- The stale-response test passes partly because React ignores updates to an unmounted
+  component; the explicit abort check is defence in depth, not separately proven by a mutant.
+- Browser behaviour (real file pickers, password managers, the built page under the CSP) is
+  unverified until the M18-06 Playwright runs.
+- Still open, unchanged: the three older fixtures' plaintext role passwords, the missing AC-14
+  M17 listing, the Windows isolation timeout, API-level admin/superuser importer rejection,
+  Compose `RETURNS_*` wiring and Caddy query-string logging (M18-06/07), and the unconfirmed SHA
+  of the catalog-failure CI run.
+
+### M18-05 pre-commit review (2026-10-28)
+
+Owner accepted: JSON part naming `bundle.json`, capabilities-based controls, UTC display. Every
+displayed timestamp now carries a " (UTC)" suffix (helper `utc()` in `ReturnsCommon.tsx`; values
+unchanged).
+
+**Reviewed guards:**
+- **Session generation and cancellation:** the page owner stays mounted. The signed-in view is
+  keyed by a new session ID on every sign-in. `useReturnsRequests` aborts every pending request
+  on unmount, and a request with the same key aborts the previous one. A response whose request
+  was aborted returns `undefined` before the 401 check, so a late old-session 401 never reaches
+  the owner's sign-out callback. Sign-in uses its own controller and ignores superseded
+  results. No runtime bug found.
+- **HTTP client:** without options, buyer requests are byte-for-byte the same path, so their
+  headers, body, error mapping and logs are unchanged (Search and Assistant tests unmodified and
+  passing). Log lines use fixed templates for all seven routes. Safe error fields are pattern
+  checked.
+- **Finding R1 (guard defect, not reachable today; FIXED after owner approval, see below):** the
+  `/returns`-only token check tests the raw path string, so a path with dot segments passes and
+  then resolves elsewhere. Node `URL` check: `/returns/../search/reranked` resolves to
+  `/search/reranked`, `/returns/%2e%2e/assistant/answer` to `/assistant/answer`, and
+  `/returns/..\search` to `/search`; all pass the current pattern.
+  - Not reachable from current callers: every call site uses a fixed path, except the detail and
+    batch paths. Their server-supplied parts are `encodeURIComponent`-encoded, and the fixed
+    segments before them (`records`, the version, `import-batches`) absorb any `..`, so the
+    resolved path stays under `/returns/`. The server's ID patterns also forbid a leading `.`.
+    Any leak would be to the same origin only.
+  - Smallest proposed fix (`client.ts` only): check
+    `new URL(path, window.location.origin)` instead of the raw string. Require the same origin
+    and a pathname that matches the pattern; also refuse a raw path containing `\` or a dot
+    segment (`/.`, `%2e`). Add the three paths above as refusal cases to `client.test.ts`.
+
+**Stale-session regression tests (new):**
+- `ReturnsPage.test.tsx` › session isolation (5): sign in, leave the list request pending, sign
+  out, sign in with a second token, then answer the old request through a mock that ignores its
+  AbortSignal (its signal is asserted aborted). Old data, an old 500 with its request ID, and an
+  old 401 neither repopulate, overwrite nor sign out the new session; the new session sends only
+  the new token; timestamps show "(UTC)".
+- `useReturnsRequests.test.tsx` (4, new file): the guard's own result, independent of React:
+  current result and current 401 reported; superseded response and superseded 401 dropped while
+  mounted; data and a 401 after unmount dropped, with `onUnauthorized` never called.
+- **Mutant check:** with the `controller.signal.aborted` check removed from
+  `useReturnsRequests.ts`, 4 tests failed (the 3 hook guard tests and the page-level late-401
+  test). The page-level late-data and late-error tests still passed, because React ignores
+  updates to the unmounted old view; the hook tests cover that path directly. The file was
+  restored from a scratchpad copy, with the SHA-256 prefix `1090ee56ae10761b` identical before
+  and after.
+
+| Command | Result |
+|---|---|
+| `npx vitest run src/domains/returns src/shared/http` | 92 passed (4 files) |
+| same guard tests against the mutant | 4 failed, 5 passed (as intended) |
+| `npm run typecheck` | exit 0 |
+| `npm test` | **149 passed** (7 files), 0 `act` warnings |
+| `npm run build` | exit 0 |
+
+Python evidence was reused, not rerun: 89 focused passed, Ruff clean. No Python file changed in
+this review.
+
+### M18-05 R1 fix (2026-10-28; owner-approved before the M18-05 commit)
+
+`frontend/src/shared/http/client.ts` only. A token-carrying request now goes through
+`returnsDestination(path)`:
+- a backslash or a `.`/`..` segment (plain or `%2e`, any case or mix) in the **path part** is
+  refused before parsing; the query is not inspected, so encoded IDs and filter values pass;
+- the path is resolved with `new URL(path, document.baseURI)` (the base `fetch` uses). The
+  resolved origin must equal `window.location.origin`, and the pathname must be exactly
+  `/returns` or start with `/returns/`;
+- the request is sent to the resolved `pathname + search`, the destination that was checked.
+
+A refused request throws before `fetch`, so no request, header or log line is produced.
+Requests without a token are unchanged: same path string, no resolution, no `Authorization`.
+
+**Tests (`client.test.ts`, +27):**
+- **Refused** (each via `getJson`, `postJson` and `postForm`; `fetch` never called; token absent
+  from logs): the three demonstrated bypasses (`/returns/../search/reranked`,
+  `/returns/%2e%2e/assistant/answer`, `/returns/..\search`), `/returnsx`, `/returnsXYZ`,
+  `/returnsXYZ/capabilities`, buyer routes, `https://example.com/returns(/capabilities)`,
+  `//example.com/returns`, `http://127.0.0.1:1/returns`, in-`/returns` traversal
+  (`/returns/records/../import`, `/returns/./capabilities`, `/returns/%2E%2e/...`,
+  `/returns/.%2e/x`), `/returns\capabilities`, and the empty path.
+- **Allowed**, each requesting exactly the checked path with the bearer header: `/returns`,
+  `/returns/`, the capabilities, validate and batches routes with a cursor; detail paths with
+  `FIX-RET-0001`, encoded `A%3AB%2FC` and dotted `SYN.RET..00001`; queries holding `..%2F`,
+  `../` and `%5C`; this origin written absolutely; and the relative `returns/capabilities`
+  (resolves to `/returns/capabilities` against the base `/`).
+- **Unauthenticated control:** `/returns/../search/x` and `/search/reranked` are sent unchanged
+  without `Authorization`.
+
+| Command | Result |
+|---|---|
+| `npx vitest run src/shared/http src/domains/returns` | first run 1 failed: my test listed the relative `returns/capabilities` as refused, but it resolves to this origin's `/returns/capabilities` (allowed by the approved rule); moved to the allowed cases. Rerun **119 passed** |
+| `npm run typecheck` | exit 0 |
+| `npm test` | **176 passed** (7 files), 0 `act` warnings |
+| `npm run build` | exit 0 |
+
+Python evidence reused (no Python change since the 89-passed focused run and clean Ruff).
+
 ## M18-04B API import integration (2026-10-28; uncommitted, awaiting review)
 
 - **CI on `6e961855d1d64939570f6111030becddd73c9b71`:** all jobs green, **as confirmed by the

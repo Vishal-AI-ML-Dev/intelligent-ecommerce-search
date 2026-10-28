@@ -3,7 +3,9 @@
 Scans every committed M18 fixture: the release under `data/seed/returns_v1/` (bundle, CSV
 set, manifest, scenarios and provenance) and the sample records in `tests/returns_samples.py`.
 Every `redaction-1` match in raw text must come from the closed §5.3 allowlist, and redacted
-outputs must have no match at all. There are no frontend fixtures yet (M18-05).
+outputs must have no match at all. M18-05: the retailer tab's frontend fixtures
+(`frontend/e2e/fixtures/returns/`) must have no match at all (§5.3), with only the narrow
+exemptions of API-generated forms listed at `frontend_strings`.
 
 Scanned: every string value and every object key. The exemptions are narrow in both field and
 form. They cover values that are not personal-data surfaces, whose hex or digit runs would
@@ -215,3 +217,82 @@ def test_the_release_directory_holds_only_the_contracted_files():
             *(f"csv/{e.value}.csv" for e in rc.Entity),
         ]
     )
+
+
+# ---- M18-05: frontend fixtures (zero matches, §5.3) -------------------------------------------
+
+FRONTEND_FIXTURES = RELEASE.parents[2] / "frontend" / "e2e" / "fixtures" / "returns"
+# API-generated forms whose digit runs match by construction: canonical UTC timestamps (six
+# fraction digits), SHA-256 hashes, batch UUIDs and canonical money. Each is exempt only under
+# its named fields and only in that exact form; everything else, including every key, is scanned.
+CANONICAL_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z")
+UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+FRONTEND_EXEMPT = {
+    **dict.fromkeys(
+        (
+            "checked_at",
+            "requested_at",
+            "received_at",
+            "ordered_at",
+            "submitted_at",
+            "observed_at",
+            "occurred_at",
+            "shipped_at",
+            "promised_delivery_by",
+            "delivered_at",
+            "opened_at",
+            "imported_at",
+            "ingestion_timestamp",
+        ),
+        CANONICAL_TIMESTAMP,
+    ),
+    **dict.fromkeys(("bundle_sha256", "raw_sha256"), SHA256),
+    "batch_id": UUID,
+    "unit_price": MONEY,
+}
+
+
+def frontend_strings(value, key: str = "") -> list[str]:
+    if isinstance(value, dict):
+        return [s for k, v in value.items() for s in [k, *frontend_strings(v, k)]]
+    if isinstance(value, list):
+        return [s for v in value for s in frontend_strings(v, key)]
+    if isinstance(value, str):
+        form = FRONTEND_EXEMPT.get(key)
+        return [] if form is not None and form.fullmatch(value) else [value]
+    return []
+
+
+def frontend_fixtures() -> dict[str, list[str]]:
+    return {
+        p.name: frontend_strings(json.loads(p.read_text(encoding="utf-8")))
+        for p in sorted(FRONTEND_FIXTURES.glob("*.json"))
+    }
+
+
+def test_frontend_fixtures_exist():
+    assert len(frontend_fixtures()) >= 15
+
+
+@pytest.mark.parametrize("name", sorted(frontend_fixtures()))
+def test_frontend_fixtures_have_no_match_at_all(name):
+    assert [(k, m) for text in frontend_fixtures()[name] for k, m in scan(text)] == []
+
+
+def test_the_frontend_exemptions_are_narrow_in_field_and_form():
+    exempted = {
+        "requested_at": "2026-03-04T06:30:00.000000Z",
+        "raw_sha256": "9876543210" * 6 + "abcd",
+        "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+        "unit_price": "149999.00",
+    }
+    assert frontend_strings(exempted) == list(exempted)  # only the keys remain
+    for value in (
+        {"requested_at": "call 9000000000"},
+        {"requested_at": "2026-03-04T06:30:00+05:30 PIN 999999"},
+        {"text": "2026-03-04T06:30:00.000000Z"},  # timestamp form, but not a timestamp field
+        {"batch_id": "999999"},
+        {"raw_sha256": "someone@mail.invalid"},
+        {"someone@mail.invalid": "x"},  # keys are scanned
+    ):
+        assert [m for s in frontend_strings(value) for _, m in scan(s)], value

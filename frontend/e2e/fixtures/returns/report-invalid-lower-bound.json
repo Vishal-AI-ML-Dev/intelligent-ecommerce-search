@@ -1,0 +1,50 @@
+{
+  "contract_version": "return-data-v1",
+  "mode": "validate",
+  "status": "invalid",
+  "bundle_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "batch_id": null,
+  "checked_at": "2026-10-27T06:00:00.000000Z",
+  "counts": {},
+  "phases_completed": [
+    "envelope"
+  ],
+  "error_count": 3,
+  "error_count_is_lower_bound": true,
+  "errors_truncated": false,
+  "errors": [
+    {
+      "file": "manifest.json",
+      "entity": null,
+      "row": null,
+      "line": null,
+      "pointer": null,
+      "field": "sha256",
+      "code": "checksum_mismatch",
+      "message": "The file checksum does not match the manifest.",
+      "value_preview": null
+    },
+    {
+      "file": "unexpected part #3",
+      "entity": null,
+      "row": null,
+      "line": null,
+      "pointer": null,
+      "field": null,
+      "code": "unexpected_file",
+      "message": "The part is not allowed in this set.",
+      "value_preview": null
+    },
+    {
+      "file": "orders.csv",
+      "entity": "orders",
+      "row": null,
+      "line": null,
+      "pointer": null,
+      "field": null,
+      "code": "encoding",
+      "message": "The content is not valid UTF-8 text.",
+      "value_preview": null
+    }
+  ]
+}

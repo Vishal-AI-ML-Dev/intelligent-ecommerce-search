@@ -1,0 +1,42 @@
+{
+  "contract_version": "return-data-v1",
+  "scopes": [
+    "returns:import",
+    "returns:read",
+    "returns:validate"
+  ],
+  "can_validate": true,
+  "can_commit": true,
+  "limits": {
+    "request_body_bytes": 9437184,
+    "bundle_bytes": 8388608,
+    "file_bytes": 5242880,
+    "manifest_bytes": 65536,
+    "files": 12,
+    "bundle_rows": 10000,
+    "entity_rows": 5000,
+    "csv_columns": 30,
+    "csv_field_bytes": 4096,
+    "text_code_points": 2000,
+    "note_code_points": 1000,
+    "dataset_long_text_code_points": 2000,
+    "dataset_short_text_code_points": 200,
+    "errors_collected": 1000,
+    "errors_returned": 200,
+    "concurrent_imports": 1
+  },
+  "reason_codes": [
+    "SIZE_TOO_SMALL",
+    "SIZE_TOO_LARGE",
+    "NOT_AS_DESCRIBED",
+    "LOOKS_DIFFERENT_FROM_IMAGE",
+    "SPECIFICATION_DIFFERENT",
+    "DEFECTIVE_OR_NOT_WORKING",
+    "ARRIVED_DAMAGED",
+    "WRONG_ITEM_RECEIVED",
+    "ARRIVED_LATE",
+    "NO_LONGER_NEEDED",
+    "OTHER",
+    "NOT_PROVIDED"
+  ]
+}

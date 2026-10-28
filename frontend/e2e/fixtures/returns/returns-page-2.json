@@ -1,0 +1,42 @@
+{
+  "items": [
+    {
+      "ref": {
+        "dataset_id": "fixture-returns",
+        "dataset_version": 1,
+        "return_id": "FIX-RET-0003"
+      },
+      "requested_at": "2026-02-27T11:45:00.000000Z",
+      "status": "cancelled",
+      "quantity": 1,
+      "customer_reason_code": "NO_LONGER_NEEDED",
+      "product": {
+        "product_id": "FIXTURE-PHN-0003",
+        "sku": "FIXTURE-PHN-0003",
+        "title": "Fixture Phone Mini",
+        "category": "phone",
+        "brand": "Fixture Mobile"
+      },
+      "order_id": "FIX-ORD-0002",
+      "order_item_id": "FIX-OI-0003",
+      "comment_count": 1,
+      "inspection_count": 0,
+      "is_synthetic": true,
+      "provenance": {
+        "source_type": "synthetic",
+        "source_name": "Fixture synthetic return dataset",
+        "license": null,
+        "source_record_id": "FIX-RET-0003",
+        "dataset_version": 1,
+        "ingestion_timestamp": "2026-10-20T04:30:00.000000Z",
+        "transformation_version": "returns-import-1",
+        "is_synthetic": true,
+        "batch_id": "7d3f9c2e-4a1b-4e8d-9c5f-2b7e1a9d4c3f",
+        "source_file": "bundle.json",
+        "source_row": 3
+      }
+    }
+  ],
+  "next_cursor": null,
+  "limit": 2
+}
