@@ -276,7 +276,11 @@ def persist(engine: Engine, catalog: LoadedCatalog, provenance: Provenance) -> I
                     product.dataset_pk = dataset.id
                     product.raw_record_id = raw_ids[record.product_id]
                     product.content_sha256 = line.content_sha256
-                    product.updated_at = func.now()
+                    # Not now(): that is this transaction's start, taken before the family-lock
+                    # wait, so it can precede the created_at another ingest committed meanwhile.
+                    product.updated_at = func.greatest(
+                        func.statement_timestamp(), Product.created_at
+                    )
                     spec = session.get(SPEC_TABLES[record.category], record.product_id)
                     values = spec_values(record)
                     if spec is None:

@@ -16,9 +16,10 @@ from catalog_support import (
     seed_lines,
     snapshot,
 )
-from sqlalchemy import func, select, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from ecommerce_search.catalog.audit import audit_database
 from ecommerce_search.catalog.cli import main
@@ -427,6 +428,83 @@ def test_concurrent_ingests_of_one_family_cannot_leave_last_writer_wins_corrupti
         assert dataset.dataset_version == "2"
         assert s.scalar(select(func.count()).select_from(Product)) == 240
     assert counts(migrated_engine)["specs"] == 240
+
+
+def test_an_ingest_that_began_before_a_concurrent_commit_still_updates_to_the_newer_version(
+    migrated_engine, tmp_path
+):
+    """Regression for the CI failure of the test above (2026-10-28), with the lock order
+    forced instead of left to thread scheduling: v2's transaction begins (fixing its `now()`)
+    and waits on the family lock; v1 then begins later, takes the lock first and commits; only
+    then does v2 proceed and update SYN-LAP-0001. `updated_at` must not fall before the
+    committed `created_at` (`ck_products_updated_not_before_created`), so v2 must succeed.
+
+    v1 runs on a single-connection engine that holds the family's session-level advisory lock,
+    which `persist`'s transaction-level lock on the same connection re-enters. Waiting is
+    bounded lock inspection (`pg_locks`), never a timed sleep."""
+    lines = seed_lines()
+    lines[0] = edit_line(lines[0], price=777777)
+    v2_path, v2_prov = make_variant(tmp_path, lines, version="2", name="v2")
+    key = ingest_lock_key("synthetic-seed")
+    holder = create_engine(migrated_engine.url, poolclass=StaticPool)  # one shared connection
+    outcomes: dict[str, object] = {}
+
+    def run_v2():
+        try:
+            outcomes["v2"] = ingest_file(migrated_engine, v2_path, v2_prov)
+        except BaseException as exc:  # noqa: BLE001 - reported to the main thread
+            outcomes["v2"] = exc
+
+    def v2_transaction_start():
+        """`xact_start` of the transaction waiting on an advisory lock here, or None."""
+        with migrated_engine.connect() as probe:
+            return probe.execute(
+                text(
+                    "SELECT a.xact_start FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid "
+                    "WHERE l.locktype = 'advisory' AND NOT l.granted "
+                    "AND a.datname = current_database()"
+                )
+            ).scalar()
+
+    def set_family_lock(take: bool) -> None:
+        with holder.connect() as h:
+            lock = func.pg_advisory_lock(key) if take else func.pg_advisory_unlock(key)
+            h.execute(select(lock))
+            h.commit()
+
+    worker = threading.Thread(target=run_v2)
+    locked = False
+    try:
+        set_family_lock(True)
+        locked = True
+        worker.start()
+        assert _wait_until(lambda: v2_transaction_start() is not None), "v2 never waited"
+        v2_started = v2_transaction_start()
+        assert ingest_file(holder, SEED, PROVENANCE).result.inserted == 240  # v1 commits
+        with Session(migrated_engine) as s:
+            created_at = s.get(Product, "SYN-LAP-0001").created_at
+        assert v2_started < created_at  # the race really is set up
+        set_family_lock(False)
+        locked = False
+        worker.join(120)
+        assert not worker.is_alive(), "v2 did not finish"
+    finally:
+        if locked:
+            set_family_lock(False)  # never leave v2 blocked, even after a failed assertion
+        if worker.is_alive():
+            worker.join(120)
+        holder.dispose()
+
+    v2 = outcomes["v2"]
+    assert not isinstance(v2, BaseException), f"v2 failed: {type(v2).__name__}: {v2}"
+    assert v2.result is not None and v2.result.updated >= 1
+    with Session(migrated_engine) as s:
+        latest = s.get(Product, "SYN-LAP-0001")
+        assert latest.price == 777777
+        assert s.get(CatalogDataset, latest.dataset_pk).dataset_version == "2"
+        assert latest.created_at == created_at  # creation time is never rewritten
+        assert latest.updated_at >= latest.created_at
+        assert s.scalar(select(func.count()).select_from(Product)) == 240
 
 
 def test_integrity_races_become_sanitized_domain_errors(migrated_engine, monkeypatch):

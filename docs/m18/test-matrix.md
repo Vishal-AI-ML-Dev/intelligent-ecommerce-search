@@ -330,6 +330,20 @@ full regression and CI are still open.
 - **AC-13 (2):** a read snapshot is `repeatable read` with `transaction_read_only = on`, and a
   write attempt as the superuser fails with SQLSTATE 25006.
 
+### Catalog ingest timestamp correction (2026-10-28; outside M18 feature scope)
+
+| Check | Kind | Result |
+|---|---|---|
+| Lock-order regression for `ck_products_updated_not_before_created` (forced order, no sleeps), original code | database integration | 1 failed (`IngestRefused`), reproducing the CI failure |
+| Same regression with `updated_at = GREATEST(statement_timestamp(), created_at)` | database integration | passed; 3/3 reruns passed |
+| `tests/integration/test_catalog_ingestion.py` | database integration | **37 passed** |
+| Scratch cleanup (database and role lists before = after) | recorded command | identical |
+
+The regression asserts that v2 succeeds, that SYN-LAP-0001 is version 2 with price 777777,
+that `created_at` is unchanged, and that `updated_at >= created_at`. The existing concurrent
+test is unchanged. Timestamp semantics: on update, `updated_at` is now the update statement's
+time (never before `created_at`); insert defaults are unchanged.
+
 ### M18-04C corrective: slot ownership under cancellation (2026-10-28)
 
 | Check | Kind | Result |

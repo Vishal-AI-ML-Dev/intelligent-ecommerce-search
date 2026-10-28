@@ -1,5 +1,60 @@
 # M18 — Handoff
 
+## Catalog ingest timestamp correction (2026-10-28; outside M18 feature scope; uncommitted)
+
+**Scope exception (owner-authorized):** a pre-M18 catalog ingestion fix, outside M18 feature
+scope. It is a single assignment in `src/ecommerce_search/ingestion/service.py` (last changed in
+`2c41a36`, M3) plus one regression test. There is no schema, migration, default or constraint
+change, and no seed or AC-14 path is touched.
+
+**CI failure** (owner-reported; the failing run's SHA was not stated; HEAD was `cf122fb`):
+`test_concurrent_ingests_of_one_family_cannot_leave_last_writer_wins_corruption`. v2 got
+`IngestRefused` with `ck_products_updated_not_before_created` (1 failed, 1057 passed,
+18 deselected).
+
+**Demonstrated cause:**
+- `persist` updates a changed product with `updated_at = now()`. `now()` is the transaction
+  start, and psycopg sends `BEGIN` before the family-lock statement, so that time is taken
+  *before* the lock wait.
+- If v2 begins first but v1 takes the lock and commits first, v1's rows have
+  `created_at = t1 > t0`, and v2's update writes `updated_at = t0 < t1`. The constraint
+  rejects it, and the newer version (v2) is lost.
+- The bug is latent since M2/M3, not caused by M18.
+- It was reproduced deterministically on a throwaway database with forced lock order (no
+  sleeps): v2's transaction started about 53 ms before v1's `created_at`, and v2 was refused
+  exactly as in CI.
+
+**Fix:** `product.updated_at = func.greatest(func.statement_timestamp(), Product.created_at)`.
+- **Timestamp semantics change:** on update, `updated_at` is now the time of the UPDATE
+  statement (after the lock is held), not the transaction start. It is never earlier than the
+  row's `created_at`, even if the server clock steps back.
+- Insert defaults (`created_at`, `updated_at` = `now()`) and `created_at` are unchanged.
+
+**Regression test** (`test_catalog_ingestion.py`):
+`test_an_ingest_that_began_before_a_concurrent_commit_still_updates_to_the_newer_version`.
+- v1 runs on a single-connection engine holding the family's session-level advisory lock,
+  which `persist`'s transaction lock re-enters; v2 waits on the lock (seen in `pg_locks`).
+- The test asserts that the race is set up (v2's `xact_start` < v1's `created_at`).
+- After v1 commits and the lock is released, it asserts that v2 succeeds, that SYN-LAP-0001
+  references version 2 with price 777777, that `created_at` is unchanged, and that
+  `updated_at >= created_at`.
+- The lock is released and the worker joined in `finally`; the throwaway database is dropped
+  by `migrated_engine`.
+- The existing concurrent-ingest test is unchanged.
+
+| Command | Result |
+|---|---|
+| server identity: `system_identifier` from the host connection vs inside the container | equal (`7697502985140146214`) |
+| new regression test, original `service.py` | **1 failed**: `IngestRefused (ck_products_updated_not_before_created)`, as in CI |
+| new regression test, with the fix | 1 passed; then 3/3 separate reruns passed |
+| `python -m pytest tests/integration/test_catalog_ingestion.py -m "integration and not real_model"` | **37 passed** (71 s), including the unchanged original concurrent test |
+| database and role lists before vs after all runs (including the failing one) | identical; no scratch database or role left |
+| `ruff check .` / `ruff format --check .`; whitespace and secret scan of the diff; AC-14 protected-path diff | see the session report |
+
+Not run: the full integration suite, the full unit suite, the Windows isolation wrapper
+(**FAILED**), CI. Still open, separately: the three older fixtures' plaintext role passwords,
+the missing AC-14 M17 listing, the Windows isolation timeout, and CI on `cf122fb`.
+
 ## M18-04C corrective: CI test race and slot ownership (2026-10-28)
 
 - **CI failure on `2b5e221`** (owner-reported; this session cannot open the private run):
