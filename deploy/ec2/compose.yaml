@@ -43,7 +43,54 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set in .env}
       APP_DB_USER: search_app
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set in .env}
+      # M18: the scoped importer role. Without a password it is created NOLOGIN (grants only);
+      # an existing role is left unchanged. Not a RETURNS_* name: Settings never reads it.
+      IMPORTER_DB_USER: returns_importer
+      IMPORTER_DB_PASSWORD: ${RETURNS_IMPORTER_DB_PASSWORD:-}
       SETUP_DB_SSLMODE: disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # M18 one-offs (docs/m18/release.md), run only by m18-release.sh and restore.sh; never started
+  # by `up`. M18_TOOLS_IMAGE (written by m18-release.sh) is an image that has the returns tools,
+  # so a rollback of APP_IMAGE does not take them away.
+  grants:
+    image: ${M18_TOOLS_IMAGE:-${APP_IMAGE}}
+    profiles: ["m18"]
+    command:
+      - python
+      - -m
+      - ecommerce_search.returns.grants
+      - --database
+      - ecommerce_search
+      - --app-role
+      - search_app
+      - --importer-role
+      - returns_importer
+    environment:
+      <<: *db-env
+      POSTGRES_USER: search_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # Imports or verifies the checksum-verified release bundle (mounted read-only) as the scoped
+  # importer role: `docker compose --profile m18 run --rm returns-import import|verify <path>`.
+  returns-import:
+    image: ${M18_TOOLS_IMAGE:-${APP_IMAGE}}
+    profiles: ["m18"]
+    entrypoint: ["python", "-m", "ecommerce_search.returns"]
+    volumes:
+      - ./returns_v1:/release/returns_v1:ro
+    environment:
+      <<: *db-env
+      POSTGRES_USER: returns_importer
+      POSTGRES_PASSWORD: ${RETURNS_IMPORTER_DB_PASSWORD:-}
+      RETURNS_IMPORTER_LABEL: ${RETURNS_IMPORTER_LABEL:-}
     depends_on:
       db:
         condition: service_healthy
@@ -64,6 +111,10 @@ services:
       ASSISTANT_COUNTRY_DB_PATH: /geo/dbip-country-lite.csv.gz
       ASSISTANT_COUNTRY_DB_SHA1: ${ASSISTANT_COUNTRY_DB_SHA1:-}
       ASSISTANT_TRUSTED_PROXY_CIDRS: 172.16.0.0/12
+      # M18 retailer returns (plan §4): viewer token only. Commit is off and the app container
+      # has no importer token or importer database credentials; imports run as a one-off.
+      RETURNS_VIEWER_TOKEN: ${RETURNS_VIEWER_TOKEN:-}
+      RETURNS_IMPORT_COMMIT_ENABLED: "false"
     volumes:
       - ./geo:/geo:ro
     depends_on:

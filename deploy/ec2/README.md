@@ -54,6 +54,13 @@ One-off commands also work without the plugin, through SSM Run Command:
 3. Roll back by running `update.sh` again with the previous tag (and its archive), or by setting
    `APP_IMAGE` back in `.env` and running `sudo docker compose up -d app`.
 
+## M18 release (return data)
+
+Not deployed yet: M18-08 needs the owner's approval. Use `sudo ./m18-release.sh` as described
+in `docs/m18/release.md`. It runs the preflight, backup, migration, roles, grants, import and
+app swap. `update.sh` alone is **not** a substitute: it neither migrates nor applies grants.
+After `0007`, never run the M26A-era `setup.sh`; `setup-db.sh` now refuses a non-empty database.
+
 ## Back up, export, restore
 
 - **Back up now:** `$SSH 'cd /opt/m26a && sudo ./backup.sh'`

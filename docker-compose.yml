@@ -68,6 +68,14 @@ services:
       RERANKER_MODEL_REVISION: ${RERANKER_MODEL_REVISION:-233902d25c440f23af6f7d6e94d2946bac0bee0a}
       RERANKER_BATCH_SIZE: ${RERANKER_BATCH_SIZE:-16}
       SEARCH_RERANK_DEPTH: ${SEARCH_RERANK_DEPTH:-20}
+      # Milestone 18 retailer returns (api only). Empty means unset: with no token every /returns
+      # route answers 503, and commit also needs the flag, the importer credentials and the label.
+      RETURNS_VIEWER_TOKEN: ${RETURNS_VIEWER_TOKEN:-}
+      RETURNS_IMPORTER_TOKEN: ${RETURNS_IMPORTER_TOKEN:-}
+      RETURNS_IMPORT_COMMIT_ENABLED: ${RETURNS_IMPORT_COMMIT_ENABLED:-false}
+      RETURNS_IMPORTER_LABEL: ${RETURNS_IMPORTER_LABEL:-}
+      RETURNS_IMPORTER_DB_USER: ${RETURNS_IMPORTER_DB_USER:-}
+      RETURNS_IMPORTER_DB_PASSWORD: ${RETURNS_IMPORTER_DB_PASSWORD:-}
       EMBEDDING_MODELS_DIR: /models
     volumes:
       - ./models:/models:ro

@@ -1,3 +1,18 @@
+# M18 (docs/m18/release.md): Caddy writes no access log (no `log` directive in the site), but its
+# own logs, such as the error logged when the app is unreachable, include the request URI. The
+# default logger therefore removes everything from "?" on, so no query string (search text,
+# filters, cursors, or anything a client mis-sends) is written. Credential headers are already
+# redacted by Caddy's default (no `log_credentials`). Not covered: the automatic HTTP->HTTPS
+# redirect echoes the path and query back to a client that used plain HTTP.
+{
+	log default {
+		format filter {
+			request>uri regexp \?.*$ ""
+			wrap json
+		}
+	}
+}
+
 # Automatic HTTPS (Let's Encrypt) for the DuckDNS hostname in .env; HTTP redirects to HTTPS.
 {$SITE_HOST} {
 	encode zstd gzip

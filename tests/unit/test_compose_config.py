@@ -236,3 +236,78 @@ def test_jev_settings_are_not_forwarded_to_any_service():
     assert "JEV_" not in COMPOSE and "TYPESAFE_" not in COMPOSE
     assert re.search(r"^JEV_ENABLED=false$", ENV_EXAMPLE, re.MULTILINE)
     assert re.search(r"^TYPESAFE_API_KEY=$", ENV_EXAMPLE, re.MULTILINE)
+
+
+# ---- Milestone 18 release wiring (docs/m18/release.md) ----------------------------------------
+
+EC2 = ROOT / "deploy" / "ec2"
+STAGING_COMPOSE = (EC2 / "compose.yaml").read_text(encoding="utf-8")
+SETUP_SH = (ROOT / "infra" / "staging" / "setup.sh").read_text(encoding="utf-8")
+RESTORE_SH = (EC2 / "restore.sh").read_text(encoding="utf-8")
+RETURNS_FORWARDED = (
+    "RETURNS_VIEWER_TOKEN: ${RETURNS_VIEWER_TOKEN:-}",
+    "RETURNS_IMPORTER_TOKEN: ${RETURNS_IMPORTER_TOKEN:-}",
+    "RETURNS_IMPORT_COMMIT_ENABLED: ${RETURNS_IMPORT_COMMIT_ENABLED:-false}",
+    "RETURNS_IMPORTER_LABEL: ${RETURNS_IMPORTER_LABEL:-}",
+    "RETURNS_IMPORTER_DB_USER: ${RETURNS_IMPORTER_DB_USER:-}",
+    "RETURNS_IMPORTER_DB_PASSWORD: ${RETURNS_IMPORTER_DB_PASSWORD:-}",
+)
+
+
+def _staging_service(name: str) -> str:
+    return re.split(r"^  \S", STAGING_COMPOSE.split(f"\n  {name}:\n")[1], flags=re.MULTILINE)[0]
+
+
+def test_returns_settings_reach_only_the_local_api_with_safe_defaults():
+    api = _api()
+    for line in RETURNS_FORWARDED:
+        assert COMPOSE.count(line) == 1 and line in api
+    assert "RETURNS_" not in _service("db", "  migrate:") + _service("migrate", "  api:")
+    assert Settings.model_fields["returns_import_commit_enabled"].default is False
+    assert re.search(r"^RETURNS_IMPORT_COMMIT_ENABLED=false$", ENV_EXAMPLE, re.MULTILINE)
+
+
+def test_the_staging_app_gets_the_viewer_token_only_and_commit_stays_off():
+    app = _staging_service("app")
+    assert "RETURNS_VIEWER_TOKEN: ${RETURNS_VIEWER_TOKEN:-}" in app
+    assert 'RETURNS_IMPORT_COMMIT_ENABLED: "false"' in app
+    for name in ("RETURNS_IMPORTER_TOKEN", "RETURNS_IMPORTER_DB", "RETURNS_IMPORTER_LABEL"):
+        assert name not in app
+    assert "POSTGRES_USER: search_app" in app
+
+
+def test_the_staging_m18_one_offs_are_profile_only_and_use_their_own_roles():
+    grants, importer = _staging_service("grants"), _staging_service("returns-import")
+    for service in (grants, importer):
+        assert 'profiles: ["m18"]' in service and 'restart: "no"' in service
+        assert "image: ${M18_TOOLS_IMAGE:-${APP_IMAGE}}" in service
+        assert "ports:" not in service
+    assert "POSTGRES_USER: search_admin" in grants
+    assert "POSTGRES_USER: returns_importer" in importer
+    assert "./returns_v1:/release/returns_v1:ro" in importer
+    assert "RETURNS_IMPORTER_TOKEN" not in importer and "RETURNS_VIEWER_TOKEN" not in importer
+
+
+def test_setup_uses_the_grants_script_and_never_a_plaintext_password_or_blanket_grant():
+    assert "GRANT SELECT ON ALL TABLES" not in SETUP_SH
+    assert "python -m ecommerce_search.returns.grants" in SETUP_SH
+    assert 'sql.Literal(os.environ["APP_DB_PASSWORD"])' not in SETUP_SH
+    assert "sql.Literal(verifier(password))" in SETUP_SH
+    assert SETUP_SH.index("for guard in GUARDS") < SETUP_SH.index("role_statement(cur, app_user")
+    setup = _staging_service("setup")
+    assert "IMPORTER_DB_PASSWORD: ${RETURNS_IMPORTER_DB_PASSWORD:-}" in setup
+    assert "RETURNS_IMPORTER_DB" not in setup.replace("${RETURNS_IMPORTER_DB_PASSWORD:-}", "")
+
+
+def test_restore_grants_by_revision_and_keeps_the_blanket_grant_pre_m18_only():
+    legacy, m18 = RESTORE_SH.split("0001|0002|0003|0004|0005|0006)")[1].split("  *)")
+    assert "GRANT SELECT ON ALL TABLES" in legacy
+    assert "GRANT SELECT ON ALL TABLES" not in m18
+    assert "--profile m18 run --rm grants" in m18
+    assert "DROP DATABASE ecommerce_search" in RESTORE_SH
+
+
+def test_caddy_logs_drop_the_query_string():
+    caddyfile = (EC2 / "Caddyfile").read_text(encoding="utf-8")
+    assert '\t\t\trequest>uri regexp \\?.*$ ""\n' in caddyfile
+    assert not re.search(r"^\s*log_credentials", caddyfile, re.MULTILINE)

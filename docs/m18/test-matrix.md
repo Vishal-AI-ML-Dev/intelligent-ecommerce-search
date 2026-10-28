@@ -273,7 +273,27 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
-## M18-06 results (actual, 2026-10-28; uncommitted)
+## M18-07 results (actual, 2026-10-28; uncommitted)
+
+Full evidence: `release.md` §5. Kind: local recorded runs. No staging, AWS or CI.
+
+| Check | Result |
+|---|---|
+| Deploy-kit pins (`tests/unit/test_compose_config.py`) | 35 passed |
+| `caddy validate` plus a real Caddy run with synthetic markers (upstream unreachable) | valid; query/auth/cookie markers 0/0/0; previous Caddyfile negative control 1 |
+| Release rehearsal (`m18-release.sh`, `0006` → `0007`, internal network) | passed: 7 s migration, roles and grants; import `imported`, verify `match`; re-run idempotent |
+| AC-18 old image (`m16-geo-e057d00`, local tag) on `0007`, no egress, generation off | health, ranked search, assistant off, live spec: passed; `/returns` 404 |
+| Restore rehearsal (dump → scratch database → grants) | 34/34 table counts and 985/985 privilege rows equal; raw files unreadable by `search_app` and the importer |
+| `restore.sh` (`0007` dump; pre-release `0006` dump) | equal counts and privileges / `0006`, 0 M18 tables left, old app passes |
+| AC-19 steps (local rehearsal only) | 401/401/200/403; 180 listed; same data after app restart |
+
+**AC-18:** passed locally. CI on the release commit is still needed. The candidate is a local
+working-tree build (lockfile-pinned package downloads were not authorized, then accepted for this
+artifact). The old image is a local tag, not verified against the staging digest.
+
+**AC-19:** staging only (M18-08).
+
+## M18-06 results (actual, 2026-10-28; committed 7c87532; CI green per owner)
 
 Fixture-backed and live results are reported separately. Details are in `handoff.md`.
 
