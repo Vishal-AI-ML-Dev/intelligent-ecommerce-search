@@ -3,7 +3,7 @@
 Status: **FROZEN — M18-01 design approved by the owner on 2026-10-24** (revision 2, with the
 owner qualifications recorded in `plan.md` §8). Decision IDs refer to `plan.md` §8. Changes
 after the freeze need owner approval. Owner-approved corrections since the freeze: §6.1
-(2026-10-26), §6.2 (2026-10-27). M18-02 (storage, contracts, grants) is implemented;
+(2026-10-26), §6.2 and §6.3 (2026-10-27). M18-02 (storage, contracts, grants) is implemented;
 its implementation boundaries are recorded in §10.
 
 ## 1. Versions and conventions
@@ -282,6 +282,8 @@ A customer statement can be wrong; only contradictions between system records ar
 | HTTP request body (read into memory with a streaming cap; no temp-file spill) | 9 MiB | 413 `payload_too_large` |
 | Total bundle bytes / any single file | 8 MiB / 5 MiB | `bundle_too_large` / `file_too_large` |
 | Files per set (11 entity + manifest) | 12 | `too_many_files` |
+| Multipart parts per HTTP request (amended §6.3) | 12; starting a 13th part rejects the whole request at once | 400 `malformed_upload` |
+| HTTP request body read time, total (amended §6.3) | 30 s, from immediately before waiting for the first body chunk | 408 `upload_timeout` |
 | `manifest.json` | 64 KiB | `file_too_large` |
 | Data rows: bundle / one entity | 10,000 / 5,000 | `too_many_rows` |
 | CSV columns / bytes per field | 30 / 4,096 | `too_many_columns` / `field_too_large` |
@@ -509,6 +511,19 @@ is out of M18 scope.
   422 `invalid_parameter` may add `parameters`, a list of `{name, code}` pairs. Names are safe
   keys and codes are fixed validation codes; submitted values are never included (§5.1).
 - **Unchanged:** every other §6 and §7 rule.
+
+### 6.3 Contract amendments C1 and C2 (owner approval 2026-10-27, M18-04B)
+
+- **C1 (part count).** On the start of a 13th multipart part, the whole HTTP request is
+  rejected with 400 `malformed_upload`. The rest of the body is neither read nor parsed, the
+  import service is not called, and no partial bundle is validated or imported. `too_many_files`
+  (§4.4) still applies inside the service; over HTTP, C1 is reached first.
+- **C2 (body-read deadline).** Reading the HTTP request body must finish within 30 s in total,
+  measured from immediately before waiting for the first body chunk (so a sender that sends no
+  body bytes is covered), not per chunk. Otherwise: 408 `upload_timeout`, fixed text,
+  `Cache-Control: no-store`, nothing imported. This bounds body reading only; it is not a
+  validation, worker or database timeout.
+- **Unchanged:** every other §4.4, §6 and §7 rule.
 
 ## 7. API contract
 

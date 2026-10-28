@@ -273,6 +273,41 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
+## M18-04B results (actual, 2026-10-27; uncommitted, awaiting diff review)
+
+All evidence is **hermetic unit**. The service is a recording fake, except where the real
+service is called on uploads that fail Phase A, with a database sentinel that fails if used.
+There is no database-integration or browser evidence.
+
+- `test_returns_api_upload.py` + `test_returns_api_access.py`: **198 passed**, after one
+  test-bug fix (the first run was 1 failed, 197 passed). Focused regression: **1352 passed**.
+- **Coverage:**
+  - Reader: parts by field name with file names ignored; parts split across 7-byte chunks; a
+    missing closing boundary and an empty body give 400.
+  - Part count: 12 parts accepted; the 13th → 400 with later chunks unread.
+  - Size: a streaming 413 stops reading, and the epilogue is counted.
+  - Time: the total-time 408 is checked with fast chunks.
+  - Headers: a disconnect, 11 invalid part-header forms and identity encodings.
+  - Request level: 415 media types, missing or overlong boundary, declared-length checks.
+  - Slot: released on success and failure; held through cancellation until the worker
+    finishes; released if cancellation comes before the worker starts.
+  - Routes: the access, gate and check order, all before any body read; status mapping
+    201/200/200/422; the importer engine and label used for commit; 503/403/500 mappings with
+    the slot released; chunked over-cap upload; unknown and repeated names reported by the
+    real service without echo; no names, bodies or tokens in app logs.
+  - No temporary file and no `request.form` for a 3 MiB part (AC-09, partial); no route
+    declares `Form`/`File`; OpenAPI documents the multipart body.
+- **Review checkpoint (2026-10-27):** C1/C2 approved (`contracts.md` §6.3). Library
+  logging fixed and tested with malformed uploads and captured logs (root handler, pytest
+  capture, stderr). Huge `Content-Length` gives 413, not 500. Tests added for a deadline with no
+  body bytes and for 405 on the import routes. `test_returns_api_upload.py` +
+  `test_returns_api_access.py` → **204 passed**; `tests/unit/returns` + app + observability →
+  **743 passed** (hermetic unit).
+- **Repeated-name fix (2026-10-28):** repeated, case-variant and `name`+`name*` parameters give
+  400; `name*` alone is still 400; quoted file-name text containing `; name=` is still accepted.
+  Upload + access tests → **213 passed** (after one attempt blocked by a Windows Application
+  Control DLL policy; the retry ran unchanged).
+
 ## M18-04A results (actual, 2026-10-26; uncommitted, awaiting owner review)
 
 M18-04A adds retailer access control, the commit gate, the lazy importer engine, safe

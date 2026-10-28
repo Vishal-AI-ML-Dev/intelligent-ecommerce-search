@@ -1,5 +1,159 @@
 # M18 — Handoff
 
+## Current state (2026-10-28, M18-04B committed under owner authorization; CI to be confirmed)
+
+- HEAD `d8f2856` (04A, CI green as confirmed by the owner). D1 approved:
+  `python-multipart==0.0.32` added. The `uv.lock` diff is only that package and the root
+  project's two references to it (11 added lines).
+- **C1 and C2 approved and recorded** in `contracts.md` §4.4 (two rows) and §6.3. The
+  deadline starts immediately before waiting for the first body chunk, so it covers a sender that
+  sends no body bytes. It bounds body reading only, not the worker or database. On the 13th part
+  the whole request is rejected and nothing is imported.
+- **Added (no 04A behaviour changed):**
+  - `api/returns_upload.py`: low-level `MultipartParser` callbacks, all in memory; a streaming
+    9 MiB cap (chunked bodies included); a closing-boundary check; part-header rules (C4); an
+    `ImportSlot` that is released on every terminal path and held until a worker that is still
+    running after cancellation has finished.
+  - `POST /returns/import/validate` (validate scope) and `POST /returns/import` (import scope;
+    the gate is checked before the body is read, then 403 `import_commit_disabled`). Check order
+    (C3): access → gate → 415 → declared 413 → 429 → streamed 413/408/400 → service. Existing
+    `validate_import`/`commit_import` are unchanged. Error mappings: storage 503, role 403
+    (D3), other 500.
+  - `app.state.returns_import_slot` and `app.state.returns_importer_label`.
+  - Seven new fixed error texts.
+- **Changes to existing files:** route pins only (the 04A inventory test and the two buyer path
+  sets each gain the two routes). The capabilities `limits` field set is unchanged.
+- **Library logging (fixed):** python-multipart wrote parse warnings containing body byte values
+  and offsets. Its only logger, `python_multipart.multipart`, is now disabled, does not
+  propagate and has a `NullHandler` (`silence_library_logs`, applied when `returns_upload` is
+  imported). No other logger is touched, and the app still logs `returns_upload_rejected` with
+  the code. Plain `propagate = False` was not enough: pytest attaches its capture handlers
+  directly to non-propagating loggers, and the test caught that.
+- Memory: about 2 × 9 MiB per process is an **estimate, not a proven bound**.
+- **Checks:**
+
+| Command | Result |
+|---|---|
+| `uv add python-multipart==0.0.32`; `git diff uv.lock` | only the new package and its root references |
+| `pytest tests/unit/returns/test_returns_api_upload.py tests/unit/returns/test_returns_api_access.py` (first run) | 1 failed, 197 passed: a test bug (the body under test was not valid multipart, so the parser failed before the cap); fixed |
+| same, rerun | **198 passed** |
+| focused regression: `tests/unit/returns` + settings, app, observability, dependencies, engine, compose, frontend serving, `test_filtered_api.py`, `test_reranked_api.py`, assistant API | **1352 passed** |
+| `ruff check .` / `ruff format --check .` | all checks passed / 513 files already formatted |
+| CI-equivalent hermetic `--collect-only`; duplicate basenames | 5893/6940 collected, no errors; 0 |
+
+  Not run: the whole `tests/unit/search` directory, the full suite, the isolation wrapper (its
+  local timeout stays **FAILED**), integration (no database used), CI. No commit or push.
+
+### M18-04B review checkpoint (2026-10-27, one bounded pass over the actual diff)
+
+**Fixed in this pass:**
+- **Library logs:** see above.
+- **Huge `Content-Length`:** `int()` refuses strings of more than 4,300 digits, so such a
+  header would have become a 500. Declared lengths are now compared by digit count first, so a
+  huge value gives 413; leading zeros are ignored.
+- **Tests added:**
+  - the deadline with a sender that never sends a chunk;
+  - library diagnostics reach no handler (root, pytest capture, stderr), with a sanity run
+    showing they would be emitted if the logger were enabled;
+  - only that one logger is configured;
+  - huge declared lengths;
+  - `GET` on both import routes gives the safe 405 with `Allow: POST`.
+
+**Confirmed by reading the code and the tests:**
+- **Access and gate before the body:** the import routes have no body parameter
+  (`body_field is None`), so FastAPI reads nothing before the dependencies. 503/401/403 and the
+  gate's 403 `import_commit_disabled` all run before `read_upload`; a spy test confirms no read.
+- **Limits:** declared length is checked before the slot. The streaming counter includes the
+  epilogue and chunked bodies. Part headers are bounded by the library (count 4, line 4,224
+  bytes); the boundary is capped at 256.
+- **Parser completion:** a missing closing boundary, an empty body or a disconnect gives 400.
+- **Timeout:** `asyncio.timeout` is entered before the first receive and covers the whole read.
+- **Single flight:** the slot is released on every terminal path: 413/408/400, cancellation
+  while reading (`BaseException` branch), service errors (in the worker's `finally`), and
+  cancellation before the worker starts. A worker still running after cancellation keeps the
+  slot until it finishes, and cancellation rolls nothing back.
+- **No spill:** a 3 MiB part is read with `tempfile` creators and `Request.form` patched to
+  fail; no route declares `Form`/`File`.
+- **Safe errors:** fixed texts with `no-store` (the route class flag keeps the middleware's
+  `no-store`). Service errors map to 503/403/500 without detail.
+- **04A and buyer compatibility (not inferred from "added lines only"):**
+  - all 04A access tests pass unchanged except the route-inventory pin;
+  - capabilities is unchanged (`request_body_bytes` still 9 MiB; `concurrent_imports` 1
+    matches the slot);
+  - the 04A middleware's 405/404 handling covers the new paths (test);
+  - buyer routes: the pinned buyer API files passed (1352-test focused run before this pass);
+  - installing python-multipart makes `Request.form` usable app-wide, but no route uses it;
+  - the logger change touches only that library's logger, which only `Request.form` /
+    `FormParser` would otherwise use.
+
+**Boundaries (not changed here):**
+- When the app answers before reading the whole body (413/400/408), it is up to uvicorn to
+  close the connection rather than parse leftover bytes. That was not verified with a real
+  server.
+- ~~A part whose `Content-Disposition` repeats `name=` takes the library's last value.~~
+  **Fixed 2026-10-28 (owner-approved, C4):** see "Repeated-name fix" below.
+- The memory figure remains an estimate.
+
+**Checks run in this pass:**
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/returns/test_returns_api_upload.py` (after the logging change, first run) | 2 failed, 76 passed: `propagate = False` alone still let pytest's handler (attached directly to non-propagating loggers) receive the records, and the handler-list assertion did not allow for pytest's handlers. Fixed by also disabling the logger and asserting by type. |
+| same, rerun | 78 passed; after the `Content-Length` fix 79 passed; after the 405 test, with the access file, **204 passed** |
+| `pytest tests/unit/returns tests/unit/test_app.py tests/unit/test_observability.py` | **743 passed** |
+| `ruff check .` / `ruff format --check .` | all checks passed / 513 files already formatted |
+| `git diff --check` on the tracked 04B paths; trailing whitespace and CR count in the two new files | exit 0; none; 0 |
+| secret-pattern grep over the 04B diff and new files | one hit: the fake test connection string built from the fake `DB_PASSWORD` |
+
+Not rerun after this pass: the 1352-test focused set and collect-only (one new test file
+already counted; no buyer file touched since).
+
+### Repeated-name fix (2026-10-28, owner-approved; C4 unchanged, no contract amendment)
+
+- **Mismatch:** python-multipart keeps only the last of repeated parameters, so
+  `form-data; name="x"; name="bundle.json"` was accepted as `bundle.json`. A repeated parameter
+  makes `Content-Disposition` invalid (RFC 6266 §4.1; RFC 7578 requires one `name`), and C4 says
+  an invalid disposition gets 400.
+- **Fix:** `_name_count` uses the standard-library header parser
+  (`email.message.Message.get_params`) only to count `name` parameters, in any case and
+  including `name*`. Anything other than exactly one gives 400 `malformed_upload`. The name
+  itself still comes from python-multipart, which remains the upload parser.
+- **Actual parse results checked before the tests** (count / library name):
+
+| Content-Disposition | Count | Library name | Result |
+|---|---|---|---|
+| `name="x"; name="bundle.json"` | 2 | `bundle.json` | 400 |
+| `name="bundle.json"; NAME="x"` / `Name=x` | 2 | `x` | 400 |
+| `name="bundle.json"; name*=utf-8''x` | 2 | `bundle.json` | 400 |
+| `name*=utf-8''bundle.json` | 1 | none | 400 (no plain name) |
+| `filename="a; name=x"; name="bundle.json"` | 1 | `bundle.json` | accepted |
+| `filename="a\"; name=x"; name="bundle.json"` | 1 | `bundle.json` | accepted |
+| unbalanced `filename="x; name=bundle.json` | 0 | none | 400 |
+| `name=""; name="bundle.json"` | 2 | `bundle.json` | 400 |
+
+- **Checks:**
+
+| Command | Result |
+|---|---|
+| `pytest tests/unit/returns/test_returns_api_upload.py tests/unit/returns/test_returns_api_access.py` (first attempt) | **did not run**: collection error `ImportError: DLL load failed while importing _util_cy: An Application Control policy has blocked this file` (SQLAlchemy's compiled module; Windows policy, not code) |
+| same, retried with no change | **213 passed** (9 new cases) |
+| `uv run ruff check .` / `ruff format --check .` | all checks passed / 513 files already formatted |
+
+### Commit checkpoint (2026-10-28)
+
+| Command | Result |
+|---|---|
+| `git diff --exit-code bf67d11 -- <AC-14 protected paths>` | exit 0 |
+| AC-14 M17 SHA-256 listing | **not run**: the listing file is still missing (see the 04A checkpoint). It was not recreated, and nothing here stands in for it. |
+| Staged files (12): `pyproject.toml`, `uv.lock`, `api/app.py`, `api/returns.py`, `api/returns_upload.py`, the two returns API test files, the two buyer path-pin files, `contracts.md`, `handoff.md`, `test-matrix.md` | reviewed; `returns.py` has no removed lines; the lockfile adds only python-multipart |
+| `git diff --cached --check` | exit 0 |
+| secret-pattern grep over `git diff --cached`; staged `.env` | one hit, the fake test connection string; no `.env` |
+| `uv lock --check` | exit 0 (lock matches `pyproject.toml`) |
+
+The four unrelated items are not staged. Reused (not rerun): the 1352-test focused run and the
+743-test returns/app/observability run. Not run: the full suite, the isolation wrapper (local
+timeout stays **FAILED**, separate from CI), integration, database access.
+
 ## Current state (2026-10-27, M18-04A reviewed; amendments A1/A2 applied; scoped commit authorized)
 
 - **Owner decision (2026-10-27):** A1 and A2 approved and applied as `contracts.md` §6.2, with

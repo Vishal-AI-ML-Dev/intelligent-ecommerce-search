@@ -14,6 +14,9 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
+    # Milestone 18 (D1): exact pin; only its low-level in-memory MultipartParser is used, by
+    # api/returns_upload.py (never request.form(), Form, File or its temp-file classes).
+    "python-multipart==0.0.32",
     "sentence-transformers>=6.1.0",
     "sqlalchemy>=2.0",
     "torch>=2.14.1",

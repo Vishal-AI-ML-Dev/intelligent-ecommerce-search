@@ -716,9 +716,14 @@ def test_path_matching_is_exact_on_the_prefix(client):
 # ---- buyer isolation and route inventory -----------------------------------------------------
 
 
-def test_routes_are_the_pre_m18_set_plus_capabilities_only(client):
+def test_routes_are_the_pre_m18_set_plus_the_built_returns_routes_only(client):
     paths = {path: set(item) for path, item in client.app.openapi()["paths"].items()}
-    assert paths == {**PRE_M18_PATHS, CAPABILITIES: {"get"}}
+    assert paths == {
+        **PRE_M18_PATHS,
+        CAPABILITIES: {"get"},
+        "/returns/import/validate": {"post"},  # M18-04B
+        "/returns/import": {"post"},  # M18-04B
+    }
 
 
 @pytest.mark.parametrize("headers", [{}, bearer(VIEWER), bearer(IMPORTER), {"Authorization": "x"}])

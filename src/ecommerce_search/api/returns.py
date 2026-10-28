@@ -39,10 +39,26 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from ecommerce_search.api.observability import log_event
+from ecommerce_search.api.returns_upload import (
+    ImportSlot,
+    UploadError,
+    check_declared_length,
+    multipart_boundary,
+    read_upload,
+    run_in_slot,
+)
 from ecommerce_search.config import Settings
 from ecommerce_search.config.settings import is_returns_token
 from ecommerce_search.db.engine import create_importer_engine
 from ecommerce_search.returns import bundle, contracts, errors
+from ecommerce_search.returns.bundle import Part
+from ecommerce_search.returns.service import (
+    ImportReport,
+    ImportRoleError,
+    ImportStorageError,
+    commit_import,
+    validate_import,
+)
 from ecommerce_search.returns.versions import CONTRACT_VERSION
 
 logger = logging.getLogger(__name__)
@@ -79,6 +95,13 @@ DETAILS = {
     "method_not_allowed": "Method Not Allowed",
     "request_failed": "The request could not be processed.",
     "internal_error": "Internal Server Error",
+    "import_commit_disabled": "Importing is not enabled on this server.",
+    "unsupported_media_type": "The upload must be sent as multipart/form-data.",
+    "malformed_upload": "The upload is not a well-formed multipart request.",
+    "payload_too_large": "The upload is larger than the request size limit.",
+    "upload_timeout": "The upload was not received within the time limit.",
+    "import_busy": "Another import is in progress; try again later.",
+    "import_storage_unavailable": "The import could not be completed; nothing was stored.",
 }
 _HTTP_CODES = {404: "not_found", 405: "method_not_allowed"}
 
@@ -404,6 +427,8 @@ LIMITS = ReturnsLimits(
 )
 
 _READ = require_scope(ReturnsScope.READ)
+_VALIDATE = require_scope(ReturnsScope.VALIDATE)
+_IMPORT = require_scope(ReturnsScope.IMPORT)
 
 router = APIRouter(prefix=PREFIX, tags=["returns"], route_class=ReturnsRoute)
 
@@ -422,3 +447,107 @@ def capabilities(
         limits=LIMITS,
         reason_codes=list(contracts.ReasonCode),
     )
+
+
+# ---- import routes (M18-04B) -----------------------------------------------------------------
+
+# The request body is read by `read_upload`, never by FastAPI, so it is documented here.
+_UPLOAD_OPENAPI = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "description": "Parts named `bundle.json`, or `manifest.json` plus one "
+                    "`<entity>.csv` per entity (contracts §4.1). File names are ignored.",
+                    "additionalProperties": {"type": "string", "format": "binary"},
+                }
+            }
+        },
+    }
+}
+
+
+def get_import_slot(request: Request) -> ImportSlot:
+    return request.app.state.returns_import_slot
+
+
+async def _run_upload(request: Request, work: Callable[[list[Part]], ImportReport]) -> ImportReport:
+    """Contracts §4.4 order after access: 415, declared size 413, 429, then the body is read
+    (streamed 413, 408, 400) and `work` runs in a worker thread holding the import slot."""
+    boundary = _upload_check(lambda: multipart_boundary(request.headers.get("content-type")))
+    _upload_check(lambda: check_declared_length(request.headers.get("content-length")))
+    slot = get_import_slot(request)
+    if not slot.acquire():
+        raise ReturnsError(429, "import_busy")
+    try:
+        parts = await read_upload(request, boundary)
+    except UploadError as exc:
+        slot.release()
+        log_event(logger, "returns_upload_rejected", code=exc.code)
+        raise ReturnsError(exc.status, exc.code) from None
+    except BaseException:
+        slot.release()
+        raise
+    try:
+        report = await run_in_slot(slot, lambda: work(parts))
+    except ImportStorageError:
+        log_event(logger, "returns_import_storage_error")
+        raise ReturnsError(503, "import_storage_unavailable") from None
+    except ImportRoleError as exc:
+        # `reason` is one of a few fixed words (superuser, owner, ...), never a database value.
+        log_event(logger, "returns_import_role_rejected", reason=exc.reason)
+        raise ReturnsError(403, "import_commit_disabled") from None
+    log_event(
+        logger,
+        "returns_import_finished",
+        mode=report.mode,
+        status=report.status,
+        error_count=report.error_count,
+    )
+    return report
+
+
+def _upload_check[T](check: Callable[[], T]) -> T:
+    try:
+        return check()
+    except UploadError as exc:
+        log_event(logger, "returns_upload_rejected", code=exc.code)
+        raise ReturnsError(exc.status, exc.code) from None
+
+
+def _report_response(report: ImportReport, status: int) -> JSONResponse:
+    return JSONResponse(report.model_dump(mode="json"), status_code=status)
+
+
+@router.post("/import/validate", response_model=ImportReport, openapi_extra=_UPLOAD_OPENAPI)
+async def validate_upload(
+    request: Request, caller: Annotated[Caller, Depends(_VALIDATE)]
+) -> JSONResponse:
+    """Validate one upload (contracts §7): 200 with the report; nothing is stored."""
+    engine = request.app.state.engine
+    report = await _run_upload(request, lambda parts: validate_import(engine, parts))
+    return _report_response(report, 200)
+
+
+# contracts §7: 201 imported; 200 already_imported / no_new_records; 422 invalid (same body).
+_COMMIT_STATUS = {"imported": 201, "already_imported": 200, "no_new_records": 200, "invalid": 422}
+
+
+@router.post("/import", response_model=ImportReport, status_code=201, openapi_extra=_UPLOAD_OPENAPI)
+async def import_upload(
+    request: Request,
+    caller: Annotated[Caller, Depends(_IMPORT)],
+    access: Annotated[ReturnsAccess, Depends(get_returns_access)],
+) -> JSONResponse:
+    """Commit one upload atomically as the importer role (contracts §4.3, §7). The commit gate
+    is checked before any body byte is read."""
+    holder: LazyImporterEngine | None = request.app.state.returns_importer_engine
+    label: str | None = request.app.state.returns_importer_label
+    if not access.gate.open or holder is None or label is None:
+        raise _denied(403, "import_commit_disabled")
+    report = await _run_upload(
+        request, lambda parts: commit_import(holder.get(), parts, imported_by_label=label)
+    )
+    return _report_response(report, _COMMIT_STATUS[report.status])

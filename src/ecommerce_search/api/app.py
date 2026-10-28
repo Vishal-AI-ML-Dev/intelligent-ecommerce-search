@@ -25,6 +25,7 @@ from ecommerce_search.api.returns import (
     build_importer_engine,
 )
 from ecommerce_search.api.returns import router as returns_router
+from ecommerce_search.api.returns_upload import ImportSlot
 from ecommerce_search.api.routed import LazyJevProvider
 from ecommerce_search.api.routed import router as routed_router
 from ecommerce_search.api.search import router as search_router
@@ -121,6 +122,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.returns_importer_engine = build_importer_engine(
         settings, app.state.returns_access.gate
     )
+    # The label recorded on API-committed batches (contracts §6); read by the import route.
+    app.state.returns_importer_label = settings.returns_importer_label
+    # One validate or import at a time per process (contracts §4.4).
+    app.state.returns_import_slot = ImportSlot()
     app.include_router(health_router)
     app.include_router(search_router)
     app.include_router(dense_router)
