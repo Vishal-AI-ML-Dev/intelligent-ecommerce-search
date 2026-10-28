@@ -1,6 +1,66 @@
 # M18 — Handoff
 
-## M18-07 Release Readiness (2026-10-28; uncommitted, awaiting owner review)
+## M18-08 Staging Release & Smoke (2026-10-28; owner-approved; docs uncommitted)
+
+- **Release:** commit `e5fa151cb13ef567235a0c446e6ab8b3b5785d32` (CI run 40695893009 green,
+  owner-confirmed).
+- **Deployed:** the rehearsed candidate (owner option B), image ID
+  `sha256:1fec521b044a6c3db5347eadcb561081a32c4db1d00d163fa236c39da817029c`. This is a local
+  working-tree build at `7c87532` whose image inputs equal `e5fa151`. Its lockfile-pinned package
+  downloads were unauthorized and later accepted. **Not a committed or CI build.**
+- Full evidence is in `release.md` §7.
+
+**Phase A (read-only):**
+- staging `0006`, 19 tables;
+- app image ID `ecaeb633…` (equal to the local AC-18 image ID; there is no registry digest);
+- all 8 server kit files equal `e057d00`;
+- no `RETURNS_*` keys; 6.0 GB free;
+- public baseline OK.
+
+**Phase B (14:00–14:26 UTC):**
+- Removed two unreferenced old image tags (plain `rmi`, no prune): **2451 MiB reclaimed**.
+- Pre-release backup exported (SHA-256 matched); previous kit and `.env` preserved in
+  `pre-m18/` (root, 700).
+- `e5fa151` kit and returns files verified (11/11); credentials generated on the server and never
+  printed.
+- Archive verified: 617 MB, uploaded in 21.6 min.
+- **`m18-release.sh` exit 0 in 68 s:** migration, roles and grants took 9 s; import `imported`
+  (batch `f3715c76…`); verify `match` (`497cebbd…`).
+- Caddy recreated in 2 s; the certificate volume was kept.
+
+**AC-19 smoke:**
+- `/returns`: 401 without a token, 401 with a wrong token; viewer 200 with `can_commit: false`;
+  viewer commit 403; 180 returns listed = import report; verify `match`.
+- **The same results after `docker compose restart app`** (healthy in 9 s).
+- Public `/health` and ranked search OK (10 results, `applied`).
+- Internal assistant: `skipped`, **0 provider calls**. No public assistant request.
+- Caddy log: 0 URIs with a query.
+- Raw return files unreadable by `search_app` and by the importer.
+- Post-release backup exported (SHA-256 matched).
+- Run artifacts cleaned up; 6.1 GB free.
+- No rollback needed.
+
+**AC status:**
+- **AC-19:** every listed check passed on staging. The restart check is an app-container restart
+  only, not a database durability or restore test.
+- **AC-18:** local rehearsal plus CI on `e5fa151`.
+- **Final M18 acceptance:** not given (owner).
+
+**Open, unchanged:**
+- the three older fixtures' plaintext SQL passwords;
+- the missing AC-14 M17 checksum listing;
+- the Windows isolation timeout (FAILED);
+- untested API-level admin-role rejection;
+- the unconfirmed SHA of the historical catalog-failure run;
+- the Caddy redirect echo;
+- the ECS/RDS guard behaviour (unverified);
+- `alembic downgrade` not rehearsed;
+- the deployed artifact's provenance (above);
+- staging database durability and restore not exercised.
+
+**Next:** owner review. Committing these docs needs approval. M18-09 acceptance is separate.
+
+## M18-07 Release Readiness (2026-10-28; committed e5fa151; CI run 40695893009 green per owner)
 
 **M18-06 closure (recorded at owner direction):**
 - `7c87532bdc35f860cf766bbeead4ff4292b07e7e` was committed and pushed, and the owner confirmed

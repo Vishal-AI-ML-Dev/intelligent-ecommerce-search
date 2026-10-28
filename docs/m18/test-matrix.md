@@ -273,7 +273,28 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
-## M18-07 results (actual, 2026-10-28; uncommitted)
+## M18-08 results (actual, 2026-10-28; staging; docs uncommitted)
+
+Kind: staging. Evidence: `release.md` §7. Deployed image ID `sha256:1fec521b…029c`; it is not a
+committed or CI build.
+
+| AC-19 check | Result |
+|---|---|
+| Pre-check: staging revision (read only) | `0006` |
+| Backup file present before the change | yes: exported, SHA-256 matched |
+| Migration, grants and CLI import applied | `m18-release.sh` exit 0: `0007`; `returns-grants-1`; import `imported` |
+| `/health`, search, assistant | 200; 10 results, `applied`; internal assistant 200 with 0 provider calls (public assistant not requested) |
+| `/returns` without a token / viewer / commit | 401 / 200 (`can_commit: false`) / 403 |
+| List and detail counts equal the CLI import report | 180 listed = 180 imported. Detail was not opened separately on staging; it is covered by AC-16 locally. |
+| `returns verify` equals the release `records_sha256` | `match` (`497cebbd…63ca`), twice |
+| App-container restart check | the same 180 returns and 1 batch after `docker compose restart app` |
+
+**Limits:**
+- the restart check is not a database durability or restore test;
+- no browser run against staging;
+- the Caddy log check was a passive count (0 URIs with a query).
+
+## M18-07 results (actual, 2026-10-28; committed e5fa151, CI run 40695893009 green per owner)
 
 Full evidence: `release.md` §5. Kind: local recorded runs. No staging, AWS or CI.
 

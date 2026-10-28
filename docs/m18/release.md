@@ -1,8 +1,7 @@
 # M18 — Release, migration and recovery runbook
 
-Status: **prepared and rehearsed locally (M18-07, 2026-10-28). Not deployed.** Staging release
-is M18-08 and needs explicit owner approval. No AWS, SSM or staging command was run for this
-document.
+Status: **rehearsed locally (M18-07) and released to staging (M18-08, 2026-10-28, owner-approved;
+evidence in §7).** M18 is not accepted.
 
 ## 1. What the release changes on the single-EC2 stack
 
@@ -176,3 +175,77 @@ Preconditions:
   tested (AC-19 checks only an app-container restart).
 - Rehearsal on Windows Docker Desktop with Git Bash; the EC2 host (Ubuntu, `sudo`) was not
   exercised.
+
+## 7. Staging release (M18-08, 2026-10-28; owner-approved Phase A and Phase B)
+
+Release commit `e5fa151cb13ef567235a0c446e6ab8b3b5785d32`; CI run 40695893009 green (owner).
+Deployed artifact (owner option B): the rehearsed candidate `ecommerce-search:m18-rc-7c87532`,
+image ID `sha256:1fec521b044a6c3db5347eadcb561081a32c4db1d00d163fa236c39da817029c`.
+- A local working-tree build at `7c87532`. Every Dockerfile input is identical at `e5fa151`.
+- During the build, lockfile-pinned packages were downloaded without authorization; the owner
+  later accepted use of this artifact (§5).
+- **Not a committed or CI build.**
+- Archive: `docker save | gzip -1`, 617,263,407 bytes, SHA-256 `adebadcb…b081730`; verified on
+  the server.
+
+Access: AWS CLI profile `m26a` (owner `aws login`), SSM port-forward, SSH with the pinned host key
+(`StrictHostKeyChecking=yes`). The port-forward was closed after each phase. No IAM, security-group,
+instance or service change.
+
+### Phase A (read-only, before any change)
+
+| Item | Finding |
+|---|---|
+| Instance | `running`, t3.small (2 vCPU), Ubuntu 24.04.5 |
+| Running app | `ecommerce-search:m16-geo-e057d00`, image ID `sha256:ecaeb633…8623503`, the same content-addressed ID as the local image used for AC-18 (no registry digest exists) |
+| Database | revision `0006`, 19 tables, 0 M18 tables, 240 products, 10 MB |
+| Roles | `search_admin` (superuser), `search_app`; no `returns_importer`. `search_app` SELECT on 19/19 tables. |
+| Server kit | all 8 files byte-identical to `e057d00` |
+| `.env` | key names only: no `RETURNS_*` / `M18_TOOLS_IMAGE`. Staging, unlike the rehearsal, has country-gated generation configured. |
+| Resources | 6.0 GB free of 19 GB; 1905 MB RAM; 2 GB swap; 7 daily 606 KB backups; cron 03:30 UTC |
+| Public baseline | `/health` 200; ranked search 200, 10 results, `applied`; `/returns/capabilities` 404 |
+
+### Phase B (14:00–14:26 UTC; outside the backup cron window)
+
+| Step | Result |
+|---|---|
+| Disk | `ecommerce-search:m26a-8851867` (`2082f377…`) and `:m26a-staging-1` (`3658d892…`) were each confirmed: 0 containers in any state, not the app, rollback or tools image. Removed with plain `docker rmi`: no force, no prune. **Reclaimed 2451 MiB** (6.43 GB → 9.00 GB free). |
+| 1 Pre-release backup | `ecommerce_search-20261028T135628Z.dump` (619,890 bytes). Exported; SHA-256 `2c076baf…324f9f` equal on both sides. Rotation removed the oldest dump (2026-10-23T05:45). |
+| 2 Kit preservation | `/opt/m26a/pre-m18/` (root, 700): the 8 previous kit files (hashes equal to Phase A) and `.env` (600, byte-identical; not shown) |
+| 3 Kit and data | 9 kit files from `e5fa151` (`setup.sh` from `infra/staging/`) and the 2 `returns_v1` files. Uploaded to a private temp directory; 11/11 SHA-256 OK; installed root-owned (scripts 755, others 644). |
+| 3 Credentials | `RETURNS_VIEWER_TOKEN` (43 chars), `RETURNS_IMPORTER_DB_PASSWORD` (64 hex), `RETURNS_IMPORTER_LABEL=m18-release`: generated on the server with `openssl rand`, appended to `.env` (600 root); values never printed |
+| Wiring check | `compose config` valid. `app` env: `RETURNS_VIEWER_TOKEN`, `RETURNS_IMPORT_COMMIT_ENABLED=false`, `POSTGRES_USER=search_app`. Importer password only in `setup` and `returns-import`. |
+| 4 Archive | uploaded in 21.6 min (through the SSM tunnel); SHA-256 and gzip verified; 7.9 GB free |
+| 4 `m18-release.sh` | **exit 0, 68 s.** Preflight (revision `0006`, bundle `d7a9f535…`); backup `…T142133Z.dump`; image loaded; `0006 → 0007`, roles (verifiers) and grants (`returns-grants-1`, 68 statements) took **9 s**; import `imported` (batch `f3715c76-93e5-41bf-8301-bd62f863867a`, 0 errors); verify `match` (`497cebbd…63ca`); grants gate; app on `1fec521b…` |
+| 5 Caddy | `up -d --force-recreate caddy`: 2 s; `caddy_data` volume unchanged (created 2026-10-22); public `/health` 200; certificate verified |
+| 6 Smoke (inside the app container; the token never left it) | before and after `docker compose restart app` (healthy after 9 s): no token 401, wrong token 401, viewer 200 (`returns:read, returns:validate`, `can_commit: false`), viewer commit 403 `forbidden`, 180 listed and unique, 1 batch; `returns verify` again: `match` |
+| 6 Assistant | internal only. Generation ineligibility was established from the code first: the peer `127.0.0.1` is not a trusted proxy and not a global address, so `region_unknown`, decided before any provider request. Result: 200, outcome `generation_unavailable`, generation `skipped`, **calls 0**. No public assistant request. |
+| 6 Public buyer | `/health` 200; ranked search 200, 10 results, `applied` (13 s: first search after the restart, model load); `/returns/capabilities` without a token 401; CSP present |
+| 6 Caddy log | 18 lines since the recreate; 0 with a `uri` containing `?` (passive count, no marker request on staging) |
+| 7 Post-release backup | `ecommerce_search-20261028T142508Z.dump` (1,202,966 bytes); exported; SHA-256 `be30de21…372c45a` equal on both sides |
+| 7 Cleanup | server archive and temp kit directory removed; local archive removed; 6.1 GB free |
+
+**Final state:**
+- revision `0007`, 34 tables, 180 returns, 1 batch;
+- roles: `search_admin`, `search_app`, `returns_importer` (login, not superuser);
+- raw return files readable by `search_app` and by the importer: false/false. `search_app`
+  lacks SELECT only on that table.
+- `.env`: `APP_IMAGE` = `M18_TOOLS_IMAGE` = `ecommerce-search:m18-rc-7c87532`;
+- images: candidate, rollback `m16-geo-e057d00`, `m16-grounded-1363994`, caddy, pgvector.
+
+**Rollback availability:**
+- **App:** set `APP_IMAGE=ecommerce-search:m16-geo-e057d00` and run `up -d app`.
+- **Caddy:** `pre-m18/Caddyfile`, then recreate Caddy.
+- **Data:** the pre-release dump exists on the server and on the PC. A data rollback needs
+  fresh owner approval.
+
+No rollback was needed.
+
+**Limitations (staging):**
+- The deployed image is the working-tree candidate, not a committed or CI build.
+- The old-image identity rests on a matching content-addressed image ID, not a registry digest.
+- The Caddy check is a passive count.
+- The HTTP→HTTPS redirect still echoes queries.
+- Database durability and restore were not exercised on staging; only an app-container restart
+  was.
+- No browser run against staging.
