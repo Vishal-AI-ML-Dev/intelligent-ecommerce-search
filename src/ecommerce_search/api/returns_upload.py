@@ -34,6 +34,7 @@ import logging
 import threading
 from collections.abc import Callable
 from email.message import Message
+from typing import cast
 
 import anyio.to_thread
 from python_multipart.exceptions import FormParserError
@@ -240,19 +241,32 @@ async def run_in_slot[T](slot: ImportSlot, work: Callable[[], T]) -> T:
     The worker is not abandoned when the caller is cancelled (a client that disconnects): the
     slot stays held until the worker actually finishes, and cancelling the request does not
     undo anything the worker did. If cancellation arrives before the worker starts, the worker
-    never runs and the slot is released here."""
-    started = False
+    never runs and the slot is released here.
 
-    def guarded() -> T:
+    A native `Task.cancel()` is not held off by anyio's shield and can land after anyio has
+    handed the job to its worker thread but before `work` starts. Ownership of the slot is
+    therefore decided under `ownership`: either the worker starts (and alone releases the slot
+    when `work` ends) or the caller abandons the job (and alone releases it), never both. The
+    lock is never held while `work` runs."""
+    ownership = threading.Lock()
+    started = abandoned = False
+
+    def guarded() -> T | None:
         nonlocal started
-        started = True
+        with ownership:
+            if abandoned:
+                return None  # the caller gave up and released the slot; do not run `work`
+            started = True
         try:
             return work()
         finally:
             slot.release()
 
     try:
-        return await anyio.to_thread.run_sync(guarded, abandon_on_cancel=False)
+        # `None` comes back only from an abandoned job, whose caller is already cancelled.
+        return cast(T, await anyio.to_thread.run_sync(guarded, abandon_on_cancel=False))
     finally:
-        if not started:
+        with ownership:
+            abandoned = not started
+        if abandoned:
             slot.release()

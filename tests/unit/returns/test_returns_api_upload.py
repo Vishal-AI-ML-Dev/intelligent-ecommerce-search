@@ -9,7 +9,9 @@ import asyncio
 import logging
 import secrets
 import tempfile
+import threading
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import anyio.to_thread
 import pytest
@@ -324,32 +326,51 @@ def test_the_slot_is_released_after_success_and_after_failure():
 
 
 def test_a_cancelled_caller_keeps_the_slot_until_the_worker_finishes():
+    """A native `Task.cancel()` is not stopped by anyio's shield, so the caller may finish
+    before the worker; the slot must still stay held until the worker finishes and be released
+    by it. Every wait is an explicit event with a bound; no timing sleeps."""
     import threading
 
-    slot = upload.ImportSlot()
-    running, release = threading.Event(), threading.Event()
-    finished: list[bool] = []
+    class RecordingSlot(upload.ImportSlot):
+        def __init__(self) -> None:
+            super().__init__()
+            self.released = threading.Event()
+
+        def release(self) -> None:
+            super().release()
+            self.released.set()
+
+    slot = RecordingSlot()
+    running, release, finished = threading.Event(), threading.Event(), threading.Event()
 
     def work():
         running.set()
-        release.wait(5)
-        finished.append(True)
+        if not release.wait(5):
+            raise TimeoutError("the test never released the worker")
+        finished.set()
 
     async def scenario():
         assert slot.acquire()
         task = asyncio.create_task(upload.run_in_slot(slot, work))
-        while not running.is_set():
-            await asyncio.sleep(0.01)
-        task.cancel()
-        await asyncio.sleep(0.05)
-        held_while_running = slot.busy and not finished
-        release.set()
+        try:
+            assert await asyncio.to_thread(running.wait, 5), "the worker never started"
+            task.cancel()
+            await asyncio.wait({task}, timeout=5)  # the caller's cancellation settles
+            # The work is still blocked: the slot is held and nothing released it.
+            assert slot.busy and not slot.released.is_set() and not finished.is_set()
+        finally:
+            release.set()
+        assert await asyncio.to_thread(finished.wait, 5), "the worker never finished"
+        assert await asyncio.to_thread(slot.released.wait, 5), "the worker never released"
+        assert not slot.busy
         with pytest.raises(asyncio.CancelledError):
             await task
-        return held_while_running
 
-    assert asyncio.run(scenario())
-    assert finished == [True] and not slot.busy
+    try:
+        asyncio.run(scenario())
+    finally:
+        release.set()  # never leave the worker thread blocked, even after a failed assertion
+        finished.wait(5)
 
 
 def test_cancellation_before_the_worker_starts_releases_the_slot(monkeypatch):
@@ -363,6 +384,156 @@ def test_cancellation_before_the_worker_starts_releases_the_slot(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(upload.run_in_slot(slot, lambda: ran.append(True)))
     assert not ran and not slot.busy
+
+
+# ---- slot ownership under every cancellation point (deterministic) -----------------------------
+
+
+class CountingSlot(upload.ImportSlot):
+    """Counts releases; a second release of the lock raises (and is recorded)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.releases = 0
+        self.release_errors: list[str] = []
+        self.released = threading.Event()
+
+    def release(self) -> None:
+        self.releases += 1
+        try:
+            super().release()
+        except RuntimeError as exc:
+            self.release_errors.append(type(exc).__name__)
+            raise
+        self.released.set()
+
+
+class OwnershipProbe:
+    """`work` that records whether it owned the slot when it started."""
+
+    def __init__(self, slot: CountingSlot, *, fail: bool = False) -> None:
+        self.slot, self.fail = slot, fail
+        self.owned_at_entry: list[bool] = []
+
+    def __call__(self) -> str:
+        self.owned_at_entry.append(self.slot.busy)
+        if self.fail:
+            raise RuntimeError("work failed")
+        return "done"
+
+
+def assert_owned_once(slot: CountingSlot, probe: OwnershipProbe, *, ran: bool) -> None:
+    assert probe.owned_at_entry == ([True] if ran else [])  # never runs without the slot
+    assert slot.releases == 1 and not slot.release_errors  # exactly one release
+    assert not slot.busy  # no leak
+
+
+@pytest.fixture
+def worker_gate(monkeypatch):
+    """A barrier inside the real anyio worker thread: after anyio accepted, dequeued and
+    checked the job, before `run_in_slot`'s own code runs in the worker."""
+    real = anyio.to_thread.run_sync
+    gate = SimpleNamespace(
+        reached=threading.Event(), opened=threading.Event(), done=threading.Event()
+    )
+
+    async def gated(func, *args, **kwargs):
+        def at_gate():
+            try:
+                gate.reached.set()
+                if not gate.opened.wait(5):
+                    raise TimeoutError("the test never opened the gate")
+                return func(*args)
+            finally:
+                gate.done.set()
+
+        return await real(at_gate, **kwargs)
+
+    monkeypatch.setattr(anyio.to_thread, "run_sync", gated)
+    yield gate
+    gate.opened.set()  # never leave the worker blocked, even after a failed assertion
+    gate.done.wait(5)
+
+
+def test_cancellation_before_dispatch_never_runs_work_and_releases_once(monkeypatch):
+    async def cancelled(*args, **kwargs):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(anyio.to_thread, "run_sync", cancelled)
+    slot = CountingSlot()
+    probe = OwnershipProbe(slot)
+    assert slot.acquire()
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(upload.run_in_slot(slot, probe))
+    assert_owned_once(slot, probe, ran=False)
+
+
+def test_a_queued_job_cancelled_before_it_starts_is_abandoned_and_released_once(worker_gate):
+    """Controlled unit reproduction of the native-cancellation race: the job is accepted and
+    dequeued by anyio's worker, the caller is cancelled natively, then the worker proceeds. The
+    caller releases the slot; the abandoned job must not run or release again."""
+    slot = CountingSlot()
+    probe = OwnershipProbe(slot)
+
+    async def scenario():
+        assert slot.acquire()
+        task = asyncio.create_task(upload.run_in_slot(slot, probe))
+        assert await asyncio.to_thread(worker_gate.reached.wait, 5), "job never dispatched"
+        task.cancel()
+        await asyncio.wait({task}, timeout=5)
+        assert task.cancelled()
+        assert slot.releases == 1 and not slot.busy  # the caller released it
+        worker_gate.opened.set()
+        assert await asyncio.to_thread(worker_gate.done.wait, 5), "worker never finished"
+
+    asyncio.run(scenario())
+    assert_owned_once(slot, probe, ran=False)
+
+
+def test_a_running_worker_keeps_and_alone_releases_the_slot_when_cancelled():
+    slot = CountingSlot()
+    running, proceed = threading.Event(), threading.Event()
+    owned: list[bool] = []
+
+    def work():
+        owned.append(slot.busy)
+        running.set()
+        if not proceed.wait(5):
+            raise TimeoutError("the test never released the worker")
+
+    async def scenario():
+        assert slot.acquire()
+        task = asyncio.create_task(upload.run_in_slot(slot, work))
+        try:
+            assert await asyncio.to_thread(running.wait, 5), "the worker never started"
+            task.cancel()
+            done, _ = await asyncio.wait({task}, timeout=5)
+            # The caller finished while `work` is still blocked, so its ownership decision did
+            # not wait for `work` (the lock is not held while `work` runs); it did not release.
+            assert done and slot.busy and slot.releases == 0
+        finally:
+            proceed.set()
+        assert await asyncio.to_thread(slot.released.wait, 5), "the worker never released"
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        proceed.set()
+    assert owned == [True]
+    assert slot.releases == 1 and not slot.release_errors and not slot.busy
+
+
+@pytest.mark.parametrize("fail", [False, True], ids=["normal-completion", "worker-exception"])
+def test_completion_and_worker_exceptions_release_exactly_once(fail):
+    slot = CountingSlot()
+    probe = OwnershipProbe(slot, fail=fail)
+    assert slot.acquire()
+    if fail:
+        with pytest.raises(RuntimeError, match="work failed"):
+            asyncio.run(upload.run_in_slot(slot, probe))
+    else:
+        assert asyncio.run(upload.run_in_slot(slot, probe)) == "done"
+    assert_owned_once(slot, probe, ran=True)
 
 
 # ---- the routes ----------------------------------------------------------------------------------

@@ -1,6 +1,42 @@
 # M18 — Handoff
 
-## M18-04C summary provenance, role-helper hardening and first DB run (2026-10-28; uncommitted)
+## M18-04C corrective: CI test race and slot ownership (2026-10-28)
+
+- **CI failure on `2b5e221`** (owner-reported; this session cannot open the private run):
+  `test_a_cancelled_caller_keeps_the_slot_until_the_worker_finishes` failed with
+  `finished == []` (1 failed, 6082 passed, 4 skipped).
+  - **Cause: a test race.** anyio's shield does not stop a native `Task.cancel()`, so the
+    caller can finish before the worker. `asyncio.run` then returned while the worker thread
+    was still finishing, and the final assertion raced it.
+  - The slot itself stayed held until the worker finished (verified by a bounded probe).
+  - **Fix:** the test now uses explicit events and a slot subclass that signals its release. It
+    asserts the slot is held while the work is blocked, then awaits worker completion and the
+    release, with cleanup in `finally`.
+- **A separate, real ownership race in `run_in_slot`**, demonstrated in a **controlled unit
+  reproduction only** (never observed on a server):
+  - The setup: a native cancel lands after anyio's worker has dequeued the job and passed its
+    `future.cancelled()` check, but before `guarded` runs.
+  - The caller then released the slot, the work ran **without the slot**, and the worker
+    released a second time (`RuntimeError`).
+  - The reproduction uses a deterministic gate inside the real anyio worker thread; no sleeps.
+- **Fix (owner-authorized):** an `ownership` lock decides whether the worker starts (and alone
+  releases) or the caller abandons the job (and alone releases; the worker then skips `work`).
+  The lock is never held while `work` runs. Caller cancellation behaviour is unchanged and
+  implies no rollback.
+
+| Command | Result |
+|---|---|
+| the fixed race test, 30 separate runs | 30 passed |
+| that test against an in-memory mutant `run_in_slot` that frees the slot on cancellation | failed, as required |
+| new deterministic slot tests against HEAD's `run_in_slot` (in-memory plugin) | 1 failed (the queued-cancellation case: work ran unowned), 6 passed |
+| slot tests with the fix, 20 separate runs (8 tests each) | 20/20 passed |
+| `tests/unit/returns/test_returns_api_upload.py` + `test_returns_api_access.py` | **218 passed** |
+| `ruff check .` / `ruff format --check .` | all checks passed / 519 files formatted |
+
+Still open, separately: the three older fixtures' plaintext role passwords, the missing AC-14
+M17 listing, and the Windows isolation timeout (**FAILED**).
+
+## M18-04C summary provenance, role-helper hardening and first DB run (2026-10-28; committed `2b5e221`)
 
 **Owner-approved §7 amendment:** `ReturnSummary` gains `provenance`
 (`contracts.md` §7 and §7.1; the original wording is quoted there).

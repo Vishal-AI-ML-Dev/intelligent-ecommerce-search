@@ -330,6 +330,18 @@ full regression and CI are still open.
 - **AC-13 (2):** a read snapshot is `repeatable read` with `transaction_read_only = on`, and a
   write attempt as the superuser fails with SQLSTATE 25006.
 
+### M18-04C corrective: slot ownership under cancellation (2026-10-28)
+
+| Check | Kind | Result |
+|---|---|---|
+| Cancelled-caller race test, rewritten with explicit events (CI failure on `2b5e221`) | hermetic unit | 30/30 runs passed; it fails against a mutant that frees the slot on cancellation |
+| Slot ownership: cancellation before dispatch, queued-job cancellation (deterministic gate in the real anyio worker), running-worker cancellation, worker exception, normal completion | hermetic unit | 20/20 runs passed. Against HEAD's `run_in_slot`, the queued case fails (work ran without the slot, double release) |
+| Upload + access test files | hermetic unit | **218 passed** |
+
+Each case checks that work never runs without owning the slot, that the slot is released
+exactly once with no leak, and that abandoned queued work does not execute. This is a
+controlled unit reproduction; it was not observed on a server.
+
 ### M18-04C first database run (2026-10-28)
 
 | Check | Kind | Result |
