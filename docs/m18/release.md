@@ -1,7 +1,9 @@
 # M18 — Release, migration and recovery runbook
 
 Status: **rehearsed locally (M18-07) and released to staging (M18-08, 2026-10-28, owner-approved;
-evidence in §7).** M18 is not accepted.
+evidence in §7).** M18 has a qualified acceptance (owner, 2026-10-28) for synthetic data, local
+development and the current single-EC2 staging demo only. It is not a production release; see
+`handoff.md` (M18-09) for the exceptions and open limitations.
 
 ## 1. What the release changes on the single-EC2 stack
 

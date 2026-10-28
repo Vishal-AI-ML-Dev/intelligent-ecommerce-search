@@ -1,6 +1,119 @@
 # M18 — Handoff
 
-## M18-08 Staging Release & Smoke (2026-10-28; owner-approved; docs uncommitted)
+## M18-09 Acceptance & Handoff (2026-10-28; owner qualified acceptance FINAL)
+
+**Owner decision (2026-10-28):** the implemented M18 capabilities are accepted **for an
+explicitly limited scope only**:
+- project-authored synthetic data;
+- local development;
+- the current single-EC2 staging demo.
+
+This is a **qualified acceptance**. It is **not**:
+- production certification;
+- validation with real retailer data;
+- proof of business impact.
+
+It does not state that every original acceptance check passed. The exceptions and limitations
+below stay open.
+
+**CI (owner-confirmed, not independently verified):**
+- `7c87532` (M18-06): all required jobs green.
+- `e5fa151` (M18-07): run 40695893009, green.
+- `134d1cb` (M18-08 evidence): all required jobs green.
+
+### Delivered functionality
+- **Return data foundation:**
+  - migration `0007` (15 append-only tables, raw files kept apart from normalized records);
+  - contract `return-data-v1` with JSON and CSV forms giving equal records;
+  - redaction and per-record provenance;
+  - the synthetic dataset `returns_v1` (180 returns plus related records).
+- **Import:**
+  - command-line tool and API: validate, import, verify;
+  - atomic and idempotent, with limits and concurrency handling;
+  - a scoped `returns_importer` role; `search_app` cannot read raw files.
+- **Protected retailer API:** seven `/returns` routes behind bearer tokens, with paging, detail
+  and batch history. No refund, ban, fraud or sanction path.
+- **Retailer UI:** the "Retailer returns" tab, including the refresh-after-import correction.
+- **Release kit:**
+  - `m18-release.sh` (preflight, backup, migrate, roles as SCRAM verifiers, grants gate, import
+    and verify, app swap);
+  - restore with grants by revision;
+  - Caddy log query stripping;
+  - the `release.md` runbook.
+
+### Evidence by environment
+- **Local:**
+  - unit, integration and Vitest suites as recorded per package;
+  - fixture and live Playwright;
+  - the buyer live check as the real `search_app` role;
+  - the release rehearsal;
+  - the old image on `0007` with no egress;
+  - both restore paths with counts and privileges compared;
+  - the Caddy marker test with a negative control.
+- **Staging (M18-08):**
+  - read-only baseline;
+  - release to `0007`, grants, import and `verify` `match`;
+  - the AC-19 auth matrix; 180 returns = the import report;
+  - an app-container restart;
+  - public buyer health and search;
+  - internal assistant check with 0 provider calls;
+  - a passive Caddy log count;
+  - backups before and after.
+- **Not verified on staging:**
+  - database durability and restore;
+  - `alembic downgrade`;
+  - a browser run;
+  - opening a return detail page.
+
+### Owner exception granted: AC-14 historical checksum listing (2026-10-28)
+AC-14 (test matrix) requires, **at each package end**, both:
+1. the protected-path diff against `bf67d11`. This **passed (exit 0)** at every package end,
+   including M18-08.
+2. a check of the untracked M17 outputs against the SHA-256 listing taken before M18-02 and kept
+   outside the repo. This **passed** at M18-02, M18-03A, M18-03B and M18-03C (10 files OK). The
+   listing (`cf74568d…41adf7`) was deleted with its temporary directory on 2026-10-27, so this
+   check **was not run for M18-04A through M18-08**.
+
+**Status:** the historical checksum verification is **unavailable, so AC-14 is not fully
+verified** for those packages. Since then the M17 paths have been preserved by not touching
+them, but no checksum proves that.
+
+**Owner decision:**
+- An explicit exception covers **only** the unavailable historical checksum checks for M18-04A
+  through M18-08.
+- The original listing was lost, and continuity **cannot now be verified**. "Untouched" is
+  agent-reported, not checksum-proven.
+- The check is **not** recorded as passed, and no replacement historical baseline was created.
+- The exception does not weaken future preservation requirements. The protected-path diff part of
+  AC-14 passed throughout.
+
+### Other open limitations (recorded, not waived)
+1. The three older test fixtures put role passwords in plaintext SQL.
+2. The Windows outer isolation wrapper is **FAILED** (1200 s timeout), recorded separately. By
+   owner decision (2026-10-28), the agreed CI hermetic-suite evidence satisfies AC-17's
+   hermetic-unit requirement. Tests, skips and timeouts are unchanged.
+3. Admin or superuser importer rejection is untested at the API level (covered at service and
+   CLI level).
+4. The SHA of the historical catalog-failure CI run is unconfirmed.
+5. Caddy's HTTP→HTTPS redirect echoes the path and query.
+6. The ECS/RDS `setup.sh` log-guard behaviour is unverified (the script fails closed).
+7. `alembic downgrade 0006` was not rehearsed.
+8. Staging database durability and restore were not exercised (the restart check covers the app
+   container only).
+9. The deployed image `sha256:1fec521b…029c` is a local working-tree build, not a committed or CI
+   build. Its lockfile-pinned package downloads were unauthorized, then accepted.
+10. The old image's identity rests on a matching image ID, not a registry digest.
+11. The live assistant is untested; the approved criteria do not require it.
+12. No browser run against staging.
+13. No real retailer or personal data was used; redaction recall on real text is unmeasured.
+
+### Not done by this step
+- `MASTER_PLAN.md`: only an M18 status row was added (owner-authorized). Plan §7 C7 and no other
+  MASTER_PLAN change was applied.
+- `release.md`'s status line updated to the qualified acceptance.
+- M19 not started.
+
+## M18-08 Staging Release & Smoke (2026-10-28; owner-approved; docs committed 134d1cb, CI green per owner)
 
 - **Release:** commit `e5fa151cb13ef567235a0c446e6ab8b3b5785d32` (CI run 40695893009 green,
   owner-confirmed).

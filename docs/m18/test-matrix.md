@@ -273,7 +273,23 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
-## M18-08 results (actual, 2026-10-28; staging; docs uncommitted)
+## M18-09 status (2026-10-28; owner qualified acceptance, final)
+
+**Scope:** accepted for project-authored synthetic data, local development and the current
+single-EC2 staging demo only. Not production certification, not real-retailer validation, not
+proof of business impact. Details: `handoff.md` (M18-09).
+
+| AC | Evidence (kind) | Status |
+|---|---|---|
+| AC-01 – AC-13 | per-package results above (unit, integration, API); CI green per owner | met, as recorded per package |
+| AC-14 | protected-path diff vs `bf67d11`: exit 0 at every package end. M17 SHA-256 listing: exit 0 at M18-02 to M18-03C; **listing lost 2026-10-27, not run for M18-04A to M18-08** | **not fully verified: the protected-path diff passed; the historical checksum checks for M18-04A to M18-08 are unavailable (listing lost; continuity unverifiable) and covered by an explicit owner exception (2026-10-28), not passed** |
+| AC-15 | Vitest (unit) | met |
+| AC-16 | fixture browser 20 (33 in the project); live browser 2+2 (local) | met (local) |
+| AC-17 | CI hermetic, integration, frontend and e2e-fixture jobs on `7c87532`; local buyer live as the real `search_app`; assistant with generation off only | hermetic-unit requirement met by the agreed CI evidence (owner decision, 2026-10-28). The local Windows outer isolation wrapper stays FAILED, recorded separately. |
+| AC-18 | local rehearsal (old image on `0007`, no egress; 7 s migration; restore counts and privileges equal); CI run 40695893009 on `e5fa151` | met (local plus CI) |
+| AC-19 | staging smoke, `release.md` §7 | met. The restart check is not a durability or restore test. |
+
+## M18-08 results (actual, 2026-10-28; staging; committed 134d1cb, CI green per owner)
 
 Kind: staging. Evidence: `release.md` §7. Deployed image ID `sha256:1fec521b…029c`; it is not a
 committed or CI build.
