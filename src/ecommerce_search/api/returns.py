@@ -23,12 +23,14 @@ import hmac
 import logging
 import re
 import threading
-from collections.abc import Callable, Coroutine
+from collections import Counter
+from collections.abc import Callable, Coroutine, Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Annotated, Any
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict
@@ -38,6 +40,8 @@ from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from ecommerce_search.api import returns_read
+from ecommerce_search.api import returns_schemas as rs
 from ecommerce_search.api.observability import log_event
 from ecommerce_search.api.returns_upload import (
     ImportSlot,
@@ -102,6 +106,10 @@ DETAILS = {
     "upload_timeout": "The upload was not received within the time limit.",
     "import_busy": "Another import is in progress; try again later.",
     "import_storage_unavailable": "The import could not be completed; nothing was stored.",
+    "malformed_cursor": "The page cursor is not valid.",
+    "cursor_mismatch": "The page cursor belongs to different filters.",
+    "return_not_found": "No return exists with this identity.",
+    "batch_not_found": "No import batch exists with this ID.",
 }
 _HTTP_CODES = {404: "not_found", 405: "method_not_allowed"}
 
@@ -551,3 +559,134 @@ async def import_upload(
         request, lambda parts: commit_import(holder.get(), parts, imported_by_label=label)
     )
     return _report_response(report, _COMMIT_STATUS[report.status])
+
+
+# ---- read routes (M18-04C) -------------------------------------------------------------------
+
+# Path parameters of the qualified detail identity (§7); a malformed value is a 422 (§7.1 E1).
+DatasetIdPath = Annotated[contracts.DatasetId, Path()]
+DatasetVersionPath = Annotated[int, Path(ge=1, le=contracts.DATASET_VERSION_MAX)]
+ReturnIdPath = Annotated[contracts.RecordId, Path()]
+
+
+def _cursor_error(exc: rs.CursorError) -> ReturnsError:
+    log_event(logger, "returns_cursor_rejected", code=exc.code)
+    return ReturnsError(400, exc.code)
+
+
+def _refuse_repeated(request: Request, names: Iterable[str]) -> None:
+    """§7.1 I4: a known query parameter given more than once is a 422 naming it (unknown
+    parameters stay ignored). Runs after access, so an unauthenticated caller learns nothing."""
+    counts = Counter(name for name, _ in request.query_params.multi_items())
+    repeated = sorted(name for name in names if counts[name] > 1)
+    if repeated:
+        raise RequestValidationError(
+            [{"type": "repeated", "loc": ("query", name), "msg": "repeated"} for name in repeated]
+        )
+
+
+# The safe error shapes the read routes actually return (`ReturnsRoute`, §7, §7.1), so OpenAPI
+# no longer advertises FastAPI's default validation body.
+_ERROR_TEXT = {
+    400: "`malformed_cursor` or `cursor_mismatch`",
+    401: "`unauthorized` (missing, malformed or unknown token)",
+    404: "`return_not_found` / `batch_not_found`",
+    422: "`invalid_parameter` with parameter names and codes only",
+    500: "`internal_error`",
+    503: "`retailer_access_not_configured`",
+}
+
+
+def _error_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    responses: dict[int | str, dict[str, Any]] = {}
+    for status in statuses:
+        model = rs.ReturnsValidationErrorBody if status == 422 else rs.ReturnsErrorBody
+        entry: dict[str, Any] = {"model": model, "description": _ERROR_TEXT[status]}
+        if status == 401:
+            entry["headers"] = {"WWW-Authenticate": {"schema": {"type": "string"}}}
+        responses[status] = entry
+    return responses
+
+
+_LIST_ERRORS = _error_responses(400, 401, 422, 500, 503)
+_DETAIL_ERRORS = _error_responses(401, 404, 422, 500, 503)
+
+
+@router.get("", response_model=rs.ReturnPage, responses=_LIST_ERRORS)
+def list_returns(
+    request: Request,
+    caller: Annotated[Caller, Depends(_READ)],
+    filters: Annotated[rs.ReturnFilters, Query()],
+) -> rs.ReturnPage:
+    """Returns in the §7 total order, filtered; keyset pages with an opaque cursor."""
+    _refuse_repeated(request, rs.ReturnFilters.model_fields)
+    sha256 = rs.filters_sha256(filters.canonical_filters())
+    try:
+        after = None if filters.cursor is None else rs.decode_return_cursor(filters.cursor, sha256)
+    except rs.CursorError as exc:
+        raise _cursor_error(exc) from None
+    rows = returns_read.list_returns(request.app.state.engine, filters, after)
+    items, more = rows[: filters.limit], len(rows) > filters.limit
+    next_cursor = None
+    if more:
+        last = items[-1]
+        position = rs.ReturnPosition(requested_at=last.requested_at, **last.ref.model_dump())
+        next_cursor = rs.return_cursor(position, sha256)
+    return rs.ReturnPage(items=items, next_cursor=next_cursor, limit=filters.limit)
+
+
+@router.get(
+    "/records/{dataset_id}/{dataset_version}/{return_id}",
+    response_model=rs.ReturnDetail,
+    responses=_DETAIL_ERRORS,
+)
+def get_return(
+    request: Request,
+    caller: Annotated[Caller, Depends(_READ)],
+    dataset_id: DatasetIdPath,
+    dataset_version: DatasetVersionPath,
+    return_id: ReturnIdPath,
+) -> rs.ReturnDetail:
+    """One return, qualified by its dataset version, with every §7 detail section."""
+    detail = returns_read.get_return(
+        request.app.state.engine, dataset_id, dataset_version, return_id
+    )
+    if detail is None:
+        raise ReturnsError(404, "return_not_found")
+    return detail
+
+
+@router.get("/import-batches", response_model=rs.BatchPage, responses=_LIST_ERRORS)
+def list_import_batches(
+    request: Request,
+    caller: Annotated[Caller, Depends(_READ)],
+    parameters: Annotated[rs.BatchPageParameters, Query()],
+) -> rs.BatchPage:
+    """Import batches, newest first (§7, §7.1 D6c/E2); file metadata is in the detail."""
+    _refuse_repeated(request, rs.BatchPageParameters.model_fields)
+    sha256 = rs.filters_sha256(parameters.canonical_filters())
+    try:
+        after = (
+            None if parameters.cursor is None else rs.decode_batch_cursor(parameters.cursor, sha256)
+        )
+    except rs.CursorError as exc:
+        raise _cursor_error(exc) from None
+    rows = returns_read.list_batches(request.app.state.engine, parameters.limit, after)
+    items, more = rows[: parameters.limit], len(rows) > parameters.limit
+    next_cursor = None
+    if more:
+        last = items[-1]
+        position = rs.BatchPosition(imported_at=last.imported_at, batch_id=last.batch_id)
+        next_cursor = rs.batch_cursor(position, sha256)
+    return rs.BatchPage(items=items, next_cursor=next_cursor, limit=parameters.limit)
+
+
+@router.get("/import-batches/{batch_id}", response_model=rs.BatchDetail, responses=_DETAIL_ERRORS)
+def get_import_batch(
+    request: Request, caller: Annotated[Caller, Depends(_READ)], batch_id: UUID
+) -> rs.BatchDetail:
+    """One batch with its file metadata; stored file bytes are never read."""
+    detail = returns_read.get_batch(request.app.state.engine, batch_id)
+    if detail is None:
+        raise ReturnsError(404, "batch_not_found")
+    return detail

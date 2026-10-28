@@ -679,13 +679,13 @@ def test_http_exception_details_are_not_echoed(error_client, path, status):
 @pytest.mark.parametrize(
     "path",
     [
-        "/returns",
+        "/returns/records",  # M18-04C: `/returns` itself is now the list route
         "/returns/",
         f"/returns/unknown?token={VIEWER}&q=zq<script>",
         "/returns/records/zq%3Cscript%3E",
         f"/returns/capabilities/?access_token={VIEWER}",
     ],
-    ids=["root", "root-slash", "unknown-with-query", "hostile-path", "slash-redirect"],
+    ids=["records-prefix", "root-slash", "unknown-with-query", "hostile-path", "slash-redirect"],
 )
 def test_unmatched_returns_paths_are_safe_404s(client, path):
     response = client.get(path, headers=bearer(VIEWER), follow_redirects=False)
@@ -723,6 +723,10 @@ def test_routes_are_the_pre_m18_set_plus_the_built_returns_routes_only(client):
         CAPABILITIES: {"get"},
         "/returns/import/validate": {"post"},  # M18-04B
         "/returns/import": {"post"},  # M18-04B
+        "/returns": {"get"},  # M18-04C
+        "/returns/records/{dataset_id}/{dataset_version}/{return_id}": {"get"},  # M18-04C
+        "/returns/import-batches": {"get"},  # M18-04C
+        "/returns/import-batches/{batch_id}": {"get"},  # M18-04C
     }
 
 

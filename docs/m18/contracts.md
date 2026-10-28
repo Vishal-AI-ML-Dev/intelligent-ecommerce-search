@@ -3,7 +3,7 @@
 Status: **FROZEN — M18-01 design approved by the owner on 2026-10-24** (revision 2, with the
 owner qualifications recorded in `plan.md` §8). Decision IDs refer to `plan.md` §8. Changes
 after the freeze need owner approval. Owner-approved corrections since the freeze: §6.1
-(2026-10-26), §6.2 and §6.3 (2026-10-27). M18-02 (storage, contracts, grants) is implemented;
+(2026-10-26), §6.2 and §6.3 (2026-10-27), and the §7.1 clarifications (2026-10-28). M18-02 (storage, contracts, grants) is implemented;
 its implementation boundaries are recorded in §10.
 
 ## 1. Versions and conventions
@@ -563,7 +563,7 @@ M18-04). Every response carries `X-Request-ID`. A 422 `invalid_parameter` may ad
 
 **`ReturnSummary`:** `ref`, `requested_at`, `status`, `quantity`, `customer_reason_code`,
 product `{product_id, sku, title, category, brand}`, `order_id`, `order_item_id`,
-`comment_count`, `inspection_count`, `is_synthetic`.
+`comment_count`, `inspection_count`, `is_synthetic`, `provenance` (amended 2026-10-28, §7.1).
 
 **`ReturnDetail`:**
 - Return facts and the order (`order_id`, `customer_ref`, `ordered_at`, `currency`).
@@ -580,6 +580,79 @@ product `{product_id, sku, title, category, brand}`, `order_id`, `order_item_id`
 
 The API shows conflicting evidence side by side (§3.1). It never flags, scores or resolves
 conflicts, and has no customer-level aggregates.
+
+### 7.1 Read API clarifications (owner approval 2026-10-28, M18-04C)
+
+Minimal clarifications of §7. These are not changes to it. The decision IDs are those of the
+M18-04 plan (2026-10-26), not `plan.md` §8.
+
+- **D6a:** `requested_from` is inclusive and `requested_to` exclusive. Both must be RFC 3339
+  with an explicit offset (§4.6 timestamp rules); anything else is 422 `invalid_parameter`.
+- **D6b / E3 (`filters_sha256`):** the SHA-256 of the canonical JSON (sorted keys, no
+  whitespace, ASCII) of the **validated** filters, the same values the query uses.
+  - Absent filters, `limit` and `cursor` are excluded, so only the page size can change between
+    pages.
+  - Timestamps are in the canonical UTC form (`YYYY-MM-DDTHH:MM:SS.ffffffZ`), so equal instants
+    written with different offsets hash equally.
+  - `batch_id` is the lower-case hyphenated UUID; booleans are `true`/`false`.
+  - The cursor is base64url without padding of compact sorted-key JSON. Exactly one encoding per
+    position is accepted, and it is at most 512 characters.
+- **D6c / E2:** `GET /returns/import-batches` uses the same cursor pattern with no filters
+  (`limit` and `cursor` only). Its order is `imported_at` desc, then `batch_id` **asc**. A
+  return cursor is `malformed_cursor` there.
+- **D6d (listing snapshot fields):** checked against the stored catalog v1 lines (240).
+  - `title`, `brand`, `category` and `currency` are strings on every line and are returned
+    verbatim.
+  - A stored line without one of them as a string fails the request (500), never a `null`.
+  - **M1 (owner decision 2026-10-28):** the raw `price` is a JSON integer on 231 lines and
+    seller text such as `"Rs 44,999"` on 9. `listing_snapshot.price` is that raw value with
+    explicit integer-or-string typing. There is no coercion, no invented `null` and no
+    current-price substitution. Any other JSON type (null, boolean, float, array, object), or a
+    missing `price`, fails the request (500).
+- **D6e:** the exact response fields (`api/returns_schemas.py`) and the committed `/returns`
+  OpenAPI snapshot (`tests/unit/returns/returns_openapi_snapshot.json`) are reviewed at the
+  pre-commit checkpoint.
+- **D7:** each read route that accesses the database runs in one READ ONLY, REPEATABLE READ
+  transaction (rolled back). `GET /returns/capabilities` stays database-free.
+- **D8:** withdrawn, superseded by the committed M18-04A `ReturnsPathMiddleware`, which gives
+  unmatched `/returns` paths a safe 404/405 with `no-store`. Unchanged.
+- **E1:** a malformed `batch_id`, `dataset_id`, `dataset_version` or `return_id` (path or
+  query) is 422 `invalid_parameter` with `parameters` (§6.2 A2).
+- **E4:** `limit` outside 1–100, or an unknown `status`, `customer_reason_code` or `category`
+  (catalog taxonomy), is 422 `invalid_parameter`.
+- **E5:** in §7, "the eight §9 fields" means MASTER_PLAN §9 (`plan.md` C4, D13), not §9 of this
+  file.
+- **New fixed error codes:** 400 `malformed_cursor`, 400 `cursor_mismatch`, 404
+  `return_not_found`, 404 `batch_not_found` (§7). Database errors use the existing 500
+  `internal_error`.
+- **I1 (approved 2026-10-28):** `correction_cases` on a detail are the cases in the same
+  dataset version that cite this return, or one of its comments or inspection observations, as
+  evidence. `evidence_count` counts all of a case's evidence links.
+- **I3 (approved 2026-10-28):** `product` (summary and detail) is the current `products` record.
+  `listing_snapshot` is the historical catalog line, separate, with `matches_current_catalog`.
+- **I4 (owner decision 2026-10-28):** a known query parameter of `GET /returns` or
+  `GET /returns/import-batches` that is given more than once is 422 `invalid_parameter`, with
+  `parameters` naming it with code `repeated`. It is checked after access. Unknown query
+  parameters are ignored, repeated or not.
+- **Per-record provenance (AC-04, §2 "all eight on every record"):** every nested source or
+  evidence record on a detail (`order`, `order_item`, comments, inspection observations,
+  `shipment`, delivery events, related reviews and complaints, correction cases) carries its
+  own `provenance`. That block is resolved through the record's **own** dataset, batch and
+  source-file references, never copied from the return.
+  - **§7 amendment (owner approval 2026-10-28):** the original §7 `ReturnSummary` list ended
+    "…, `comment_count`, `inspection_count`, `is_synthetic`." The amended list adds
+    **`provenance`**, the same block as the detail's. It is resolved through the return's own
+    dataset, batch and source-file references, so AC-04 holds for summaries too. Every other
+    `ReturnSummary` field is unchanged.
+  - Catalog-side objects (`product`, `listing_snapshot`) are catalog records, not
+    `return-data-v1` records, and carry no return provenance.
+- **OpenAPI error documentation:** the four read routes document the safe bodies they return:
+  - `ReturnsErrorBody {detail, code}` for 400/401/404/500/503;
+  - `ReturnsValidationErrorBody {detail, code, parameters}` for 422;
+  - not FastAPI's default validation body.
+
+  The batch counts model is named `BatchEntityCounts`, so 04B's `ImportReport` keeps its
+  `EntityCounts` component. This changes documentation only, with no runtime change.
 
 ## 8. Demo dataset and scenario design (D8, D9)
 

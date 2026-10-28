@@ -1,6 +1,199 @@
 # M18 — Handoff
 
-## Current state (2026-10-28, M18-04B committed under owner authorization; CI to be confirmed)
+## M18-04C summary provenance, role-helper hardening and first DB run (2026-10-28; uncommitted)
+
+**Owner-approved §7 amendment:** `ReturnSummary` gains `provenance`
+(`contracts.md` §7 and §7.1; the original wording is quoted there).
+- Summaries and the detail now share one source: `pv_` columns from the return's own
+  `return_datasets` (`d`), `return_import_batches` (`rb`) and `return_import_files` (`rf`).
+- The `batch_id` filter now compares `rb.batch_id` (same meaning as the previous subquery).
+- The OpenAPI snapshot diff against the previous review snapshot shows one change only:
+  `ReturnSummary` gains a required `provenance`. No path changed.
+
+**Role helper (`tests/returns_roles.py`):** the verifier is treated as a secret.
+- The statement goes through the raw DBAPI cursor, so SQLAlchemy (`echo`, `sqlalchemy.engine`)
+  never sees it.
+- The session first sets `log_statement=none`, `log_min_error_statement=panic`, duration logging
+  and sampling off, `track_activities=off` and `pg_stat_statements.track_utility=off`.
+  `RESET ALL` runs afterwards. If any guard fails, no `CREATE ROLE` is sent.
+- A failure carries only the type and SQLSTATE and is not chained.
+- **Server-side check:** the dev server's `log_min_error_statement` is `error`, so without the
+  guard a failing `CREATE ROLE` would have logged its full text (verifier included) to the
+  container log.
+
+**Dependency on the three older fixtures:** none. The 04C module imports only
+`returns_support.scratch`, `returns_release` and `returns_roles`. The plaintext-password issue in
+`test_returns_import.py`, `test_returns_dataset_integration.py` and `test_returns_grants.py`
+stays **tracked and unchanged**.
+
+**Docker / isolation:**
+- Docker Desktop (existing install) was started. `docker compose up -d --no-build --pull never db`
+  used the existing image (`pgvector/pgvector:0.8.6-pg16`), container and volume
+  (`ecommerce-search_pgdata`); nothing was pulled, built, reconfigured or deleted.
+- The server behind the test settings (`127.0.0.1:5432`) was positively identified as that
+  container: the same `pg_control_system().system_identifier` from inside the container and from
+  the host.
+- The fixture creates `ecommerce_search_test_<uuid>`, asserted by the `scratch()` prefix guard,
+  and `m18t_app_*`, `m18t_imp_*` and `m18t_probe_*` roles; it drops them afterwards.
+- The dev database was not migrated, seeded or queried. Only cluster catalogs were read: the
+  database and role lists, and log settings.
+- The db container was left running.
+
+| Command | Result |
+|---|---|
+| affected unit tests (`test_returns_api_read.py`, `test_returns_roles.py`, `test_returns_api_access.py`, `test_returns_api_upload.py`, `test_filtered_api.py`, `test_reranked_api.py`) | **766 passed** |
+| first role-test run after the hardening | 1 failed, 8 passed: a **test artifact** (the fixture patched the global `secrets.token_bytes`, so the "random" password equalled the salt); fixed by patching only the helper's `secrets` |
+| `python -m pytest tests/integration/test_returns_api_read_integration.py -m "integration and not real_model"` | **29 passed** (33 s), first run |
+| databases and roles before vs after | identical; 0 `ecommerce_search_test_*`, 0 `m18t_*` left |
+| server log since start: `SCRAM-SHA-256` / `CREATE ROLE` / `PASSWORD` | 0 / 0 / 0. The duplicate-role error was logged **without** a `STATEMENT` line. The two `STATEMENT` lines are my malformed baseline `pg_settings` query and the intentional READ ONLY `CREATE TABLE` probe |
+| pytest output: `SCRAM-SHA-256` / `CREATE ROLE` / `PASSWORD` | 0 / 0 / 0 |
+| `ruff check .` / `ruff format --check .` | all checks passed / 519 files formatted |
+| hermetic `--collect-only` / integration `--collect-only` | 6087/7163 / 1058/1076, no errors |
+| duplicate test basenames; AC-14 protected-path diff | 0; exit 0 |
+
+**Still open:**
+- the three older fixtures (tracked);
+- the AC-14 M17 listing is still missing;
+- the focused 1489-test regression set was not rerun after these changes (reused evidence);
+- not run: the full suite and the isolation wrapper (**FAILED**), CI.
+
+No commit, push, deployment or acceptance.
+
+## M18-04C review corrections (2026-10-28; uncommitted, awaiting review)
+
+Owner decisions are recorded in `contracts.md` §7.1:
+- **M1:** the raw price, typed integer-or-string;
+- **I1, I3:** approved;
+- **I4:** repeated scalar parameters → 422;
+- **I2:** replaced by per-record provenance.
+
+**Fixed:**
+1. **Per-record provenance.** Every nested source or evidence record on a detail carries its
+   own `provenance`, resolved from its own `dataset_pk`, `batch_pk` and `source_file_pk`:
+   - `order` and `order_item`;
+   - comments and inspection observations;
+   - `shipment` and its delivery events;
+   - related reviews and complaints;
+   - correction cases.
+
+   The return's own block now takes `dataset_version` from its dataset row, not the path.
+   **Reported conflict, not edited:** §7 fixes the `ReturnSummary` field list and AC-05
+   requires it exactly, so a summary still carries only `is_synthetic` of the eight. This
+   needs an owner decision.
+2. **OpenAPI.** The four read routes now document `ReturnsErrorBody`
+   (400/401/404/500/503, with `WWW-Authenticate` on 401) and `ReturnsValidationErrorBody`
+   (422), instead of FastAPI's default validation body.
+   - Found and fixed in the same pass: the 04C batch counts model shared the name
+     `EntityCounts` with 04B's `ImportReport` counts, which had renamed 04B's OpenAPI
+     component. It is now `BatchEntityCounts`, and `ImportReport` is back to `EntityCounts`.
+   - A snapshot diff shows only the four 04C paths changed. The 04A/04B paths are identical,
+     and `ImportReport` differs only by that restored ref name.
+   - The snapshot still covers all seven `/returns` paths. No 04A/04B runtime code changed.
+3. **Secret-safe test roles** (`tests/returns_roles.py`, used by the 04C fixture):
+   - The SQL text carries a client-computed SCRAM-SHA-256 verifier, never the password.
+   - A failure is re-raised as `RoleSetupError` with only the exception type and SQLSTATE,
+     outside the `except` block, so nothing is chained.
+   - The fixture's `assert re.fullmatch(..., password)` was removed, because pytest's
+     assertion rewriting would have printed the password on failure.
+   - **Real defect caught by the new test:** `text()` read `:<base64>` inside the verifier as
+     a bind parameter (`StatementError`), so the helper now uses `exec_driver_sql`.
+   - **Not changed (pending approval):** the committed 03B/03C fixtures
+     `test_returns_import.py`, `test_returns_dataset_integration.py` and
+     `test_returns_grants.py` (found by search) keep `CREATE ROLE ... PASSWORD '<plaintext>'`.
+4. **Owner decisions applied:**
+   - **M1:** `listing_snapshot.price` is the raw `int | str` (strict, no coercion). Null,
+     boolean, float, array, object or a missing price is a 500.
+   - **I1:** unchanged SQL, now approved, with positive and negative integration tests.
+   - **I3:** recorded.
+   - **I4:** `_refuse_repeated`, run after access.
+
+**Tests added:**
+- **Unit:** M1 typing; nested provenance from the record's own columns (a missing column fails
+  rather than borrowing); the nested queries join their own references; the summary pin; I4
+  (repeated → 422 without values, unknown ignored, access first); OpenAPI error shapes and
+  unchanged 04A/04B responses; the role helper (RFC 7677 vector, SQL text, failure surfaces).
+- **Integration (written, NOT RUN):**
+  - a split-batch dataset version (`synthetic-returns` 20: parents first, then the rest), so
+    a comment's batch differs from its return's batch, plus every nested record compared with
+    its stored provenance;
+  - I1 for every return of version 1 (positive, and same-product negative);
+  - the M1 raw price type.
+
+| Command | Result |
+|---|---|
+| `python -m pytest tests/unit/returns/test_returns_roles.py tests/unit/returns/test_returns_api_read.py` (first run) | 2 failed, 173 passed: the OpenAPI snapshot (expected before regeneration) and the role failure test (the `text()` bind defect above) |
+| `python -m pytest tests/unit/returns/test_returns_roles.py` after the fix | 7 passed |
+| snapshot regenerated; diff against the previous snapshot | only the four 04C paths changed; schemas as described above |
+| affected unit tests: `test_returns_api_read.py`, `test_returns_roles.py`, `test_returns_api_access.py`, `test_returns_api_upload.py`, `test_filtered_api.py`, `test_reranked_api.py` | **762 passed** |
+| `ruff check .` / `ruff format --check .` | all checks passed / 519 files already formatted |
+| duplicate test basenames | 0 |
+
+The role tests use an **in-memory SQLite engine** (no server, no file) to drive SQLAlchemy's
+real statement logging and failure path. No PostgreSQL was started or accessed.
+
+Not run: the integration tests (no database), the focused 1489-test regression set,
+collect-only, the full suite, the isolation wrapper (stays **FAILED**), CI. No commit, push or
+deploy.
+
+## Current state (2026-10-28, M18-04C implemented; uncommitted, awaiting review)
+
+- **HEAD at start:** `64cea6627d48f523651c2e7a5ed32f326f114514` (04B), equal to the local
+  `origin/main` ref (not fetched). CI on `d8f2856` and `64cea66` is green **as confirmed by the
+  owner**, not independently verified.
+- **Decisions:** the owner approved D6a–D6e, D7, D8 (withdrawn) and E1–E5. They are recorded as
+  `contracts.md` §7.1. D6–D8 are the M18-04 plan's decisions (2026-10-26), not `plan.md` §8.
+- **Added (no 04A/04B behaviour changed):**
+  - `api/returns_schemas.py`: query models, response models (exact allowlists) and cursors.
+  - `api/returns_read.py`: fixed SQL in one READ ONLY REPEATABLE READ snapshot per request.
+    The plan did not list this file; the queries are kept out of the route module.
+  - Four routes in `api/returns.py`: `GET /returns`,
+    `/returns/records/{dataset_id}/{dataset_version}/{return_id}`, `/returns/import-batches`
+    and `/returns/import-batches/{batch_id}`.
+  - Four new fixed error codes (`contracts.md` §7.1).
+- **Changes to existing tests:**
+  - route pins only: the 04A inventory test and the two buyer path sets each gain the four
+    routes;
+  - one 04A case: `test_unmatched_returns_paths_are_safe_404s` used the bare `/returns` path as
+    an unmatched 404, but it is now the list route, so that case is `/returns/records` (still
+    unmatched). The other four cases are unchanged.
+- **Open for owner review:**
+  - **M1 (contract mismatch, D6d):** the raw catalog `price` is an integer on 231 lines and
+    seller text (e.g. `"Rs 44,999"`) on 9. `price` is not returned; the owner must decide:
+    raw, normalized or omitted.
+  - **I1:** the detail `correction_cases` are those citing the return or its comments or
+    observations.
+  - **I2:** nested records (comments, observations, reviews, complaints, shipment, events)
+    carry no per-record provenance; only the return detail has the provenance block.
+  - **I3:** the summary and detail `product` is the current catalog record; the snapshot is
+    separate, with `matches_current_catalog`.
+  - **I4:** unknown query parameters are ignored and repeated scalar parameters take the last
+    value (FastAPI default), so the hash and the SQL use the same parsed value.
+  - **D6e:** the exact fields in `api/returns_schemas.py` and
+    `tests/unit/returns/returns_openapi_snapshot.json`.
+- **Integration: NOT RUN.** The Docker engine was not running, and no existing disposable scratch
+  database existed (the fixtures create and drop their own). Creating one was not authorized.
+  The 24 tests are collected only. Running them needs owner approval to start the local Docker
+  `db`; the module then creates a throwaway database and two throwaway roles, as M18-03C did.
+- **Checks:**
+
+| Command | Result |
+|---|---|
+| `uv run pytest tests/unit/returns/test_returns_api_read.py` (first attempt) | blocked: Windows Application Control refused the `pytest` launcher (os error 4551); retried as `python -m pytest` |
+| `uv run python -m pytest tests/unit/returns/test_returns_api_read.py` (first run) | 5 failed, 117 passed: test bugs (log assertions without `caplog.set_level`); fixed |
+| same, rerun | **122 passed** |
+| focused regression (04B set + the new file) | **1489 passed** |
+| `ruff check .` / `ruff format --check .` | all checks passed / 517 files already formatted |
+| CI-equivalent hermetic `--collect-only` | 6030/7101, no errors |
+| integration-job `--collect-only` | 1053/1071, no errors; new module 24 collected |
+| duplicate test basenames | 0 |
+| `git diff --exit-code bf67d11 -- <AC-14 protected paths>` | exit 0 |
+
+  Not run: the integration tests, the full unit suite, the isolation wrapper (its local timeout
+  stays **FAILED**, separate from CI), CI, any database. The AC-14 M17 listing is still
+  missing; no fresh baseline was taken, since it would not prove the earlier state. No commit,
+  push or deploy.
+
+## State after M18-04B (2026-10-28, committed `64cea66`; CI later owner-confirmed green)
 
 - HEAD `d8f2856` (04A, CI green as confirmed by the owner). D1 approved:
   `python-multipart==0.0.32` added. The `uv.lock` diff is only that package and the root

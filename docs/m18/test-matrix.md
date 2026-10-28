@@ -273,6 +273,114 @@ full regression and CI are still open.
 - **AC-06 and AC-07:** the domain side is covered, as after M18-03B.
 - **AC-09, AC-11, AC-12 and AC-13:** still need M18-04.
 
+## M18-04C results (actual, 2026-10-28; uncommitted, awaiting diff, schema and OpenAPI review)
+
+| Check | Kind | Result |
+|---|---|---|
+| `tests/unit/returns/test_returns_api_read.py` (new) | hermetic unit | **122 passed** |
+| Focused regression: `tests/unit/returns` + settings, app, observability, dependencies, engine, compose, frontend serving, `test_filtered_api.py`, `test_reranked_api.py`, assistant API | hermetic unit | **1489 passed** |
+| `tests/integration/test_returns_api_read_integration.py` (new, 24 tests) | database integration | **NOT RUN**: no existing disposable scratch database was available (Docker engine not running) and creating one was not authorized; `--collect-only` only (24 collected) |
+| `ruff check .` / `ruff format --check .` | lint | all checks passed / 517 files already formatted |
+| CI-equivalent hermetic `--collect-only` | recorded command | 6030/7101 collected (1071 deselected), no errors |
+| Integration-job `--collect-only` (placeholder password, no connection) | recorded command | 1053/1071 collected (18 deselected), no errors |
+| Duplicate `test_*.py` basenames | recorded command | 0 |
+| AC-14 protected-path diff against `bf67d11` | recorded command | exit 0 |
+| AC-14 M17 SHA-256 listing | recorded command | **not checked**: the listing is still missing (see `handoff.md`); no fresh baseline was taken, since it would not prove the earlier state |
+
+**What the unit tests cover (with a faked read layer):**
+- **AC-11 (read routes):** 503 with no tokens configured, 401 for missing, unknown, wrong-scheme
+  and empty tokens on all four routes; both tokens can read; access is checked before
+  parameters.
+- **AC-10 / E1 / E4:** 13 invalid list parameters and 6 malformed path parameters give 422 with
+  the name and code only, never the value. Database errors on every route give a safe 500 that
+  logs only the type. A broken snapshot line gives a 500, never a `null`.
+- **E3:** the filter hash excludes `limit`, `cursor` and absent filters, and normalizes offsets
+  to UTC. The hashed values are the ones the SQL binds, and no value appears in the SQL text.
+- **Cursors:** round trip with one encoding per position; 21 malformed shapes are refused
+  (padding, key order, extra key, `v`, bool or string versions, non-canonical timestamps, bad
+  IDs, upper-case hash, non-ASCII, non-object); filter mismatch; batch cursors refuse return
+  cursors and non-canonical UUIDs.
+- **Through the routes:**
+  - a next cursor comes from the last item, and the last page has none;
+  - a page-size change keeps the cursor valid;
+  - reuse with other filters gives 400 `cursor_mismatch`, logged by code only and never
+    echoed.
+- **AC-13 (2) / D7:**
+  - each read function, against a recording engine, runs REPEATABLE READ, then
+    `SET TRANSACTION READ ONLY`, then SELECTs only, then rolls back;
+  - capabilities opens no snapshot;
+  - the read module never names `return_import_file_contents` or `raw_bytes`.
+- **AC-05:** exact field allowlists for the 22 response models, no decision, score or flag
+  field names, and the `/returns` OpenAPI snapshot.
+- **AC-13 (1):** the route inventory is the pre-M18 set plus exactly the 7 §7 routes (the
+  access-test pin and both buyer path-set pins).
+
+**What the integration tests would cover (not run):**
+- **AC-12:**
+  - ties across dataset IDs, across versions 1/2/10 and inside one version;
+  - paging at sizes 1–5 and with mixed sizes, compared with an order computed independently in
+    Python;
+  - each filter against independent SQL, plus `requested_from` inclusive and `requested_to`
+    exclusive;
+  - cursor mismatch, malformed cursors and offset-equivalent timestamps.
+- **Detail:** the same `return_id` in two versions gives two details. Content, snapshot and
+  provenance are compared with stored rows, and every return of one version serves a detail as
+  the real API role.
+- **Batches and 404s:** batch order and file metadata only; the 404s.
+- **AC-13 (2):** a read snapshot is `repeatable read` with `transaction_read_only = on`, and a
+  write attempt as the superuser fails with SQLSTATE 25006.
+
+### M18-04C first database run (2026-10-28)
+
+| Check | Kind | Result |
+|---|---|---|
+| `tests/integration/test_returns_api_read_integration.py` | database integration (scratch DB, real `m18t_*` roles) | **29 passed** |
+| Affected unit tests (incl. summary provenance and the hardened role helper) | hermetic unit | **766 passed** |
+| Cleanup: database and role lists before = after | recorded command | identical |
+| Server log and pytest output scanned for `SCRAM-SHA-256`, `CREATE ROLE`, `PASSWORD` | recorded command | 0 in each |
+
+- **AC-12:** ties (across dataset IDs, versions 1/2/10/20, and inside one version), paging at
+  sizes 1–5 and mixed sizes, every filter, the `requested_from`/`requested_to` bounds, cursor
+  errors, qualified detail identity, 404s and batch order all pass against independent SQL.
+- **AC-04:** summary and detail provenance, and every nested record's provenance, equal the
+  stored references. In the split-batch version, comments carry the second batch and their
+  return the first.
+- **AC-13 (2):** a read snapshot is `repeatable read` with `read_only = on`, and a write fails
+  with 25006.
+- **I1 / M1:** I1 holds for every return of version 1 (with same-product negatives); raw prices
+  keep their JSON type.
+- **Roles:** stored as SCRAM, the fixture roles authenticate, a wrong password gives 28P01, and a
+  real duplicate `CREATE ROLE` gives a sanitized `RoleSetupError` (42710) with no secret on any
+  surface.
+
+### M18-04C review corrections (2026-10-28)
+
+| Check | Kind | Result |
+|---|---|---|
+| Affected unit tests (`test_returns_api_read.py`, new `test_returns_roles.py`, `test_returns_api_access.py`, `test_returns_api_upload.py`, `test_filtered_api.py`, `test_reranked_api.py`) | hermetic unit | **762 passed** (first run: 2 failed, see `handoff.md`) |
+| `ruff check .` / `ruff format --check .` | lint | all checks passed / 519 files formatted |
+| Integration additions: per-record provenance (split batches), I1 positive and negative, M1 raw price | database integration | **NOT RUN** (no database) |
+
+- **AC-04:**
+  - unit: nested records require their own `provenance`, built only from their own columns,
+    and the queries join their own references;
+  - integration (not run): a comment's batch differs from its return's batch, and every nested
+    record equals its stored provenance.
+  - The summary is pinned to the frozen §7 list (reported conflict).
+- **AC-05:** the allowlists now include each nested record's `provenance`,
+  `ListingSnapshot.price`, `BatchEntityCounts` and the error bodies.
+- **AC-10 / I4:** repeated known parameters give 422 `repeated` without values; unknown
+  parameters are ignored; access is checked first.
+- **OpenAPI:** the read routes document only the safe error bodies, and the 04A/04B responses
+  and the `ImportReport` component are unchanged.
+- **Fixture secret safety:** RFC 7677 vector; the password is never in the SQL text; on failure
+  it is absent from the message, `repr`, traceback, SQLAlchemy logs, stdout and stderr, and
+  nothing is chained.
+
+**AC status after M18-04C (implementation).** Partial; no AC is closed. AC-12, AC-04 (API
+provenance) and AC-13 (2) for reads need the integration run. The hermetic parts of AC-05,
+AC-10, AC-11 and AC-13 (1) are covered.
+
 ## M18-04B results (actual, 2026-10-27; uncommitted, awaiting diff review)
 
 All evidence is **hermetic unit**. The service is a recording fake, except where the real

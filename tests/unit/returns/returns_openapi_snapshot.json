@@ -1,0 +1,2465 @@
+{
+  "paths": {
+    "/returns": {
+      "get": {
+        "description": "Returns in the §7 total order, filtered; keyset pages with an opaque cursor.",
+        "operationId": "list_returns_returns_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dataset_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dataset_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 999999999,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dataset Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReturnStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "customer_reason_code",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReasonCode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Customer Reason Code"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Category"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "product_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requested_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Requested From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requested_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Requested To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_comment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Comment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_inspection",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Inspection"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Batch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`malformed_cursor` or `cursor_mismatch`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`unauthorized` (missing, malformed or unknown token)",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsValidationErrorBody"
+                }
+              }
+            },
+            "description": "`invalid_parameter` with parameter names and codes only"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`retailer_access_not_configured`"
+          }
+        },
+        "summary": "List Returns",
+        "tags": [
+          "returns"
+        ]
+      }
+    },
+    "/returns/capabilities": {
+      "get": {
+        "description": "What this caller may do, and the import limits. No database access.",
+        "operationId": "capabilities_returns_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "returns"
+        ]
+      }
+    },
+    "/returns/import": {
+      "post": {
+        "description": "Commit one upload atomically as the importer role (contracts §4.3, §7). The commit gate\nis checked before any body byte is read.",
+        "operationId": "import_upload_returns_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "additionalProperties": {
+                  "format": "binary",
+                  "type": "string"
+                },
+                "description": "Parts named `bundle.json`, or `manifest.json` plus one `<entity>.csv` per entity (contracts §4.1). File names are ignored.",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Import Upload",
+        "tags": [
+          "returns"
+        ]
+      }
+    },
+    "/returns/import-batches": {
+      "get": {
+        "description": "Import batches, newest first (§7, §7.1 D6c/E2); file metadata is in the detail.",
+        "operationId": "list_import_batches_returns_import_batches_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`malformed_cursor` or `cursor_mismatch`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`unauthorized` (missing, malformed or unknown token)",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsValidationErrorBody"
+                }
+              }
+            },
+            "description": "`invalid_parameter` with parameter names and codes only"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`retailer_access_not_configured`"
+          }
+        },
+        "summary": "List Import Batches",
+        "tags": [
+          "returns"
+        ]
+      }
+    },
+    "/returns/import-batches/{batch_id}": {
+      "get": {
+        "description": "One batch with its file metadata; stored file bytes are never read.",
+        "operationId": "get_import_batch_returns_import_batches__batch_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`unauthorized` (missing, malformed or unknown token)",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`return_not_found` / `batch_not_found`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsValidationErrorBody"
+                }
+              }
+            },
+            "description": "`invalid_parameter` with parameter names and codes only"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`retailer_access_not_configured`"
+          }
+        },
+        "summary": "Get Import Batch",
+        "tags": [
+          "returns"
+        ]
+      }
+    },
+    "/returns/import/validate": {
+      "post": {
+        "description": "Validate one upload (contracts §7): 200 with the report; nothing is stored.",
+        "operationId": "validate_upload_returns_import_validate_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "additionalProperties": {
+                  "format": "binary",
+                  "type": "string"
+                },
+                "description": "Parts named `bundle.json`, or `manifest.json` plus one `<entity>.csv` per entity (contracts §4.1). File names are ignored.",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Validate Upload",
+        "tags": [
+          "returns"
+        ]
+      }
+    },
+    "/returns/records/{dataset_id}/{dataset_version}/{return_id}": {
+      "get": {
+        "description": "One return, qualified by its dataset version, with every §7 detail section.",
+        "operationId": "get_return_returns_records__dataset_id___dataset_version___return_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dataset_id",
+            "required": true,
+            "schema": {
+              "title": "Dataset Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dataset_version",
+            "required": true,
+            "schema": {
+              "maximum": 999999999,
+              "minimum": 1,
+              "title": "Dataset Version",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "return_id",
+            "required": true,
+            "schema": {
+              "title": "Return Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`unauthorized` (missing, malformed or unknown token)",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`return_not_found` / `batch_not_found`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsValidationErrorBody"
+                }
+              }
+            },
+            "description": "`invalid_parameter` with parameter names and codes only"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnsErrorBody"
+                }
+              }
+            },
+            "description": "`retailer_access_not_configured`"
+          }
+        },
+        "summary": "Get Return",
+        "tags": [
+          "returns"
+        ]
+      }
+    }
+  },
+  "schemas": {
+    "BatchDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "batch_id": {
+          "format": "uuid",
+          "title": "Batch Id",
+          "type": "string"
+        },
+        "bundle_sha256": {
+          "title": "Bundle Sha256",
+          "type": "string"
+        },
+        "contract_version": {
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "counts": {
+          "additionalProperties": {
+            "$ref": "#/components/schemas/BatchEntityCounts"
+          },
+          "propertyNames": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "title": "Counts",
+          "type": "object"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "dataset_version": {
+          "title": "Dataset Version",
+          "type": "integer"
+        },
+        "file_count": {
+          "title": "File Count",
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/components/schemas/BatchFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "format": {
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "imported_at": {
+          "title": "Imported At",
+          "type": "string"
+        },
+        "imported_by_label": {
+          "title": "Imported By Label",
+          "type": "string"
+        },
+        "redaction_version": {
+          "title": "Redaction Version",
+          "type": "string"
+        },
+        "total_bytes": {
+          "title": "Total Bytes",
+          "type": "integer"
+        },
+        "transformation_version": {
+          "title": "Transformation Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "batch_id",
+        "dataset_id",
+        "dataset_version",
+        "contract_version",
+        "transformation_version",
+        "redaction_version",
+        "bundle_sha256",
+        "format",
+        "file_count",
+        "total_bytes",
+        "counts",
+        "imported_by_label",
+        "imported_at",
+        "files"
+      ],
+      "title": "BatchDetail",
+      "type": "object"
+    },
+    "BatchEntityCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "new": {
+          "title": "New",
+          "type": "integer"
+        },
+        "received": {
+          "title": "Received",
+          "type": "integer"
+        },
+        "unchanged": {
+          "title": "Unchanged",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "received",
+        "new",
+        "unchanged"
+      ],
+      "title": "BatchEntityCounts",
+      "type": "object"
+    },
+    "BatchFile": {
+      "additionalProperties": false,
+      "description": "File metadata only; the stored bytes are never selected (§2).",
+      "properties": {
+        "entity": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/Entity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "raw_sha256": {
+          "title": "Raw Sha256",
+          "type": "string"
+        },
+        "row_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Row Count"
+        },
+        "size_bytes": {
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "entity",
+        "media_type",
+        "size_bytes",
+        "raw_sha256",
+        "row_count"
+      ],
+      "title": "BatchFile",
+      "type": "object"
+    },
+    "BatchPage": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/components/schemas/BatchSummary"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "limit": {
+          "title": "Limit",
+          "type": "integer"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        }
+      },
+      "required": [
+        "items",
+        "next_cursor",
+        "limit"
+      ],
+      "title": "BatchPage",
+      "type": "object"
+    },
+    "BatchSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "batch_id": {
+          "format": "uuid",
+          "title": "Batch Id",
+          "type": "string"
+        },
+        "bundle_sha256": {
+          "title": "Bundle Sha256",
+          "type": "string"
+        },
+        "contract_version": {
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "counts": {
+          "additionalProperties": {
+            "$ref": "#/components/schemas/BatchEntityCounts"
+          },
+          "propertyNames": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "title": "Counts",
+          "type": "object"
+        },
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "dataset_version": {
+          "title": "Dataset Version",
+          "type": "integer"
+        },
+        "file_count": {
+          "title": "File Count",
+          "type": "integer"
+        },
+        "format": {
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "imported_at": {
+          "title": "Imported At",
+          "type": "string"
+        },
+        "imported_by_label": {
+          "title": "Imported By Label",
+          "type": "string"
+        },
+        "redaction_version": {
+          "title": "Redaction Version",
+          "type": "string"
+        },
+        "total_bytes": {
+          "title": "Total Bytes",
+          "type": "integer"
+        },
+        "transformation_version": {
+          "title": "Transformation Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "batch_id",
+        "dataset_id",
+        "dataset_version",
+        "contract_version",
+        "transformation_version",
+        "redaction_version",
+        "bundle_sha256",
+        "format",
+        "file_count",
+        "total_bytes",
+        "counts",
+        "imported_by_label",
+        "imported_at"
+      ],
+      "title": "BatchSummary",
+      "type": "object"
+    },
+    "Category": {
+      "enum": [
+        "laptop",
+        "phone",
+        "shoes",
+        "headphones"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "ComplaintChannel": {
+      "enum": [
+        "email",
+        "chat",
+        "phone",
+        "other"
+      ],
+      "title": "ComplaintChannel",
+      "type": "string"
+    },
+    "ComplaintTopic": {
+      "enum": [
+        "delivery",
+        "damaged",
+        "wrong_item",
+        "product_issue",
+        "return_process",
+        "other"
+      ],
+      "title": "ComplaintTopic",
+      "type": "string"
+    },
+    "CorrectionCaseRef": {
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "title": "Case Id",
+          "type": "string"
+        },
+        "evidence_count": {
+          "title": "Evidence Count",
+          "type": "integer"
+        },
+        "focus_area": {
+          "$ref": "#/components/schemas/CorrectionFocusArea"
+        },
+        "opened_at": {
+          "title": "Opened At",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "status": {
+          "$ref": "#/components/schemas/CorrectionCaseStatus"
+        }
+      },
+      "required": [
+        "case_id",
+        "focus_area",
+        "status",
+        "opened_at",
+        "evidence_count",
+        "provenance"
+      ],
+      "title": "CorrectionCaseRef",
+      "type": "object"
+    },
+    "CorrectionCaseStatus": {
+      "enum": [
+        "opened"
+      ],
+      "title": "CorrectionCaseStatus",
+      "type": "string"
+    },
+    "CorrectionFocusArea": {
+      "description": "The area a person asked to investigate. Not a finding.",
+      "enum": [
+        "listing_text",
+        "size_information",
+        "specification",
+        "imagery",
+        "packaging",
+        "product_quality",
+        "fulfilment",
+        "logistics",
+        "other"
+      ],
+      "title": "CorrectionFocusArea",
+      "type": "string"
+    },
+    "Currency": {
+      "enum": [
+        "INR"
+      ],
+      "title": "Currency",
+      "type": "string"
+    },
+    "CustomerStatements": {
+      "additionalProperties": false,
+      "properties": {
+        "comments": {
+          "items": {
+            "$ref": "#/components/schemas/ReturnComment"
+          },
+          "title": "Comments",
+          "type": "array"
+        },
+        "customer_reason_code": {
+          "$ref": "#/components/schemas/ReasonCode"
+        }
+      },
+      "required": [
+        "customer_reason_code",
+        "comments"
+      ],
+      "title": "CustomerStatements",
+      "type": "object"
+    },
+    "DeliveryEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "$ref": "#/components/schemas/DeliveryEventType"
+        },
+        "occurred_at": {
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "source": {
+          "$ref": "#/components/schemas/DeliveryEventSource"
+        }
+      },
+      "required": [
+        "event_id",
+        "occurred_at",
+        "event_type",
+        "source",
+        "provenance"
+      ],
+      "title": "DeliveryEvent",
+      "type": "object"
+    },
+    "DeliveryEventSource": {
+      "enum": [
+        "carrier",
+        "warehouse"
+      ],
+      "title": "DeliveryEventSource",
+      "type": "string"
+    },
+    "DeliveryEventType": {
+      "enum": [
+        "dispatched",
+        "in_transit",
+        "out_for_delivery",
+        "delivered",
+        "delivery_attempt_failed",
+        "delay_notified",
+        "damage_reported_by_carrier",
+        "returned_to_origin"
+      ],
+      "title": "DeliveryEventType",
+      "type": "string"
+    },
+    "Entity": {
+      "description": "The eleven entities; each value is also its table name and CSV base name.",
+      "enum": [
+        "orders",
+        "order_items",
+        "shipments",
+        "delivery_events",
+        "returns",
+        "return_comments",
+        "inspection_observations",
+        "customer_reviews",
+        "support_complaints",
+        "correction_cases",
+        "correction_case_evidence"
+      ],
+      "title": "Entity",
+      "type": "string"
+    },
+    "EntityCounts": {
+      "additionalProperties": false,
+      "description": "`new` and `unchanged` are null when the natural-key comparison did not run.",
+      "properties": {
+        "new": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "New"
+        },
+        "received": {
+          "title": "Received",
+          "type": "integer"
+        },
+        "unchanged": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unchanged"
+        }
+      },
+      "required": [
+        "received"
+      ],
+      "title": "EntityCounts",
+      "type": "object"
+    },
+    "EvidencePresence": {
+      "additionalProperties": false,
+      "description": "Counts per kind; zero means \"not recorded\", never \"none happened\".",
+      "properties": {
+        "correction_cases": {
+          "title": "Correction Cases",
+          "type": "integer"
+        },
+        "delivery_events": {
+          "title": "Delivery Events",
+          "type": "integer"
+        },
+        "inspection_observations": {
+          "title": "Inspection Observations",
+          "type": "integer"
+        },
+        "related_complaints": {
+          "title": "Related Complaints",
+          "type": "integer"
+        },
+        "related_reviews": {
+          "title": "Related Reviews",
+          "type": "integer"
+        },
+        "return_comments": {
+          "title": "Return Comments",
+          "type": "integer"
+        },
+        "shipment": {
+          "title": "Shipment",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "return_comments",
+        "inspection_observations",
+        "shipment",
+        "delivery_events",
+        "related_reviews",
+        "related_complaints",
+        "correction_cases"
+      ],
+      "title": "EvidencePresence",
+      "type": "object"
+    },
+    "ImportReport": {
+      "additionalProperties": false,
+      "description": "The §4.8 report, the same for every interface (CLI, API).",
+      "properties": {
+        "batch_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Batch Id"
+        },
+        "bundle_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bundle Sha256"
+        },
+        "checked_at": {
+          "title": "Checked At",
+          "type": "string"
+        },
+        "contract_version": {
+          "default": "return-data-v1",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "counts": {
+          "additionalProperties": {
+            "$ref": "#/components/schemas/EntityCounts"
+          },
+          "title": "Counts",
+          "type": "object"
+        },
+        "error_count": {
+          "title": "Error Count",
+          "type": "integer"
+        },
+        "error_count_is_lower_bound": {
+          "title": "Error Count Is Lower Bound",
+          "type": "boolean"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/components/schemas/RowError"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "errors_truncated": {
+          "title": "Errors Truncated",
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "validate",
+            "commit"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "phases_completed": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Phases Completed",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "valid",
+            "invalid",
+            "imported",
+            "already_imported",
+            "no_new_records"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "status",
+        "bundle_sha256",
+        "checked_at",
+        "counts",
+        "phases_completed",
+        "error_count",
+        "error_count_is_lower_bound",
+        "errors_truncated",
+        "errors"
+      ],
+      "title": "ImportReport",
+      "type": "object"
+    },
+    "InspectionCondition": {
+      "description": "What an inspector saw. Not a decision on refund, fault or conduct.",
+      "enum": [
+        "as_new",
+        "used_good",
+        "damaged",
+        "functional_fault_confirmed",
+        "no_fault_found",
+        "item_differs_from_order",
+        "parts_missing",
+        "not_assessable"
+      ],
+      "title": "InspectionCondition",
+      "type": "string"
+    },
+    "InspectionObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "$ref": "#/components/schemas/InspectionCondition"
+        },
+        "inspector_ref": {
+          "title": "Inspector Ref",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Note"
+        },
+        "observation_id": {
+          "title": "Observation Id",
+          "type": "string"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        }
+      },
+      "required": [
+        "observation_id",
+        "observed_at",
+        "inspector_ref",
+        "condition",
+        "note",
+        "provenance"
+      ],
+      "title": "InspectionObservation",
+      "type": "object"
+    },
+    "ListingSnapshot": {
+      "additionalProperties": false,
+      "description": "The immutable catalog line referenced by the order item (D4). The fields are the values\non that raw line, verbatim and uncoerced; `price` keeps its raw JSON type, an integer or the\nseller's text (M1, §7.1). `matches_current_catalog` says whether the product's current\ncatalog record is that same line.",
+      "properties": {
+        "brand": {
+          "title": "Brand",
+          "type": "string"
+        },
+        "catalog_dataset_id": {
+          "title": "Catalog Dataset Id",
+          "type": "string"
+        },
+        "catalog_dataset_version": {
+          "title": "Catalog Dataset Version",
+          "type": "string"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "matches_current_catalog": {
+          "title": "Matches Current Catalog",
+          "type": "boolean"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Price"
+        },
+        "raw_sha256": {
+          "title": "Raw Sha256",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "catalog_dataset_id",
+        "catalog_dataset_version",
+        "raw_sha256",
+        "matches_current_catalog",
+        "title",
+        "brand",
+        "category",
+        "currency",
+        "price"
+      ],
+      "title": "ListingSnapshot",
+      "type": "object"
+    },
+    "OrderFacts": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "$ref": "#/components/schemas/Currency"
+        },
+        "customer_ref": {
+          "title": "Customer Ref",
+          "type": "string"
+        },
+        "order_id": {
+          "title": "Order Id",
+          "type": "string"
+        },
+        "ordered_at": {
+          "title": "Ordered At",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        }
+      },
+      "required": [
+        "order_id",
+        "customer_ref",
+        "ordered_at",
+        "currency",
+        "provenance"
+      ],
+      "title": "OrderFacts",
+      "type": "object"
+    },
+    "OrderItemFacts": {
+      "additionalProperties": false,
+      "properties": {
+        "order_item_id": {
+          "title": "Order Item Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "unit_price": {
+          "title": "Unit Price",
+          "type": "string"
+        }
+      },
+      "required": [
+        "order_item_id",
+        "quantity",
+        "unit_price",
+        "provenance"
+      ],
+      "title": "OrderItemFacts",
+      "type": "object"
+    },
+    "ParameterError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "code"
+      ],
+      "title": "ParameterError",
+      "type": "object"
+    },
+    "ProductRef": {
+      "additionalProperties": false,
+      "description": "The product as it is in the current catalog (`products`); `sku` = `product_id` (D3).",
+      "properties": {
+        "brand": {
+          "title": "Brand",
+          "type": "string"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "product_id": {
+          "title": "Product Id",
+          "type": "string"
+        },
+        "sku": {
+          "title": "Sku",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "product_id",
+        "sku",
+        "title",
+        "category",
+        "brand"
+      ],
+      "title": "ProductRef",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "MASTER_PLAN §9's eight fields (plan C4/D13, Option A) plus the import location, resolved\nfrom the record's own dataset, batch and source-file references (never copied from a\nparent record).",
+      "properties": {
+        "batch_id": {
+          "format": "uuid",
+          "title": "Batch Id",
+          "type": "string"
+        },
+        "dataset_version": {
+          "title": "Dataset Version",
+          "type": "integer"
+        },
+        "ingestion_timestamp": {
+          "title": "Ingestion Timestamp",
+          "type": "string"
+        },
+        "is_synthetic": {
+          "title": "Is Synthetic",
+          "type": "boolean"
+        },
+        "license": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "License"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "source_name": {
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_record_id": {
+          "title": "Source Record Id",
+          "type": "string"
+        },
+        "source_row": {
+          "title": "Source Row",
+          "type": "integer"
+        },
+        "source_type": {
+          "title": "Source Type",
+          "type": "string"
+        },
+        "transformation_version": {
+          "title": "Transformation Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_type",
+        "source_name",
+        "license",
+        "source_record_id",
+        "dataset_version",
+        "ingestion_timestamp",
+        "transformation_version",
+        "is_synthetic",
+        "batch_id",
+        "source_file",
+        "source_row"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "ReasonCode": {
+      "description": "`return-reason-codes-1`: the customer's own choice, a statement, not a classification.",
+      "enum": [
+        "SIZE_TOO_SMALL",
+        "SIZE_TOO_LARGE",
+        "NOT_AS_DESCRIBED",
+        "LOOKS_DIFFERENT_FROM_IMAGE",
+        "SPECIFICATION_DIFFERENT",
+        "DEFECTIVE_OR_NOT_WORKING",
+        "ARRIVED_DAMAGED",
+        "WRONG_ITEM_RECEIVED",
+        "ARRIVED_LATE",
+        "NO_LONGER_NEEDED",
+        "OTHER",
+        "NOT_PROVIDED"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "RelatedComplaint": {
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "$ref": "#/components/schemas/ComplaintChannel"
+        },
+        "complaint_id": {
+          "title": "Complaint Id",
+          "type": "string"
+        },
+        "customer_topic": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/ComplaintTopic"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "opened_at": {
+          "title": "Opened At",
+          "type": "string"
+        },
+        "order_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Order Id"
+        },
+        "order_item_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Order Item Id"
+        },
+        "product_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Product Id"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "complaint_id",
+        "order_id",
+        "order_item_id",
+        "product_id",
+        "opened_at",
+        "channel",
+        "customer_topic",
+        "text",
+        "provenance"
+      ],
+      "title": "RelatedComplaint",
+      "type": "object"
+    },
+    "RelatedReview": {
+      "additionalProperties": false,
+      "properties": {
+        "order_item_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Order Item Id"
+        },
+        "product_id": {
+          "title": "Product Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "rating": {
+          "title": "Rating",
+          "type": "integer"
+        },
+        "review_id": {
+          "title": "Review Id",
+          "type": "string"
+        },
+        "submitted_at": {
+          "title": "Submitted At",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Text"
+        }
+      },
+      "required": [
+        "review_id",
+        "product_id",
+        "order_item_id",
+        "rating",
+        "submitted_at",
+        "text",
+        "provenance"
+      ],
+      "title": "RelatedReview",
+      "type": "object"
+    },
+    "ReturnComment": {
+      "additionalProperties": false,
+      "properties": {
+        "comment_id": {
+          "title": "Comment Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "submitted_at": {
+          "title": "Submitted At",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "comment_id",
+        "submitted_at",
+        "text",
+        "provenance"
+      ],
+      "title": "ReturnComment",
+      "type": "object"
+    },
+    "ReturnDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "correction_cases": {
+          "items": {
+            "$ref": "#/components/schemas/CorrectionCaseRef"
+          },
+          "title": "Correction Cases",
+          "type": "array"
+        },
+        "customer_statements": {
+          "$ref": "#/components/schemas/CustomerStatements"
+        },
+        "evidence_presence": {
+          "$ref": "#/components/schemas/EvidencePresence"
+        },
+        "inspection_observations": {
+          "items": {
+            "$ref": "#/components/schemas/InspectionObservation"
+          },
+          "title": "Inspection Observations",
+          "type": "array"
+        },
+        "listing_snapshot": {
+          "$ref": "#/components/schemas/ListingSnapshot"
+        },
+        "order": {
+          "$ref": "#/components/schemas/OrderFacts"
+        },
+        "order_item": {
+          "$ref": "#/components/schemas/OrderItemFacts"
+        },
+        "product": {
+          "$ref": "#/components/schemas/ProductRef"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "received_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Received At"
+        },
+        "ref": {
+          "$ref": "#/components/schemas/ReturnRef"
+        },
+        "related_complaints": {
+          "items": {
+            "$ref": "#/components/schemas/RelatedComplaint"
+          },
+          "title": "Related Complaints",
+          "type": "array"
+        },
+        "related_reviews": {
+          "items": {
+            "$ref": "#/components/schemas/RelatedReview"
+          },
+          "title": "Related Reviews",
+          "type": "array"
+        },
+        "requested_at": {
+          "title": "Requested At",
+          "type": "string"
+        },
+        "shipment": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/Shipment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/components/schemas/ReturnStatus"
+        }
+      },
+      "required": [
+        "ref",
+        "requested_at",
+        "status",
+        "quantity",
+        "received_at",
+        "order",
+        "order_item",
+        "product",
+        "listing_snapshot",
+        "customer_statements",
+        "inspection_observations",
+        "shipment",
+        "related_reviews",
+        "related_complaints",
+        "correction_cases",
+        "evidence_presence",
+        "provenance"
+      ],
+      "title": "ReturnDetail",
+      "type": "object"
+    },
+    "ReturnPage": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/components/schemas/ReturnSummary"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "limit": {
+          "title": "Limit",
+          "type": "integer"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Next Cursor"
+        }
+      },
+      "required": [
+        "items",
+        "next_cursor",
+        "limit"
+      ],
+      "title": "ReturnPage",
+      "type": "object"
+    },
+    "ReturnRef": {
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": {
+          "title": "Dataset Id",
+          "type": "string"
+        },
+        "dataset_version": {
+          "title": "Dataset Version",
+          "type": "integer"
+        },
+        "return_id": {
+          "title": "Return Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dataset_id",
+        "dataset_version",
+        "return_id"
+      ],
+      "title": "ReturnRef",
+      "type": "object"
+    },
+    "ReturnStatus": {
+      "enum": [
+        "requested",
+        "in_transit_to_warehouse",
+        "received",
+        "closed",
+        "cancelled"
+      ],
+      "title": "ReturnStatus",
+      "type": "string"
+    },
+    "ReturnSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "comment_count": {
+          "title": "Comment Count",
+          "type": "integer"
+        },
+        "customer_reason_code": {
+          "$ref": "#/components/schemas/ReasonCode"
+        },
+        "inspection_count": {
+          "title": "Inspection Count",
+          "type": "integer"
+        },
+        "is_synthetic": {
+          "title": "Is Synthetic",
+          "type": "boolean"
+        },
+        "order_id": {
+          "title": "Order Id",
+          "type": "string"
+        },
+        "order_item_id": {
+          "title": "Order Item Id",
+          "type": "string"
+        },
+        "product": {
+          "$ref": "#/components/schemas/ProductRef"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "ref": {
+          "$ref": "#/components/schemas/ReturnRef"
+        },
+        "requested_at": {
+          "title": "Requested At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/ReturnStatus"
+        }
+      },
+      "required": [
+        "ref",
+        "requested_at",
+        "status",
+        "quantity",
+        "customer_reason_code",
+        "product",
+        "order_id",
+        "order_item_id",
+        "comment_count",
+        "inspection_count",
+        "is_synthetic",
+        "provenance"
+      ],
+      "title": "ReturnSummary",
+      "type": "object"
+    },
+    "ReturnsCapabilities": {
+      "additionalProperties": false,
+      "description": "`GET /returns/capabilities` (contracts §7). Holds no credential or configuration detail\nbeyond whether this caller may commit.",
+      "properties": {
+        "can_commit": {
+          "title": "Can Commit",
+          "type": "boolean"
+        },
+        "can_validate": {
+          "title": "Can Validate",
+          "type": "boolean"
+        },
+        "contract_version": {
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/components/schemas/ReturnsLimits"
+        },
+        "reason_codes": {
+          "items": {
+            "$ref": "#/components/schemas/ReasonCode"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "scopes": {
+          "items": {
+            "$ref": "#/components/schemas/ReturnsScope"
+          },
+          "title": "Scopes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "contract_version",
+        "scopes",
+        "can_validate",
+        "can_commit",
+        "limits",
+        "reason_codes"
+      ],
+      "title": "ReturnsCapabilities",
+      "type": "object"
+    },
+    "ReturnsErrorBody": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "detail",
+        "code"
+      ],
+      "title": "ReturnsErrorBody",
+      "type": "object"
+    },
+    "ReturnsLimits": {
+      "additionalProperties": false,
+      "description": "contracts §4.4.",
+      "properties": {
+        "bundle_bytes": {
+          "title": "Bundle Bytes",
+          "type": "integer"
+        },
+        "bundle_rows": {
+          "title": "Bundle Rows",
+          "type": "integer"
+        },
+        "concurrent_imports": {
+          "title": "Concurrent Imports",
+          "type": "integer"
+        },
+        "csv_columns": {
+          "title": "Csv Columns",
+          "type": "integer"
+        },
+        "csv_field_bytes": {
+          "title": "Csv Field Bytes",
+          "type": "integer"
+        },
+        "dataset_long_text_code_points": {
+          "title": "Dataset Long Text Code Points",
+          "type": "integer"
+        },
+        "dataset_short_text_code_points": {
+          "title": "Dataset Short Text Code Points",
+          "type": "integer"
+        },
+        "entity_rows": {
+          "title": "Entity Rows",
+          "type": "integer"
+        },
+        "errors_collected": {
+          "title": "Errors Collected",
+          "type": "integer"
+        },
+        "errors_returned": {
+          "title": "Errors Returned",
+          "type": "integer"
+        },
+        "file_bytes": {
+          "title": "File Bytes",
+          "type": "integer"
+        },
+        "files": {
+          "title": "Files",
+          "type": "integer"
+        },
+        "manifest_bytes": {
+          "title": "Manifest Bytes",
+          "type": "integer"
+        },
+        "note_code_points": {
+          "title": "Note Code Points",
+          "type": "integer"
+        },
+        "request_body_bytes": {
+          "title": "Request Body Bytes",
+          "type": "integer"
+        },
+        "text_code_points": {
+          "title": "Text Code Points",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "request_body_bytes",
+        "bundle_bytes",
+        "file_bytes",
+        "manifest_bytes",
+        "files",
+        "bundle_rows",
+        "entity_rows",
+        "csv_columns",
+        "csv_field_bytes",
+        "text_code_points",
+        "note_code_points",
+        "dataset_long_text_code_points",
+        "dataset_short_text_code_points",
+        "errors_collected",
+        "errors_returned",
+        "concurrent_imports"
+      ],
+      "title": "ReturnsLimits",
+      "type": "object"
+    },
+    "ReturnsScope": {
+      "enum": [
+        "returns:read",
+        "returns:validate",
+        "returns:import"
+      ],
+      "title": "ReturnsScope",
+      "type": "string"
+    },
+    "ReturnsValidationErrorBody": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "const": "invalid_parameter",
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/components/schemas/ParameterError"
+          },
+          "title": "Parameters",
+          "type": "array"
+        }
+      },
+      "required": [
+        "detail",
+        "code",
+        "parameters"
+      ],
+      "title": "ReturnsValidationErrorBody",
+      "type": "object"
+    },
+    "RowError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Entity"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Field"
+        },
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "line": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Line"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "pointer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pointer"
+        },
+        "row": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Row"
+        },
+        "value_preview": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value Preview"
+        }
+      },
+      "required": [
+        "file",
+        "code",
+        "message"
+      ],
+      "title": "RowError",
+      "type": "object"
+    },
+    "Shipment": {
+      "additionalProperties": false,
+      "properties": {
+        "carrier_ref": {
+          "title": "Carrier Ref",
+          "type": "string"
+        },
+        "delivered_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Delivered At"
+        },
+        "delivery_events": {
+          "items": {
+            "$ref": "#/components/schemas/DeliveryEvent"
+          },
+          "title": "Delivery Events",
+          "type": "array"
+        },
+        "promised_delivery_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Promised Delivery By"
+        },
+        "provenance": {
+          "$ref": "#/components/schemas/Provenance"
+        },
+        "shipment_id": {
+          "title": "Shipment Id",
+          "type": "string"
+        },
+        "shipped_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Shipped At"
+        },
+        "status": {
+          "$ref": "#/components/schemas/ShipmentStatus"
+        }
+      },
+      "required": [
+        "shipment_id",
+        "carrier_ref",
+        "status",
+        "shipped_at",
+        "promised_delivery_by",
+        "delivered_at",
+        "delivery_events",
+        "provenance"
+      ],
+      "title": "Shipment",
+      "type": "object"
+    },
+    "ShipmentStatus": {
+      "enum": [
+        "pending",
+        "in_transit",
+        "delivered",
+        "delivery_failed",
+        "returned_to_origin",
+        "unknown"
+      ],
+      "title": "ShipmentStatus",
+      "type": "string"
+    }
+  }
+}

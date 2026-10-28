@@ -1572,6 +1572,10 @@ def test_frozen_operations_and_components_are_byte_identical_to_head(make_settin
         "/returns/capabilities",  # Milestone 18 (retailer API; M18-04A)
         "/returns/import/validate",  # Milestone 18 (M18-04B)
         "/returns/import",  # Milestone 18 (M18-04B)
+        "/returns",  # Milestone 18 (M18-04C)
+        "/returns/records/{dataset_id}/{dataset_version}/{return_id}",  # M18-04C
+        "/returns/import-batches",  # Milestone 18 (M18-04C)
+        "/returns/import-batches/{batch_id}",  # Milestone 18 (M18-04C)
     }
     v3_only = {
         "RerankedSearchRequest",
