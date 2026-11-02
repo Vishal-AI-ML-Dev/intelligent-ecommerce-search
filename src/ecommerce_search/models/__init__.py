@@ -23,6 +23,16 @@ from ecommerce_search.models.listings import (
     ListingNormalizationRun,
     ListingVersion,
 )
+from ecommerce_search.models.return_classifications import (
+    ReturnCategoryPrediction,
+    ReturnClassification,
+    ReturnClassificationEvidence,
+    ReturnClassificationInput,
+    ReturnClassificationRun,
+    ReturnComplaintGroup,
+    ReturnComplaintGroupMember,
+    ReturnComplaintGroupRun,
+)
 from ecommerce_search.models.returns import (
     CorrectionCaseEvidenceRow,
     CorrectionCaseRow,
@@ -67,7 +77,15 @@ __all__ = [
     "ProductEmbedding",
     "ProductSearchDocument",
     "RawCatalogRecord",
+    "ReturnCategoryPrediction",
+    "ReturnClassification",
+    "ReturnClassificationEvidence",
+    "ReturnClassificationInput",
+    "ReturnClassificationRun",
     "ReturnCommentRow",
+    "ReturnComplaintGroup",
+    "ReturnComplaintGroupMember",
+    "ReturnComplaintGroupRun",
     "ReturnDataset",
     "ReturnImportBatch",
     "ReturnImportFile",

@@ -1,14 +1,22 @@
-"""Offline baseline command line. No database, network or model.
+"""Baseline command line. No network or model.
 
     python -m ecommerce_search.returns.classification classify <inputs.json>
     python -m ecommerce_search.returns.classification taxonomy
+    python -m ecommerce_search.returns.classification record \
+        --dataset-id <id> --dataset-version <n> [--min-pattern-size 3]
 
-`classify` reads a JSON array of `ClassificationInput` objects (`contracts.py`) and prints a
-JSON array of `ClassificationResult` objects on stdout. `taxonomy` prints the §19 categories,
-their suggested areas and the categories the baseline never predicts.
+`classify` (offline) reads a JSON array of `ClassificationInput` objects (`contracts.py`) and
+prints a JSON array of `ClassificationResult` objects on stdout. `taxonomy` prints the §19
+categories, their suggested areas and the categories the baseline never predicts.
 
-Exit status: 0 on success; 2 on a usage or input error, with a fixed message on stderr that
-contains no path or input value.
+`record` connects with the POSTGRES_* settings as the least-privilege classifier role (any
+other role is refused before a write), classifies every return of one M18 dataset version,
+records the run, then records per-SKU complaint groups of that run (`store.py`). Both steps are
+idempotent. It prints `{"classification": RunReport, "groups": GroupReport}`: counts of inferred
+outputs, not accuracy.
+
+Exit status: 0 on success; 2 on a usage, input, configuration, role or database error, with a
+fixed message on stderr that contains no path, input value or credential.
 """
 
 import argparse
@@ -71,19 +79,61 @@ def _taxonomy() -> dict[str, object]:
     }
 
 
+def _record(dataset_id: str, dataset_version: int, min_pattern_size: int) -> dict[str, object]:
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from ecommerce_search.config import get_settings
+    from ecommerce_search.db.engine import create_db_engine
+    from ecommerce_search.returns.classification import store
+
+    try:
+        settings = get_settings()
+    except ValidationError as exc:
+        fields = sorted({str(e["loc"][0]) for e in exc.errors() if e["loc"]})
+        raise CliError(f"settings are incomplete or invalid: {', '.join(fields)}") from None
+    engine = create_db_engine(settings)
+    try:
+        run = store.record_classification_run(engine, dataset_id, dataset_version)
+        groups = store.record_group_run(engine, run.run_id, min_pattern_size)
+    except store.StoreError as exc:
+        raise CliError(str(exc)) from None
+    except SQLAlchemyError:
+        raise CliError("the database operation failed") from None
+    finally:
+        engine.dispose()
+    return {"classification": run.model_dump(mode="json"), "groups": groups.model_dump(mode="json")}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    from ecommerce_search.returns.classification.grouping import DEFAULT_MIN_PATTERN_SIZE
+
     parser = argparse.ArgumentParser(
         prog="python -m ecommerce_search.returns.classification",
-        description="Deterministic return-reason baseline (offline; no database or model).",
+        description="Deterministic return-reason baseline (no network or model).",
     )
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("classify", help="classify a JSON array of inputs").add_argument(
         "path", type=Path
     )
     commands.add_parser("taxonomy", help="print the categories and suggested areas")
+    record = commands.add_parser("record", help="classify and group one stored dataset version")
+    record.add_argument("--dataset-id", required=True)
+    record.add_argument("--dataset-version", required=True, type=int)
+    record.add_argument("--min-pattern-size", type=int, default=DEFAULT_MIN_PATTERN_SIZE)
     args = parser.parse_args(argv)
     if args.command == "taxonomy":
         print(json.dumps(_taxonomy(), indent=2))
+        return EXIT_OK
+    if args.command == "record":
+        if args.min_pattern_size < 2:
+            print("classification record: --min-pattern-size must be at least 2", file=sys.stderr)
+            return EXIT_ERROR
+        try:
+            report = _record(args.dataset_id, args.dataset_version, args.min_pattern_size)
+        except CliError as exc:
+            print(f"classification record: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        print(json.dumps(report, indent=2))
         return EXIT_OK
     try:
         inputs = _load(args.path)

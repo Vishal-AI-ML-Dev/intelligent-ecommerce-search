@@ -945,9 +945,11 @@ def test_upgrade_downgrade_reupgrade_restores_both_schemas_exactly(
             assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
                 "0006"
             )
-        migrator.upgrade(scratch_database)
+        # M19: head is now 0008, so the M18 round trip re-upgrades to 0007 explicitly (0008 has
+        # its own round-trip test in test_returns_classification_integration.py).
+        migrator.upgrade(scratch_database, "0007")
         assert schema_snapshot(engine) == at_0007
-        migrator.upgrade(scratch_database)  # head again: no-op
+        migrator.upgrade(scratch_database, "0007")  # 0007 again: no-op
         assert schema_snapshot(engine) == at_0007
     finally:
         engine.dispose()

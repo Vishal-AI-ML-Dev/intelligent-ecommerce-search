@@ -53,6 +53,16 @@ EXPECTED_TABLES = {
     "support_complaints",
     "correction_cases",
     "correction_case_evidence",
+    # Milestone 19 Part 2 adds exactly eight append-only inferred classification tables
+    # (migration 0008; no JSON, no vector or search column, no non-constraint index).
+    "return_classification_runs",
+    "return_classifications",
+    "return_classification_inputs",
+    "return_category_predictions",
+    "return_classification_evidence",
+    "return_complaint_group_runs",
+    "return_complaint_groups",
+    "return_complaint_group_members",
 }
 SEARCH_TABLE = "product_search_documents"
 EMBEDDING_TABLE = "product_embeddings"

@@ -438,7 +438,7 @@ def test_model_and_migration_constraint_definitions_are_identical(settings):
     config = Config("alembic.ini")
     config.attributes["database"] = "offline_sql_only"  # offline mode never connects
     config.output_buffer = io.StringIO()
-    command.upgrade(config, "0001:0007", sql=True)  # M18: the model now includes 0007
+    command.upgrade(config, "0001:0008", sql=True)  # M19: the model now includes 0008
     migration = _constraint_definitions(config.output_buffer.getvalue())
 
     model = {}
