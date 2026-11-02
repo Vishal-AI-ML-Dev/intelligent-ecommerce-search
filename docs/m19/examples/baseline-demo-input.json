@@ -1,0 +1,40 @@
+[
+  {
+    "return_id": "demo-hinglish-size",
+    "customer_reason_code": "OTHER",
+    "customer_statements": [
+      {"evidence_type": "return_comment", "evidence_id": "demo-c1", "text": "Shoe size chhota hai, fit nahi hua"}
+    ]
+  },
+  {
+    "return_id": "demo-negation-conflict",
+    "customer_reason_code": "ARRIVED_DAMAGED",
+    "customer_statements": [
+      {"evidence_type": "return_comment", "evidence_id": "demo-c2", "text": "It is not damaged, just too tight"}
+    ]
+  },
+  {
+    "return_id": "demo-defect-inspected",
+    "customer_reason_code": "DEFECTIVE_OR_NOT_WORKING",
+    "customer_statements": [
+      {"evidence_type": "return_comment", "evidence_id": "demo-c3", "text": "phone kaam nahi karta"}
+    ],
+    "inspection_observations": [
+      {"observation_id": "demo-o3", "condition": "functional_fault_confirmed"}
+    ]
+  },
+  {
+    "return_id": "demo-misspelled",
+    "customer_reason_code": "NOT_PROVIDED",
+    "customer_statements": [
+      {"evidence_type": "return_comment", "evidence_id": "demo-c4", "text": "screen came damagd, and the delivery was late"}
+    ]
+  },
+  {
+    "return_id": "demo-insufficient",
+    "customer_reason_code": "NOT_PROVIDED",
+    "customer_statements": [
+      {"evidence_type": "return_comment", "evidence_id": "demo-c5", "text": "Please process my return"}
+    ]
+  }
+]
