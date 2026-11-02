@@ -405,6 +405,47 @@ def test_the_cli_records_as_the_classifier_role(db, recorded, monkeypatch, capsy
     assert db.passwords[role] not in captured.out + captured.err
 
 
+def test_part_3_scoring_reads_the_stored_run_through_verified_read_back(
+    db, recorded, monkeypatch, capsys, tmp_path
+):
+    """`python -m evals.returns score --run-id` against the stored run, with ONE TEST FIXTURE
+    label row in `tmp_path` (not a human judgement; never the real label sheet)."""
+    from evals.returns import cli as eval_cli
+    from evals.returns.labels import COLUMNS
+
+    from returns_release import ROOT as REPO
+
+    _, run = recorded
+    split_file = REPO / "evals" / "returns" / "labelling" / "return-reason-split-1.json"
+    first_dev = sorted(json.loads(split_file.read_text(encoding="utf-8"))["sets"]["dev"])[0]
+    cells = dict.fromkeys(COLUMNS, "") | {
+        "item": "1",
+        "return_id": first_dev,
+        "insufficient_evidence": "1",
+        "annotator": "fixture",
+    }
+    sheet = tmp_path / "fixture-labels.csv"
+    sheet.write_text(",".join(COLUMNS) + "\n" + ",".join(cells.values()) + "\n")
+    role = db.roles["wr"]
+    monkeypatch.setenv("POSTGRES_DB", db.name)
+    monkeypatch.setenv("POSTGRES_USER", role)
+    monkeypatch.setenv("POSTGRES_PASSWORD", db.passwords[role])
+    get_settings.cache_clear()
+    try:
+        code = eval_cli.main(
+            ["score", "--split", str(split_file), "--set", "dev", "--labels", str(sheet)]
+            + ["--run-id", str(run.run_id)]
+        )
+    finally:
+        get_settings.cache_clear()
+    captured = capsys.readouterr()
+    assert code == 0, captured.err
+    report = json.loads(captured.out)
+    assert report["run"]["source"] == "stored_run" and report["run"]["run_id"] == run.run_id
+    assert report["coverage"]["numerator"] == 1 and report["coverage"]["denominator"] == 60
+    assert db.passwords[role] not in captured.out + captured.err
+
+
 # ---- versions (last: adds a second run) ----------------------------------------------------
 
 

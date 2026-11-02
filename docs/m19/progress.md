@@ -2,10 +2,11 @@
 
 **Status (2026-11-02):**
 - **Part 1:** committed at `3b725a6` (CI green, owner-reported).
-- **Part 2:** storage and complaint groups, committed on `main` after the owner's P1–P10
-  decisions (commit message "feat(m19): add Part 2 ..."). An M19 staging release is blocked on
-  P9/P10.
-- M19 is **not accepted**, and Parts 3–4 have not started.
+- **Part 2:** committed at `6773fd9` (CI green, owner-reported). An M19 staging release is
+  blocked on P9/P10.
+- **Part 3 step A** (evaluation preparation) is committed on `main` with blank label sheets.
+  No labels exist yet; the owner labels next. ADR-010 is Proposed, with no provider calls.
+- M19 is **not accepted**, and Part 4 has not started.
 
 - **Baseline:** M18 closed with qualified acceptance at
   `e2903cc959503f2d146e1459792c4cb8db936d8f`. Its exceptions and limitations
@@ -348,5 +349,144 @@ accuracy**, and no labels were used.
 - Complaints linked only by order or by product are ignored (P3).
 - No API, UI or staging release. A staging release is blocked on P9/P10 (Part 4).
 
+## Part 3 step A: human-reviewed evaluation preparation (2026-11-02)
+
+The owner is the only annotator. No code creates, prefills or suggests labels. Neither scenario
+intent nor any model output is ground truth. No provider was called.
+
+### Files
+| Path | Content |
+|---|---|
+| `evals/returns/source.py` | blind items read offline from a `return-data-v1` bundle (redacted text, order-item complaint links); refuses `scenarios.json` and non-bundles |
+| `evals/returns/split.py` | `return-reason-split-1`, the seeded split stratified by reason code |
+| `evals/returns/kit.py` | the static, offline HTML kit |
+| `evals/returns/labels.py` | `return-reason-labels-1`, the label contract and its CSV form |
+| `evals/returns/scoring.py` | `return-reason-scoring-1` |
+| `evals/returns/cli.py`, `__main__.py` | `split`, `kit`, `validate`, `score` |
+| `evals/returns/labelling/return-reason-split-1.json` | the recorded split |
+| `evals/returns/labelling/{dev,test}-kit.html` | blind kits |
+| `evals/returns/labelling/{dev,test}-labels.csv` | **blank** label sheets: `item` and `return_id` only |
+| `docs/decisions/ADR-010-return-classification-provider-comparison.md` | draft provider-comparison ADR, no calls |
+
+### Split (`return-reason-split-1`, seed `20261102`)
+- **Sizes:** 60 dev, 60 test, 60 unlabelled.
+- **Strata:** customer reason code. The labelled total is shared by largest remainder, and dev
+  and test differ by at most one per stratum:
+
+  | Reason code | dev | test | unlabelled |
+  |---|---|---|---|
+  | ARRIVED_DAMAGED | 6 | 5 | 5 |
+  | ARRIVED_LATE | 3 | 2 | 3 |
+  | DEFECTIVE_OR_NOT_WORKING | 10 | 9 | 9 |
+  | LOOKS_DIFFERENT_FROM_IMAGE | 6 | 5 | 5 |
+  | NOT_AS_DESCRIBED | 4 | 4 | 4 |
+  | NOT_PROVIDED | 2 | 3 | 3 |
+  | NO_LONGER_NEEDED | 8 | 9 | 9 |
+  | OTHER | 6 | 6 | 6 |
+  | SIZE_TOO_LARGE | 4 | 4 | 4 |
+  | SIZE_TOO_SMALL | 4 | 4 | 4 |
+  | SPECIFICATION_DIFFERENT | 5 | 6 | 5 |
+  | WRONG_ITEM_RECEIVED | 2 | 3 | 3 |
+
+- **Presentation order:** a separate seeded shuffle per set, so neighbouring IDs are not shown
+  together.
+- **Test set:** labelled together with dev, but scored only with `--final`.
+
+### Blind kit
+- **Shows:** item number, return ID, reason code, comments, linked complaints with topic, and
+  inspection conditions. Customer statements and inspection observations are in separate
+  sections.
+- **Never shows:** predictions, tiers, review reasons, groups, products, inspection notes,
+  scenario intent or `scenarios.json`.
+- **Offline:** no script, link or external resource, and a CSP of `default-src 'none'`. All
+  text is HTML-escaped, so an `<img onerror>` overlay comment displays as plain text.
+
+### How the owner labels
+1. Open `evals/returns/labelling/dev-kit.html` in a browser; it works offline.
+2. Edit `evals/returns/labelling/dev-labels.csv`. For each row:
+   - put `1` in every category column the evidence supports, or `defect_kind_undetermined`
+     for a defect whose kind is unclear, or `insufficient_evidence` on its own;
+   - fill `annotator` with your handle (for example `owner-1`);
+   - optionally add a `note` (at most 500 characters).
+
+   Leave a row entirely empty to skip it. Keep the header, the column order, `item` and
+   `return_id` unchanged.
+3. Check the sheet: `uv run python -m evals.returns validate --split
+   evals/returns/labelling/return-reason-split-1.json --set dev --labels
+   evals/returns/labelling/dev-labels.csv`. Errors name the row and column only.
+4. Repeat for `test-kit.html` and `test-labels.csv`. This is recommended before any provider
+   run.
+5. Score dev against a stored run (local database, classifier role): `uv run python -m
+   evals.returns score --split … --set dev --labels …/dev-labels.csv --run-id <n>`. The test
+   set needs `--final` and is meant for the final comparison only.
+
+### Label contract (`return-reason-labels-1`)
+- **Tokens:** the twelve categories, multi-label, plus `defect_kind_undetermined`.
+- **Rules:**
+  - `insufficient_evidence` stands alone;
+  - `defect_kind_undetermined` excludes both defect kinds;
+  - labelled rows need a pseudonymous `annotator`;
+  - unlabelled rows must be empty.
+- **Validation:** checks the exact header, and the size and UTF-8 limits. It reports every
+  problem by row and column with a fixed code and never quotes a cell.
+
+### Scoring rules (`return-reason-scoring-1`)
+- **Per category** (all except `insufficient_evidence`): TP, FP and FN; precision and recall
+  with counts and 95% Wilson intervals. Only single-category baseline predictions count. An
+  unresolved pair predicts no single kind, and a human `defect_kind_undetermined` mark counts
+  toward no specific kind.
+- **Concern rows:**
+  - `defect_any_kind`: either defect kind, the unresolved defect pair, or the human
+    `defect_kind_undetermined`;
+  - `description_either`: expectation mismatch or incorrect specification, including their
+    unresolved pair.
+- **Abstention:** a 2x2 table against the human `insufficient_evidence`, with abstention rate,
+  abstention precision and insufficient-evidence recall. Also the review rate.
+- **Exact-set match:** an unresolved defect pair is treated as `defect_kind_undetermined`, and
+  abstention as `insufficient_evidence`. An unresolved description pair never matches exactly.
+- **Small-sample limits:** every proportion shows its numerator and denominator, and is flagged
+  `too_few_to_interpret` below 10. There is no single headline accuracy, no macro or micro
+  average, and no agreement statistic (one annotator). Coverage is reported.
+
+### Tests (2026-11-02)
+- `tests/unit/returns/test_returns_eval_labels_split_kit.py` and
+  `test_returns_eval_scoring.py`: 23 passed. They cover:
+  - label validation and its safe errors;
+  - template blankness and no-overwrite;
+  - split determinism, disjointness and stratum balance;
+  - the recorded split matching the bundle;
+  - refusal of `scenarios.json`;
+  - kit blindness, escaping and offline safety;
+  - the real sheets holding no labels;
+  - the scoring rules on test-fixture labels, including the `--final` gate;
+  - CLI exit codes with no cell echo.
+- `tests/integration/test_returns_classification_integration.py`: one new test, `score
+  --run-id` reading the stored run through the source-verified read-back. The module passed
+  16.
+- All labels in the tests are marked test fixtures and are written only to `tmp_path`.
+
+### Limitations
+- One annotator, 60 dev and 60 test returns, all synthetic: per-category intervals will be
+  wide.
+- The kit omits product category and inspection notes. Add them later if the owner finds
+  labels impossible without them.
+- The split is reproducible from the bundle and the seed. A changed bundle fails
+  `check_split`.
+
+### Owner answers on ADR-010 (2026-11-02; ADR stays Proposed)
+1. **Jev only,** via the existing M11 adapter after contract checks. Gemini is out of scope for
+   M19.
+2. **Data terms:** the owner confirms Jev's data terms before any call. Until then, no calls.
+3. **Price and caps:** recheck the official price page before any run. Hard cap USD 1, and a
+   call cap equal to the planned call count; the run stops on either cap.
+4. **Call shape:** one yes/no judgement per category per return. That is 10 categories, so 600
+   calls per pass and at most 2,400 for 3 dev passes plus 1 test pass.
+5. **Labels first:** dev and test labels must both be finished before any provider run.
+6. **Display:** provider outputs stay evaluation-only. Part 4 shows baseline results only.
+
+**Still open in ADR-010:** the data-terms confirmation, the price check on the run date, an
+optional 11th "defect of any kind" judgement, and run approval.
+
 ## Next (not authorized)
-Part 3: optional GenAI and a human-reviewed quality comparison. It needs owner approval.
+The owner labels the dev and test sheets. Then Part 3 step B, the dev scoring of the baseline.
+Any provider run needs every ADR-010 condition met and separate approval.
